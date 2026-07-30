@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Reel Recipe — Pixel Wall</title>
+  <meta name="description" content="1,000,000 pixel charity wall by The Reel Recipe. Claim a pixel for 2 EGP — all proceeds go to charity.">
+  <link rel="icon" type="image/png" href="assets/logo-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ═══════════ HEADER ═══════════ -->
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-logo" src="assets/logo-icon.png" alt="The Reel Recipe logo">
+      <div class="brand-text">
+        <h1>THE REEL RECIPE</h1>
+        <div class="sponsors">
+          <span class="sp-label">SPONSORED BY</span>
+          <span class="sp-logos">
+            <!-- Coca-Cola -->
+            <svg class="sp" viewBox="0 0 92 24" aria-label="Coca-Cola"><text x="46" y="17" text-anchor="middle" font-family="'Brush Script MT','Segoe Script',cursive" font-style="italic" font-weight="bold" font-size="17" fill="#F40009">Coca-Cola</text></svg>
+            <!-- Nike -->
+            <svg class="sp" viewBox="0 0 40 16" aria-label="Nike"><path fill="#fff" d="M39.5 1.2 10.8 13.4c-2.4 1-4.4 1.5-6 1.5-1.8 0-3.1-.6-3.9-1.9-.5-.8-.6-1.9-.3-3.1.3-1.2 1-2.6 2.1-4C3.4 5 4.3 4 5.6 2.9c-.4.7-2.4 4-.1 5.7.5.3 1.1.5 1.9.5 1 0 2.3-.3 3.7-.9L39.5 1.2z"/></svg>
+            <!-- Pepsi -->
+            <svg class="sp" viewBox="0 0 24 24" aria-label="Pepsi"><circle cx="12" cy="12" r="11" fill="#fff"/><path fill="#E32934" d="M12 1a11 11 0 0 1 10.9 9.6c-4.1 2-9.4 1-14.5 2.6C5.6 14.1 3 15.6 1.6 17A11 11 0 0 1 12 1z"/><path fill="#004B93" d="M22.6 13.6A11 11 0 0 1 2.3 18.4c1.5-1.6 4-3 6.9-3.9 4.7-1.5 9.6-.5 13.4-.9z"/></svg>
+            <!-- McDonald's -->
+            <svg class="sp" viewBox="0 0 26 22" aria-label="McDonald's"><path fill="#FFC72C" d="M2 22V10.5C2 5 4.6 1.5 7.5 1.5c2.6 0 4.6 2.8 5.5 6.8.9-4 2.9-6.8 5.5-6.8 2.9 0 5.5 3.5 5.5 9V22h-4V10.5c0-3-.7-5-1.7-5s-2 2-2.3 5.2V22h-6V10.7C9.7 7.5 8.7 5.5 7.7 5.5s-1.7 2-1.7 5V22H2z"/></svg>
+            <!-- Samsung -->
+            <svg class="sp" viewBox="0 0 78 16" aria-label="Samsung"><text x="39" y="12.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="bold" font-size="12" letter-spacing="1.5" fill="#fff">SAMSUNG</text></svg>
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="charity-badge">
+      <svg class="px-heart" viewBox="0 0 14 12" aria-hidden="true"><path fill="currentColor" d="M2 0h3v1h1v1h2V1h1V0h3v1h1v3h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1H6v-1H5V9H4V8H3V7H2V6H1V4H0V1h1V0h1z"/></svg>
+      <div class="charity-text">
+        <b>ALL PROCEEDS GO TO CHARITY</b>
+        <span>THANK YOU!</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════ STATS BAR ═══════════ -->
+  <section class="statsbar">
+    <div class="stat price-stat">
+      <span class="pxswatch" aria-hidden="true"></span>
+      <div class="price-lines">
+        <b>1 PIXEL = 2 EGP</b>
+        <span>Click any white pixel to claim it! Pixels live for 30 days.</span>
+      </div>
+    </div>
+    <div class="stat num-stat">
+      <label>PIXELS TAKEN</label>
+      <b id="statTaken" class="accent">0</b>
+    </div>
+    <div class="stat num-stat">
+      <label>TOTAL RAISED</label>
+      <b id="statRaised" class="accent">0 <i>EGP</i></b>
+    </div>
+    <div class="legend" aria-hidden="true">
+      <span class="lg"><i class="chip chip-taken"></i>TAKEN</span>
+      <span class="lg"><i class="chip chip-yours"></i>YOURS</span>
+      <span class="lg"><i class="chip chip-avail"></i>AVAILABLE</span>
+    </div>
+    <div class="stats-actions">
+      <button id="btnCompany" class="btn-company" title="Pre-order a logo spot for your brand">&#127970; COMPANY PRE-ORDER <i>10 EGP/PX</i></button>
+      <button id="btnHelp" class="btn-help" title="How it works" aria-label="How it works">?</button>
+    </div>
+  </section>
+
+  <!-- ═══════════ CANVAS ═══════════ -->
+  <main class="canvas-wrap" id="canvasWrap">
+    <canvas id="wall"></canvas>
+    <div class="zoom-controls">
+      <button id="zoomIn" title="Zoom in (+)">+</button>
+      <button id="zoomOut" title="Zoom out (−)">−</button>
+      <button id="zoomFit" title="Fit whole wall (0)">&#8862;</button>
+    </div>
+    <div class="coords" id="coords">0, 0</div>
+    <canvas id="minimap" width="148" height="148" title="Minimap — click to jump"></canvas>
+    <div class="tooltip" id="tooltip" hidden></div>
+    <div class="placement-hint" id="placementHint" hidden>
+      <span>CLICK A SPOT TO PLACE &middot; <span class="ok">GREEN = OK</span> &middot; <span class="bad">RED = TOO CROWDED</span> &middot; ESC TO CANCEL</span>
+      <span class="ph-actions">
+        <b id="phOverlap"></b>
+        <button id="btnFindSpot" type="button">&#128269; FIND FREE SPOT</button>
+      </span>
+    </div>
+  </main>
+
+  <!-- ═══════════ PALETTE DOCK ═══════════ -->
+  <div class="palette-dock" id="paletteDock">
+    <div class="tools">
+      <button id="toolPan" class="tool sel" title="Move mode — drag to pan · click to place one pixel (V)">&#9995;</button>
+      <button id="toolBrush" class="tool" title="Brush mode — hold &amp; drag to paint under the mouse (B) · pan with Space or middle mouse">&#128396;</button>
+    </div>
+    <div class="palette" id="palette"></div>
+    <span class="sel-counter" id="selCounter">0/20</span>
+  </div>
+
+  <!-- ═══════════ ACTION BAR ═══════════ -->
+  <footer class="actionbar">
+    <div class="ab-left">
+      <div class="mini-stat" id="yoursStat" title="Click to highlight your pixels">YOUR PIXELS: <b id="statYours">0</b></div>
+      <div class="mini-stat paint-stat">
+        <svg viewBox="0 0 16 16" class="bucket" aria-hidden="true"><path fill="currentColor" d="M6 1h4v1h1v1h1v1h1v1h1v4h-1v1h-1v1h-1v1h-1v1H8v1H6v-1H5v-1H4v-1H3V9H2V5h1V4h1V3h1V2h1V1zm0 3v1H5v1H4v2h1v1h1v1h2v1h2V9h1V8h1V6h-1V5h-1V4H6z"/><path fill="currentColor" d="M13 10h2v3h-1v1h-1v-1h-1v-2h1v-1z"/></svg>
+        PAINT: <b id="statPaint">0</b>
+        <button id="btnPaintShop" class="btn-buy-paint">BUY</button>
+      </div>
+    </div>
+    <div class="ab-center">
+      <button id="btnClear" class="btn-clear" disabled>CLEAR</button>
+      <button id="btnCheckout" class="btn-claim" disabled>CLICK PIXELS TO PAINT</button>
+    </div>
+    <div class="ab-right">
+      <label for="customColor">SELECTED COLOR</label>
+      <span class="cur-color-wrap">
+        <input type="color" id="customColor" value="#3DDFA6" title="Pick any color">
+        <span class="cur-color" id="curColor"></span>
+        <svg viewBox="0 0 8 8" class="caret" aria-hidden="true"><path fill="currentColor" d="M0 2h8L4 7z"/></svg>
+      </span>
+    </div>
+  </footer>
+
+  <!-- ═══════════ DEMO PILL ═══════════ -->
+  <div class="demo-pill">
+    <span class="dp-label">PROTOTYPE DEMO</span>
+    <button id="demoTime" title="Simulate one week passing — expired pixels get auto-deleted">&#9193; +7 DAYS</button>
+    <button id="demoReseed" title="Restore the demo artwork">RESEED</button>
+    <button id="demoWipe" title="Wipe the wall to a fully empty grid">WIPE</button>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+
+  <!-- ═══════════ MODALS ═══════════ -->
+
+  <!-- Help -->
+  <div class="overlay" id="modalHelp" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <button class="modal-x" data-close aria-label="Close">&times;</button>
+      <img class="modal-logo" src="assets/logo-icon.png" alt="">
+      <h2 id="helpTitle">THE PIXEL WALL</h2>
+      <p class="modal-sub">1,000,000 pixels. One wall. All for charity.</p>
+      <div class="steps">
+        <div class="step"><span class="step-n">1</span><div><b>PICK &amp; PAINT</b><p>Choose a color and click up to <b>20 empty pixels</b> to preview your art on the wall.</p></div></div>
+        <div class="step"><span class="step-n">2</span><div><b>CLAIM THEM</b><p>Happy with the preview? Check out at <b>2 EGP per pixel</b>. Every pound goes to charity.</p></div></div>
+        <div class="step"><span class="step-n">3</span><div><b>30 DAYS OF FAME</b><p>Each pixel lives for <b>30 days</b>, then fades away so the wall stays fresh.</p></div></div>
+      </div>
+      <div class="help-notes">
+        <p>&#128396; Switch to <b>BRUSH mode</b> (B) to paint continuously while holding the mouse down.</p>
+        <p>&#129699; Want more than 20 pixels at once? Buy <b>PAINT</b> — prepaid pixels that remove the preview limit.</p>
+        <p>&#127970; Companies can <b>pre-order logo space</b> at 10 EGP/pixel — with a clickable link on their logo.</p>
+      </div>
+      <button class="btn-claim modal-cta" data-close>START PAINTING</button>
+    </div>
+  </div>
+
+  <!-- Checkout -->
+  <div class="overlay" id="modalCheckout" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="coTitle">
+      <button class="modal-x" data-close aria-label="Close">&times;</button>
+      <h2 id="coTitle">CHECKOUT</h2>
+      <div id="coBody">
+        <div class="co-rows">
+          <div class="co-row"><span>PIXELS</span><b id="coPixels">0</b></div>
+          <div class="co-row" id="coPaintRow" hidden><span>PAINT APPLIED</span><b id="coPaint" class="accent">−0</b></div>
+          <div class="co-row co-total"><span>TO PAY</span><b id="coTotal">0 EGP</b></div>
+        </div>
+        <div class="pay-methods" id="payMethods">
+          <label class="pm"><input type="radio" name="pm" value="card" checked><span>&#128179; CARD</span></label>
+          <label class="pm"><input type="radio" name="pm" value="vf"><span>&#128241; VODAFONE CASH</span></label>
+          <label class="pm"><input type="radio" name="pm" value="insta"><span>&#9889; INSTAPAY</span></label>
+          <label class="pm"><input type="radio" name="pm" value="fawry"><span>&#127978; FAWRY</span></label>
+        </div>
+        <p class="fine">Prototype — no real payment happens. 100% of proceeds go to charity. Pixels expire after 30 days.</p>
+        <button class="btn-claim modal-cta" id="btnPay">PAY</button>
+      </div>
+      <div id="coSuccess" class="co-success" hidden>
+        <div class="big-emoji">&#127881;</div>
+        <h3 id="coSuccessMsg">PIXELS CLAIMED!</h3>
+        <p>They're yours for the next 30 days. Thank you for donating!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paint shop -->
+  <div class="overlay" id="modalPaint" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="psTitle">
+      <button class="modal-x" data-close aria-label="Close">&times;</button>
+      <h2 id="psTitle">&#129699; PAINT SHOP</h2>
+      <p class="modal-sub">Paint = prepaid pixels. Any paint in your bucket <b>removes the 20-pixel preview limit</b> and is spent first at checkout.</p>
+      <div class="packs">
+        <button class="pack" data-paint="25" data-price="45">
+          <b class="pk-amt">25</b><span class="pk-unit">PAINT</span>
+          <span class="pk-price">45 EGP</span><span class="pk-save">SAVE 10%</span>
+        </button>
+        <button class="pack pack-pop" data-paint="100" data-price="160">
+          <i class="pk-tag">POPULAR</i>
+          <b class="pk-amt">100</b><span class="pk-unit">PAINT</span>
+          <span class="pk-price">160 EGP</span><span class="pk-save">SAVE 20%</span>
+        </button>
+        <button class="pack" data-paint="500" data-price="700">
+          <b class="pk-amt">500</b><span class="pk-unit">PAINT</span>
+          <span class="pk-price">700 EGP</span><span class="pk-save">SAVE 30%</span>
+        </button>
+      </div>
+      <p class="fine">Prototype — clicking a pack instantly adds paint (mock payment).</p>
+    </div>
+  </div>
+
+  <!-- Company pre-order -->
+  <div class="overlay" id="modalCompany" hidden>
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="cpTitle">
+      <button class="modal-x" data-close aria-label="Close">&times;</button>
+      <h2 id="cpTitle">&#127970; COMPANY PRE-ORDER</h2>
+      <p class="modal-sub">Reserve a spot for your logo at <b>10 EGP per pixel</b> — it stays on the wall for 30 days.</p>
+      <div class="cp-grid">
+        <div class="cp-form">
+          <label class="fld">
+            <span class="lbl">COMPANY NAME</span>
+            <input type="text" id="cpName" placeholder="e.g. Nile Soda Co." maxlength="24" autocomplete="organization">
+            <span class="fld-err" id="errName" hidden></span>
+          </label>
+          <div class="fld">
+            <span class="lbl">SIZE (PIXELS)</span>
+            <div class="size-row">
+              <span class="stepper" data-target="cpW">
+                <button type="button" class="st-btn" data-step="-1" aria-label="Decrease width">&minus;</button>
+                <input type="number" id="cpW" value="50" min="8" max="400" step="1" aria-label="Width in pixels">
+                <button type="button" class="st-btn" data-step="1" aria-label="Increase width">+</button>
+              </span>
+              <button type="button" id="cpRatioLock" class="ratio-lock is-on" aria-pressed="true" title="Match the logo's ratio (from the crop)">
+                <svg viewBox="0 0 12 14" aria-hidden="true"><path fill="currentColor" class="shackle" d="M3 0h6v1h1v4H8V2H4v3H2V1h1V0z"/><path fill="currentColor" d="M1 5h10v9H1V5zm4 2v2H4v2h4V9H7V7H5z"/></svg>
+              </button>
+              <span class="stepper" data-target="cpH">
+                <button type="button" class="st-btn" data-step="-1" aria-label="Decrease height">&minus;</button>
+                <input type="number" id="cpH" value="30" min="8" max="400" step="1" aria-label="Height in pixels">
+                <button type="button" class="st-btn" data-step="1" aria-label="Increase height">+</button>
+              </span>
+            </div>
+            <div class="size-price">
+              <span class="sp-est"><b id="cpSizePrice">0</b> EGP</span>
+              <span class="sp-sub" id="cpSizeSub">pick a logo for an exact price</span>
+            </div>
+            <span class="fld-err" id="errSize" hidden></span>
+          </div>
+          <div class="size-presets">
+            <button type="button" data-w="30" data-h="30">30×30</button>
+            <button type="button" data-w="50" data-h="30">50×30</button>
+            <button type="button" data-w="80" data-h="40">80×40</button>
+            <button type="button" data-w="120" data-h="60">120×60</button>
+            <button type="button" data-w="200" data-h="100">200×100</button>
+            <button type="button" data-w="300" data-h="150">300×150</button>
+          </div>
+          <div class="fld">
+            <span class="lbl">FIT TO BUDGET</span>
+            <div class="budget-row">
+              <input type="range" id="cpBudget" min="0" max="1000" step="1" value="420" aria-label="Budget in EGP">
+              <span class="budget-val"><b id="cpBudgetVal">0</b> EGP</span>
+            </div>
+            <span class="cp-hint">Drag to set what you want to spend — only the output resolution changes, always at the logo's own ratio. Your crop stays put.</span>
+          </div>
+          <div class="fld">
+            <span class="lbl">LOGO IMAGE</span>
+            <div class="file-row">
+              <button type="button" id="cpPick" class="btn-file">CHOOSE FILE</button>
+              <span class="file-name" id="cpFileName">No file chosen</span>
+              <input type="file" id="cpFile" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" hidden>
+              <button type="button" id="cpSample" class="btn-mini" title="Use The Reel Recipe logo as a sample">SAMPLE</button>
+            </div>
+            <span class="cp-note"><b>&#9888; PNG preferred.</b> A transparent PNG gives the sharpest result — other formats have a solid background you'll need to remove below.</span>
+            <span class="fld-err" id="errFile" hidden></span>
+          </div>
+          <label class="fld">
+            <span class="lbl">CTA LINK (OPTIONAL)</span>
+            <input type="url" id="cpLink" placeholder="https://your-site.com" inputmode="url" spellcheck="false">
+            <span class="cp-hint">Anyone who clicks your logo on the wall opens this link.</span>
+            <span class="fld-err" id="errLink" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">CTA LABEL</span>
+            <input type="text" id="cpCta" placeholder="VISIT SITE" maxlength="18">
+          </label>
+        </div>
+
+        <div class="cp-col">
+          <div class="cp-stage" id="cpEditor" hidden>
+            <span class="cp-prev-label">SOURCE &middot; <i class="lbl-dim">drag to crop</i></span>
+            <div class="crop-wrap" id="cropWrap">
+              <canvas id="cpSrc"></canvas>
+              <div class="crop-box" id="cropBox">
+                <i class="ch" data-h="nw"></i><i class="ch" data-h="n"></i><i class="ch" data-h="ne"></i>
+                <i class="ch" data-h="w"></i><i class="ch" data-h="e"></i>
+                <i class="ch" data-h="sw"></i><i class="ch" data-h="s"></i><i class="ch" data-h="se"></i>
+              </div>
+            </div>
+            <div class="crop-tools">
+              <button id="cropAuto" title="Crop tightly around the logo">&#9986; AUTO CROP</button>
+              <button id="cropReset" title="Use the whole image">RESET</button>
+              <span class="crop-ratio">RATIO <b id="cropRatioVal">—</b></span>
+            </div>
+            <label class="chk bg-toggle">
+              <input type="checkbox" id="bgRemove">
+              <span>REMOVE BACKGROUND <i class="exp-tag">EXPERIMENTAL</i></span>
+            </label>
+            <div class="bg-opts" id="bgOpts" hidden>
+              <label class="rng">
+                <span>TOLERANCE <b id="tolVal">32</b></span>
+                <input type="range" id="bgTol" min="6" max="120" step="2" value="32">
+              </label>
+              <span class="cp-hint">Removes the background colour around the edges <b>and any white inside the logo</b> — the wall is white, so white pixels would be invisible and you'd be paying for nothing. Check the preview before paying.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="cp-col">
+          <div class="cp-stage">
+            <span class="cp-prev-label">PIXEL PREVIEW</span>
+            <canvas id="cpCanvas" width="240" height="150"></canvas>
+            <div class="cp-cost"><span id="cpCount">0</span> paintable pixels &middot; <b id="cpCost" class="accent">0 EGP</b></div>
+            <p class="cp-hint" id="cpEmpty">Choose a logo image to see how it will look on the wall.</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn-claim modal-cta" id="btnPlaceLogo" disabled>PLACE ON THE WALL &#8594;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Company confirm -->
+  <div class="overlay" id="modalConfirm" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cfTitle">
+      <button class="modal-x" data-close aria-label="Close">&times;</button>
+      <h2 id="cfTitle">CONFIRM PRE-ORDER</h2>
+      <div class="co-rows">
+        <div class="co-row"><span>COMPANY</span><b id="cfName">—</b></div>
+        <div class="co-row"><span>PIXELS</span><b id="cfPixels">0</b></div>
+        <div class="co-row" id="cfSkipRow" hidden><span>SKIPPED (TAKEN)</span><b id="cfSkip" class="warn-txt">0</b></div>
+        <div class="co-row" id="cfLinkRow" hidden><span>CTA LINK</span><b id="cfLink" class="cf-link">—</b></div>
+        <div class="co-row co-total"><span>TO PAY</span><b id="cfTotal">0 EGP</b></div>
+      </div>
+      <p class="fine">Prototype — mock payment. Your logo stays up for 30 days.</p>
+      <button class="btn-claim modal-cta" id="btnConfirmPlace">PAY &amp; PLACE</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
