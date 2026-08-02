@@ -50,6 +50,12 @@
 [hidden] { display: none !important; }
 
 html, body { height: 100%; }
+/* dvh tracks the mobile URL bar as it collapses, so the app shell never gets
+   cut off the way a static 100vh does. Declared after the 100% so unsupporting
+   browsers keep the old value. */
+@supports (height: 100dvh) {
+  html, body { height: 100dvh; }
+}
 body {
   background:
     radial-gradient(rgba(244,244,248,0.028) 1px, transparent 1px) 0 0 / 22px 22px,
@@ -61,10 +67,20 @@ body {
   flex-direction: column;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  /* stop the grey flash on tap and iOS's rubber-band / pull-to-refresh, both of
+     which fight the canvas drag */
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 
 button { font-family: inherit; color: inherit; background: none; border: none; cursor: pointer; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* kills the 300ms tap delay without disabling pinch-zoom on the page */
+button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
+/* chrome around the wall shouldn't turn into a text selection when a drag
+   starts on it — the wall itself already handles its own gestures */
+.topbar, .statsbar, .palette-dock, .actionbar, .demo-pill, .zoom-controls,
+.coords, .placement-hint, .sel-counter { user-select: none; -webkit-user-select: none; }
 
 /* ═══════════ HEADER ═══════════ */
 .topbar {
@@ -262,6 +278,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   position: relative;
   z-index: 6;
   align-self: center;
+  /* content-sized, so without a cap it can outgrow the viewport and force a
+     horizontal scrollbar — hit this on wide-but-short landscape phones */
+  max-width: calc(100% - 16px);
   margin-top: -58px;
   display: flex; align-items: center; gap: 12px;
   background: rgba(20,20,44,0.92);
@@ -387,8 +406,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 /* ═══════════ DEMO PILL ═══════════ */
 .demo-pill {
-  position: fixed; left: 14px; bottom: 86px;
-  z-index: 30;
+  /* anchored to the canvas, above the palette dock — the dock is pulled 58px
+     up into the canvas here, so 14px would put this underneath it */
+  position: absolute; left: 14px; bottom: 68px;
+  z-index: 6;
   display: flex; align-items: center; gap: 6px;
   background: rgba(20,20,44,0.94);
   border: 1px dashed var(--border-2);
@@ -866,18 +887,274 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   .sp { height: 14px; }
 }
 @media (max-width: 860px) {
-  body { overflow: auto; }
   .topbar { flex-wrap: wrap; }
   .charity-badge { display: none; }
   .statsbar { gap: 14px; }
   .price-lines span { display: none; }
   .btn-company i { display: none; }
-  .canvas-wrap { min-height: 58vh; }
   .actionbar { flex-wrap: wrap; justify-content: center; }
   .ab-left, .ab-right { flex: 0 0 auto; }
   .ab-center { order: 3; width: 100%; justify-content: center; }
   .palette-dock { margin-top: -52px; max-width: 96vw; }
   .cp-grid, .cp-grid > .cp-col:last-child { grid-template-columns: 1fr; grid-column: auto; }
-  .demo-pill { bottom: auto; top: 8px; left: 8px; }
   #toasts { bottom: 12px; }
+  /* the dock goes near-full-width here and is pulled 52px up into the canvas,
+     so both bottom-anchored overlays have to clear it */
+  #minimap { bottom: 62px; }
+  .demo-pill { bottom: 62px; }
+}
+
+/* ═══════════ TOUCH / MOBILE ═══════════ */
+
+/* Notched phones: keep the fixed chrome clear of the rounded corners and the
+   home indicator. Zero on every device without insets, so it's safe globally. */
+.topbar     { padding-left: max(20px, env(safe-area-inset-left));
+              padding-right: max(20px, env(safe-area-inset-right));
+              padding-top: max(12px, env(safe-area-inset-top)); }
+.statsbar   { padding-left: max(20px, env(safe-area-inset-left));
+              padding-right: max(20px, env(safe-area-inset-right)); }
+.actionbar  { padding-left: max(20px, env(safe-area-inset-left));
+              padding-right: max(20px, env(safe-area-inset-right));
+              padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.zoom-controls { right: max(14px, env(safe-area-inset-right)); }
+#minimap       { right: max(14px, env(safe-area-inset-right)); }
+.coords        { left: max(14px, env(safe-area-inset-left)); }
+
+/* Touch devices: no hover to reveal anything, and fingers need real targets. */
+@media (hover: none) {
+  /* transform-based hovers latch on after a tap and look stuck — drop them */
+  .swatch:hover, .tool:hover, .pack:hover { transform: none; }
+  .btn-company:hover, .btn-help:hover, .zoom-controls button:hover,
+  .tool:hover, .swatch:hover, .pack:hover, .crop-tools button:hover,
+  .size-presets button:hover, .btn-mini:hover, .btn-file:hover,
+  .demo-pill button:hover, .st-btn:hover, .ratio-lock:hover,
+  #yoursStat:hover, .modal-x:hover, .btn-buy-paint:hover, #btnFindSpot:hover {
+    border-color: inherit; background: inherit; color: inherit;
+  }
+  /* re-assert the states that actually mean something */
+  .tool.sel { border-color: var(--accent); background: var(--accent-dim); }
+  .swatch.sel { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); transform: scale(1.18); }
+  .size-presets button.sel { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+  .ratio-lock.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+  .pack-pop { border-color: var(--accent); }
+  /* clear feedback on press, since there's no hover to preview it */
+  .swatch:active { transform: scale(1.22); }
+  .tool:active, .pack:active, .size-presets button:active,
+  .crop-tools button:active, .btn-file:active, .btn-mini:active { border-color: var(--accent); }
+}
+
+/* Coarse pointer = finger. Grow every control to a comfortable target. */
+@media (pointer: coarse) {
+  /* 16px is the threshold below which iOS Safari zooms the page on focus —
+     that zoom then strands the user mid-form with no way back. */
+  .fld input[type="text"],
+  .fld input[type="number"],
+  .fld input[type="url"] { font-size: 16px; padding: 11px 12px; }
+
+  .swatch { width: 38px; height: 38px; }
+  .palette { gap: 8px; }
+  .tool { width: 44px; height: 44px; font-size: 19px; }
+  .zoom-controls button { width: 48px; height: 48px; font-size: 16px; }
+  .btn-help { width: 44px; height: 44px; }
+  .modal-x { width: 44px; height: 44px; font-size: 26px; top: 8px; right: 8px; }
+  .st-btn { width: 42px; }
+  .ratio-lock { width: 46px; }
+  .size-presets button, .crop-tools button, .btn-mini, .btn-file,
+  .btn-buy-paint, .demo-pill button { min-height: 38px; padding: 9px 12px; }
+  .pm span { padding: 15px 10px; }
+  .chk span { padding-top: 6px; padding-bottom: 6px; }
+  /* crop handles are 11px on desktop — far too small to grab with a thumb */
+  .crop-box .ch { width: 20px; height: 20px; }
+  .ch[data-h="nw"], .ch[data-h="ne"], .ch[data-h="sw"], .ch[data-h="se"] { margin: 0; }
+  .ch[data-h="nw"] { left: -10px; top: -10px; }
+  .ch[data-h="ne"] { right: -10px; top: -10px; }
+  .ch[data-h="sw"] { left: -10px; bottom: -10px; }
+  .ch[data-h="se"] { right: -10px; bottom: -10px; }
+  .ch[data-h="n"]  { top: -10px;    margin-left: -10px; }
+  .ch[data-h="s"]  { bottom: -10px; margin-left: -10px; }
+  .ch[data-h="w"]  { left: -10px;   margin-top: -10px; }
+  .ch[data-h="e"]  { right: -10px;  margin-top: -10px; }
+  /* fatter slider thumbs */
+  .budget-row input[type="range"]::-webkit-slider-thumb,
+  .rng input[type="range"]::-webkit-slider-thumb { width: 26px; height: 26px; }
+  .budget-row input[type="range"]::-moz-range-thumb,
+  .rng input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; }
+  .budget-row input[type="range"], .rng input[type="range"] { height: 10px; }
+}
+
+/* ── Phone portrait ── */
+@media (max-width: 620px) {
+  /* The shell stays fixed rather than scrolling: a scrolling page competes with
+     dragging the wall, and the CLAIM button must never scroll out of reach. */
+  body { overflow: hidden; }
+
+  .topbar { padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: 8px; gap: 10px; }
+  .brand { gap: 10px; }
+  .brand-logo { height: 34px; }
+  .brand-text h1 { font-size: 11px; letter-spacing: 0.5px; text-shadow: 2px 2px 0 rgba(61,223,166,0.22); }
+  .sponsors { gap: 8px; margin-top: 5px; }
+  .sp-label { display: none; }
+  .sp-logos { gap: 10px; }
+  .sp { height: 12px; }
+
+  .statsbar { gap: 10px 14px; padding: 8px 14px; }
+  .price-stat { display: none; }          /* the help modal already explains pricing */
+  .num-stat label { font-size: 6px; }
+  .num-stat b { font-size: 11px; }
+  .stats-actions { margin-left: auto; gap: 8px; }
+  .btn-company { font-size: 7px; padding: 10px 10px; }
+
+  .canvas-wrap { min-height: 0; }         /* flex handles it now — no vh guesswork */
+  .zoom-controls { top: 10px; gap: 5px; }
+  .coords { font-size: 7px; padding: 6px 8px; top: 10px; }
+
+  /* The minimap ate 38% of the width and sat under the palette dock. The dock
+     is pulled 46px up into the canvas, so anything below that is covered —
+     both of these clear it regardless of how many rows the dock wraps to. */
+  #minimap { width: 84px !important; height: 84px !important; bottom: 56px; }
+
+  .placement-hint { font-size: 7px; padding: 8px 10px; gap: 8px; max-width: calc(100% - 20px); }
+  #btnFindSpot { font-size: 7px; padding: 9px 10px; }
+
+  .palette-dock {
+    margin-top: -46px; max-width: calc(100% - 16px);
+    gap: 8px; padding: 8px 10px; border-radius: var(--r);
+  }
+  .tools { padding-right: 8px; gap: 5px; }
+  /* One scrolling row instead of a wrapping grid. At finger size the 17
+     swatches wrapped to 5 rows and the dock ate 242px of a 844px screen —
+     this keeps it to a single ~48px row and the targets stay big. */
+  .palette {
+    flex-wrap: nowrap; justify-content: flex-start;
+    flex: 1 1 auto; min-width: 0;
+    overflow-x: auto; overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    gap: 8px;
+    /* room for .sel's scale(1.18) + ring, which overflow:auto would clip */
+    padding: 5px 2px;
+    /* fade the trailing edge so it reads as scrollable */
+    mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+  }
+  .palette::-webkit-scrollbar { display: none; }
+  .swatch { flex: 0 0 auto; }
+  .sel-counter { padding-left: 8px; font-size: 8px; }
+
+  .actionbar { gap: 8px; padding: 8px 14px max(8px, env(safe-area-inset-bottom)); }
+  .ab-left { order: 1; gap: 8px; }
+  .ab-right { order: 2; }
+  .ab-center { order: 3; gap: 8px; }
+  .ab-right label { display: none; }      /* the swatch is self-explanatory */
+  .mini-stat { font-size: 7px; padding: 9px 10px; gap: 6px; }
+  .btn-claim { font-size: 9px; padding: 14px 18px; flex: 1 1 auto; }
+  .btn-clear { font-size: 7px; padding: 12px 12px; }
+
+  /* prototype affordance — keep it on the wall, above the dock, opposite the
+     minimap so the two never meet */
+  .demo-pill { left: 10px; bottom: 56px; padding: 5px 6px; gap: 4px; }
+  .dp-label { display: none; }
+  .demo-pill button { font-size: 6.5px; padding: 7px 7px; }
+
+  #toasts { bottom: 84px; width: 100%; padding: 0 12px; }
+  .toast { font-size: 12px; padding: 10px 12px; width: 100%; }
+
+  .overlay { padding: 10px; }
+  .modal { padding: 24px 18px 20px; max-height: 92vh; border-radius: var(--r); }
+  .modal h2 { font-size: 13px; }
+  .modal-sub { font-size: 12.5px; }
+  .modal-logo { height: 42px; }
+  .modal-foot { margin: 6px -18px 0; padding: 12px 18px max(14px, env(safe-area-inset-bottom)); }
+  .packs { grid-template-columns: 1fr; }
+  .pack { flex-direction: row; justify-content: space-between; padding: 14px 16px; }
+  .pk-tag { left: auto; right: 10px; transform: none; }
+  .pay-methods { grid-template-columns: 1fr; }
+  .step { padding: 11px 12px; gap: 11px; }
+  .cp-grid { gap: 16px; }
+}
+
+@supports (height: 100dvh) {
+  @media (max-width: 620px) { .modal { max-height: 92dvh; } }
+}
+
+/* ── Very narrow phones (≤400px) ──
+   The action bar was wrapping to three rows with the colour picker stranded
+   alone on the middle one. Let the CLAIM row absorb it instead. */
+@media (max-width: 400px) {
+  .actionbar { gap: 6px; padding: 7px 10px max(7px, env(safe-area-inset-bottom)); }
+  /* CLAIM's label is too wide to share a row, so it keeps its own full-width
+     one and the colour picker tucks in beside the stats instead — two rows
+     rather than three. */
+  .ab-left   { order: 1; flex: 1 1 auto; min-width: 0; }
+  .ab-right  { order: 2; flex: 0 0 auto; }
+  .ab-center { order: 3; width: 100%; }
+  .mini-stat { font-size: 6.5px; padding: 7px 7px; gap: 4px; }
+  .mini-stat b { font-size: 9px; }
+  .btn-buy-paint { font-size: 6px; padding: 4px 5px; }
+  .bucket { width: 12px; height: 12px; }
+  .btn-claim { font-size: 8px; padding: 12px 8px; }
+  .btn-clear { font-size: 6.5px; padding: 11px 9px; }
+  .cur-color-wrap { padding: 5px 7px; gap: 6px; }
+  .cur-color { width: 20px; height: 20px; }
+  .topbar { padding-left: 12px; padding-right: 12px; }
+  .statsbar { padding-left: 12px; padding-right: 12px; gap: 8px 10px; }
+  .btn-company { font-size: 6.5px; padding: 9px 8px; }
+}
+
+/* ── Phone landscape / any short viewport ──
+   67% of a 390px-tall viewport was going to chrome, pushing the action bar
+   off-screen. Strip the shell down so the wall keeps the room. */
+@media (max-height: 500px) and (orientation: landscape) {
+  body { overflow: hidden; }
+  .topbar { padding: 6px 14px; gap: 10px; }
+  .brand-logo { height: 26px; }
+  .brand-text h1 { font-size: 10px; }
+  .sponsors { display: none; }
+  .charity-badge { display: none; }
+
+  .statsbar { padding: 5px 14px; gap: 12px; }
+  .price-stat, .legend { display: none; }
+  .num-stat { flex-direction: row; align-items: center; gap: 7px; }
+  .num-stat label { font-size: 6px; }
+  .num-stat b { font-size: 10px; }
+  .btn-company { font-size: 6.5px; padding: 8px 9px; }
+  .btn-help { width: 34px; height: 34px; font-size: 10px; }
+
+  .palette-dock { margin-top: -42px; padding: 6px 9px; gap: 8px; }
+  /* a single scrolling row costs only the swatch height, so keep them
+     thumb-sized here too rather than shrinking to 26px */
+  .swatch { width: 34px; height: 34px; }
+  .tool { width: 38px; height: 38px; font-size: 16px; }
+  /* same single-row treatment — vertical space is even scarcer here */
+  .palette {
+    flex-wrap: nowrap; justify-content: flex-start;
+    flex: 1 1 auto; min-width: 0;
+    overflow-x: auto; overflow-y: hidden;
+    overscroll-behavior-x: contain; scrollbar-width: none;
+    padding: 5px 2px;
+    mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+  }
+  .palette::-webkit-scrollbar { display: none; }
+  .swatch { flex: 0 0 auto; }
+
+  .actionbar { padding: 6px 14px; gap: 8px; flex-wrap: nowrap; }
+  .ab-center { order: 0; width: auto; }
+  .ab-right label, .dp-label { display: none; }
+  .mini-stat { font-size: 6.5px; padding: 8px 9px; }
+  .btn-claim { font-size: 8px; padding: 11px 14px; }
+  .btn-clear { font-size: 7px; padding: 10px 10px; }
+
+  #minimap { width: 74px !important; height: 74px !important; bottom: 52px; }
+  /* a 231px-tall canvas can't fit a 3-button column *and* the minimap down the
+     same edge — lay the zoom buttons out as a row instead */
+  .zoom-controls { flex-direction: row; gap: 5px; }
+  .zoom-controls button { width: 36px; height: 36px; font-size: 13px; }
+  /* dock is pulled 42px up here — sit clear of it rather than disappear */
+  .demo-pill { left: 10px; bottom: 52px; padding: 4px 6px; gap: 4px; }
+  .dp-label { display: none; }
+  .demo-pill button { font-size: 6px; padding: 6px 6px; }
+  #toasts { bottom: 70px; }
+  .modal { max-height: 94vh; padding: 18px 18px 14px; }
+  .modal-logo, .help-notes { display: none; }
 }

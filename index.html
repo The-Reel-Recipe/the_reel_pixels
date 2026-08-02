@@ -2,10 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- viewport-fit=cover lets the layout reach under the notch; the safe-area
+       insets in styles.css keep the controls out from under it. No maximum-scale
+       or user-scalable=no — pinch-zooming the page stays available. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>The Reel Recipe — Pixel Wall</title>
   <meta name="description" content="1,000,000 pixel charity wall by The Reel Recipe. Claim a pixel for 2 EGP — all proceeds go to charity.">
+  <meta name="theme-color" content="#14142c">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="icon" type="image/png" href="assets/logo-icon.png">
+  <link rel="apple-touch-icon" href="assets/logo-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -91,6 +98,17 @@
         <button id="btnFindSpot" type="button">&#128269; FIND FREE SPOT</button>
       </span>
     </div>
+
+    <!-- ═══════════ DEMO PILL ═══════════ -->
+    <!-- lives inside the canvas so it anchors to the wall instead of the
+         viewport — as a fixed element it landed on top of the action bar
+         buttons once the phone layout got short -->
+    <div class="demo-pill">
+      <span class="dp-label">PROTOTYPE DEMO</span>
+      <button id="demoTime" title="Simulate one week passing — expired pixels get auto-deleted">&#9193; +7 DAYS</button>
+      <button id="demoReseed" title="Restore the demo artwork">RESEED</button>
+      <button id="demoWipe" title="Wipe the wall to a fully empty grid">WIPE</button>
+    </div>
   </main>
 
   <!-- ═══════════ PALETTE DOCK ═══════════ -->
@@ -126,14 +144,6 @@
       </span>
     </div>
   </footer>
-
-  <!-- ═══════════ DEMO PILL ═══════════ -->
-  <div class="demo-pill">
-    <span class="dp-label">PROTOTYPE DEMO</span>
-    <button id="demoTime" title="Simulate one week passing — expired pixels get auto-deleted">&#9193; +7 DAYS</button>
-    <button id="demoReseed" title="Restore the demo artwork">RESEED</button>
-    <button id="demoWipe" title="Wipe the wall to a fully empty grid">WIPE</button>
-  </div>
 
   <div id="toasts" aria-live="polite"></div>
 
