@@ -324,6 +324,14 @@ function openStream() {
   const es = new EventSource(API_BASE + '/api/stream');
   es.onmessage = ev => {
     let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (d.t === 'hello') {
+      // A serverless host kills the stream at the function's max duration, so
+      // reconnects are routine. Refetch only when the server moved on without
+      // us — otherwise every reconnect would re-download the whole wall.
+      if (d.rev !== api.rev) resync(`missed ${d.rev - api.rev} update(s)`);
+      api.rev = d.rev;
+      return;
+    }
     if (d.rev) api.rev = d.rev;
     if (d.t === 'paint') {
       const target = d.layer === 'res' ? addReserved : addPixel;
@@ -342,8 +350,9 @@ function openStream() {
       resync('bulk change');
     }
   };
-  // EventSource retries on its own; a gap means we may have missed deltas
-  es.onerror = () => { if (es.readyState === EventSource.CONNECTING) resync('stream reconnect'); };
+  // EventSource reconnects on its own, and the hello above decides whether
+  // anything was actually missed — nothing to do here.
+  es.onerror = () => {};
   return es;
 }
 
