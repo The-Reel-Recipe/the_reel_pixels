@@ -272,6 +272,9 @@ async function loadWall() {
   cycle = meta.cycle;
   applyAllowance(meta.allowance);
   if (meta.prices) priceThePacks(meta.prices.paint);   // badges can't drift from the real rate
+  // /api/dev/* is unauthenticated by design (it's a prototype affordance), so a
+  // deployment with DEV=0 shouldn't show controls that can only fail
+  document.querySelector('.demo-pill').hidden = meta.dev === false;
   for (const [name, brand] of Object.entries(meta.brands || {})) {
     const safe = safeUrl(brand.url);
     if (safe) brands.set(name, { url: safe, cta: brand.cta || 'VISIT SITE' });
