@@ -1,16 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/index.js": {
+    "api/[...path].js": {
       "maxDuration": 60
     }
   },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" }
-  ],
   "headers": [
     {
-      "source": "/(app.js|styles.css|index.html)",
+      "source": "/(app.js|styles.css|index.html)?",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     }
   ]
