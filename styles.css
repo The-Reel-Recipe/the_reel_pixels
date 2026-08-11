@@ -98,7 +98,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 .sp-logos { display: flex; align-items: center; gap: 14px; }
 .sp { height: 17px; width: auto; opacity: 0.95; }
 
-.charity-badge {
+.cycle-badge {
   display: flex; align-items: center; gap: 12px;
   border: 2px solid var(--accent);
   border-radius: var(--r);
@@ -106,11 +106,11 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   background: var(--accent-dim);
   box-shadow: 0 0 0 1px rgba(0,0,0,0.3), inset 0 0 18px rgba(61,223,166,0.08);
 }
-.px-heart { width: 26px; color: var(--accent); animation: heartbeat 1.6s infinite; }
-@keyframes heartbeat { 0%,100% { transform: scale(1); } 12% { transform: scale(1.14); } 24% { transform: scale(1); } }
-.charity-text { display: flex; flex-direction: column; gap: 5px; }
-.charity-text b    { font-family: var(--fp); font-size: 8px; letter-spacing: 0.5px; }
-.charity-text span { font-family: var(--fp); font-size: 10px; color: var(--accent); }
+.px-cal { width: 24px; color: var(--accent); animation: cal-tick 3.2s infinite; }
+@keyframes cal-tick { 0%,88%,100% { transform: none; } 92% { transform: translateY(-2px); } 96% { transform: none; } }
+.cycle-text { display: flex; flex-direction: column; gap: 5px; }
+.cycle-text b    { font-family: var(--fp); font-size: 8px; letter-spacing: 0.5px; }
+.cycle-text span { font-family: var(--fp); font-size: 10px; color: var(--accent); }
 
 /* ═══════════ STATS BAR ═══════════ */
 .statsbar {
@@ -142,6 +142,8 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 .chip { width: 14px; height: 14px; display: inline-block; border: 2px solid var(--border-2); }
 .chip-taken { background: #23205a; }
 .chip-yours { background: var(--accent); border-color: var(--accent-hi); }
+/* prepaid pixels are drawn washed-out on the white board until the reset promotes them */
+.chip-next  { background: rgba(255,255,255,0.4); }
 .chip-avail { background: #fff; }
 
 .stats-actions { display: flex; align-items: center; gap: 10px; }
@@ -331,6 +333,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   white-space: nowrap;
 }
 .sel-counter.full { color: var(--danger); }
+.sel-counter.waiting { color: var(--warn); }   /* counting down to the free refill */
 .sel-counter.infinite { color: var(--accent); }
 .sel-counter.shake { animation: shake .4s; }
 @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-4px)} 40%{transform:translateX(4px)} 60%{transform:translateX(-3px)} 80%{transform:translateX(3px)} }
@@ -403,6 +406,23 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 #customColor { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 .cur-color { width: 24px; height: 24px; border: 2px solid rgba(255,255,255,0.25); border-radius: 3px; background: var(--accent); pointer-events: none; }
 .caret { width: 9px; color: var(--text-dim); pointer-events: none; }
+
+/* ═══════════ OFFLINE NOTE ═══════════ */
+.offline-note {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 8; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 22px 26px; max-width: min(420px, 88%);
+  background: var(--surface); border: 2px solid var(--danger);
+  border-radius: var(--r); box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+}
+.offline-note b { font-family: var(--fp); font-size: 10px; color: var(--danger); letter-spacing: 0.5px; }
+.offline-note p { font-size: 13px; color: var(--text-dim); }
+.offline-note code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px;
+  padding: 8px 14px; background: var(--surface-2);
+  border: 1px solid var(--border-2); border-radius: 4px; color: var(--accent);
+}
 
 /* ═══════════ DEMO PILL ═══════════ */
 .demo-pill {
@@ -888,7 +908,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 }
 @media (max-width: 860px) {
   .topbar { flex-wrap: wrap; }
-  .charity-badge { display: none; }
+  .cycle-badge { display: none; }
   .statsbar { gap: 14px; }
   .price-lines span { display: none; }
   .btn-company i { display: none; }
@@ -1051,8 +1071,10 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   .btn-clear { font-size: 7px; padding: 12px 12px; }
 
   /* prototype affordance — keep it on the wall, above the dock, opposite the
-     minimap so the two never meet */
-  .demo-pill { left: 10px; bottom: 56px; padding: 5px 6px; gap: 4px; }
+     minimap so the two never meet. Four buttons no longer fit on one row at
+     this width, so cap it short of the minimap and let it wrap upward. */
+  .demo-pill { left: 10px; bottom: 56px; padding: 5px 6px; gap: 4px;
+               flex-wrap: wrap; max-width: calc(100% - 120px); }
   .dp-label { display: none; }
   .demo-pill button { font-size: 6.5px; padding: 7px 7px; }
 
@@ -1098,6 +1120,9 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   .cur-color { width: 20px; height: 20px; }
   .topbar { padding-left: 12px; padding-right: 12px; }
   .statsbar { padding-left: 12px; padding-right: 12px; gap: 8px 10px; }
+  /* three counters + the brand button wrap onto two rows here — the reset
+     countdown is the one that has to survive, so the queue count steps out */
+  .next-stat { display: none; }
   .btn-company { font-size: 6.5px; padding: 9px 8px; }
 }
 
@@ -1110,10 +1135,10 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   .brand-logo { height: 26px; }
   .brand-text h1 { font-size: 10px; }
   .sponsors { display: none; }
-  .charity-badge { display: none; }
+  .cycle-badge { display: none; }
 
   .statsbar { padding: 5px 14px; gap: 12px; }
-  .price-stat, .legend { display: none; }
+  .price-stat, .legend, .next-stat { display: none; }
   .num-stat { flex-direction: row; align-items: center; gap: 7px; }
   .num-stat label { font-size: 6px; }
   .num-stat b { font-size: 10px; }

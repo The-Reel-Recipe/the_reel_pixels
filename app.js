@@ -1,16 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════
    THE REEL RECIPE — PIXEL WALL  (interactive prototype)
-   1000×1000 canvas · 2 EGP/pixel · companies 10 EGP/pixel
-   20-pixel preview limit removed by PAINT credits · 30-day expiry
+   1000×1000 canvas · 20 free pixels per person, refilling every 30 min
+   prepaid PAINT 10 EGP/pixel · brand pre-orders 10 EGP/pixel
+
+   The wall runs in monthly cycles: at 00:00 on the 1st everything
+   painted on it is wiped, free and painted alike. Only brand
+   pre-orders survive that — they aren't on the wall at all
+   beforehand, they sit in the `reserved` queue and get promoted
+   onto the fresh wall by the reset.
+
+   None of that is decided here. server.js owns the wall, the queue,
+   the cycle and the per-IP allowance; this file draws what it sends
+   and posts intents back. The Maps below are a local mirror kept in
+   step by the /api/stream event feed, not a source of truth — with
+   no server reachable there is no wall, and the page says so.
    ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
 /* ── Constants ── */
 const W = 1000, H = 1000;
-const PRICE_USER = 2, PRICE_COMPANY = 10;
-const CAP = 20;                       // free preview limit
-const DAY = 86400000, LIFE = 30 * DAY;
-const LS_KEY = 'trrpixel.v1';
+const PRICE_COMPANY = 10;
+const CAP = 20;                       // free pixels per person, per batch
+const DAY = 86400000;
+const LS_KEY = 'trrpixel.help';       // the one thing still ours to remember
 
 const PALETTE = [
   '#3DDFA6', '#22C55E', '#14B8A6', '#59C2FF', '#2E6BE6', '#3D3D8F',
@@ -19,20 +31,122 @@ const PALETTE = [
 ];
 
 /* ── State ── */
-const pixels = new Map();             // idx -> {c,o,t,exp}
+const pixels = new Map();             // idx -> {c,o,t}  — live wall, this cycle
+const reserved = new Map();           // idx -> {c,o,t}  — brand bookings, up at the next reset
 const sel = new Map();                // idx -> color (preview basket)
 const yours = new Set();              // idx of committed pixels owned by YOU
 const brands = new Map();             // owner name -> {url, cta} for clickable sponsor logos
-let paint = 0;                        // prepaid pixel credits
+const nextBrands = new Map();         // same, for logos still waiting in the queue
+let paint = 0;                        // prepaid pixel credits (server-held)
+let freeUsed = 0;                     // free pixels spent out of the current batch
+let refillAt = 0;                     // when the batch comes back (0 = not waiting)
+let cycle = 0;                        // start of the cycle currently on the wall
+let myHandle = '';                    // what the server calls this caller
 let helpSeen = false;
-let taken = 0, raised = 0;
-let simOffset = 0;                    // demo time travel
+let taken = 0;
 let selColor = PALETTE[0];
-let saveTimer = null;
 
-const simNow = () => Date.now() + simOffset;
 const idx = (x, y) => y * W + x;
 const fmt = n => n.toLocaleString('en-US');
+const hex = c => '#' + c.toString(16).padStart(6, '0');
+const rgbInt = h => parseInt(h.slice(1), 16);
+
+/* ── Server ──
+   `skew` lines the server's clock up with ours so countdowns don't drift on a
+   machine with a wrong clock. Every timestamp in this file is server time. */
+const api = { on: false, skew: 0, rev: 0 };
+const serverNow = () => Date.now() + api.skew;
+
+/* Where the API lives. Same origin when the page is served by server.js;
+   ?api=https://… or <meta name="pixel-api"> to point a statically hosted
+   page (GitHub Pages, a CDN) at a server running somewhere else. */
+const API_BASE = (new URLSearchParams(location.search).get('api') ||
+  (document.querySelector('meta[name="pixel-api"]') || {}).content || '').replace(/\/+$/, '');
+
+async function apiJson(path, body) {
+  const res = await fetch(API_BASE + path, body ? {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+  } : undefined);
+  if (!res.ok) throw new Error(`${path} → ${res.status}`);
+  return res.json();
+}
+
+/* Wire format, matching server.js:
+     [u32 metaLen][meta JSON][u32 aCount][a…][u32 bCount][b…]
+     entry = u32 idx · u8 r · u8 g · u8 b · u16 ownerId   (9 bytes)
+   A 160k-pixel logo is 1.4 MB this way and would be 4 MB as JSON. */
+const ENTRY = 9;
+function encodeEnvelope(meta, a, b = []) {
+  const json = new TextEncoder().encode(JSON.stringify(meta));
+  const buf = new ArrayBuffer(4 + json.length + 4 + a.length * ENTRY + 4 + b.length * ENTRY);
+  const dv = new DataView(buf), bytes = new Uint8Array(buf);
+  let o = 0;
+  dv.setUint32(o, json.length, true); o += 4;
+  bytes.set(json, o); o += json.length;
+  for (const list of [a, b]) {
+    dv.setUint32(o, list.length, true); o += 4;
+    for (const [i, c, own] of list) {
+      dv.setUint32(o, i, true); o += 4;
+      bytes[o++] = (c >> 16) & 255; bytes[o++] = (c >> 8) & 255; bytes[o++] = c & 255;
+      dv.setUint16(o, own || 0, true); o += 2;
+    }
+  }
+  return buf;
+}
+function decodeEnvelope(buf) {
+  const dv = new DataView(buf), bytes = new Uint8Array(buf);
+  let o = 0;
+  const metaLen = dv.getUint32(o, true); o += 4;
+  const meta = JSON.parse(new TextDecoder().decode(bytes.subarray(o, o + metaLen))); o += metaLen;
+  const readList = () => {
+    const n = dv.getUint32(o, true); o += 4;
+    const out = new Array(n);
+    for (let i = 0; i < n; i++) {
+      out[i] = [dv.getUint32(o, true), (bytes[o + 4] << 16) | (bytes[o + 5] << 8) | bytes[o + 6], dv.getUint16(o + 7, true)];
+      o += ENTRY;
+    }
+    return out;
+  };
+  return { meta, a: readList(), b: readList() };
+}
+async function apiEnvelope(path, meta, a, b) {
+  const res = await fetch(API_BASE + path, {
+    method: 'POST', headers: { 'content-type': 'application/octet-stream' },
+    body: encodeEnvelope(meta, a, b)
+  });
+  if (!res.ok) throw new Error(`${path} → ${res.status}`);
+  return res.json();
+}
+
+function applyAllowance(d) {
+  api.skew = d.now - Date.now();
+  freeUsed = Math.max(0, CAP - d.free);
+  refillAt = d.refillAt || 0;
+  paint = d.paint || 0;
+  if (d.handle) myHandle = d.handle;
+}
+
+/* ── Monthly cycle ── */
+const cycleStart = t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), 1).getTime(); };
+const cycleEnd   = t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(); };
+const monthName  = t => new Date(t).toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
+const shortDate  = t => new Date(t).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }).toUpperCase();
+/* Every countdown targets the end of the cycle the *wall* is in — which the
+   server tells us — not whatever month this machine's calendar says. */
+const cycleEndsAt = () => cycleEnd(cycle);
+/* the cycle the prepaid queue is booked for = the one starting at the next reset */
+const nextCycleName = () => monthName(cycleEndsAt());
+function countdown(ms) {
+  if (ms <= 0) return '0h';
+  const d = Math.floor(ms / DAY), h = Math.floor((ms % DAY) / 3600000);
+  if (d > 0) return `${d}d ${String(h).padStart(2, '0')}h`;
+  const m = Math.floor((ms % 3600000) / 60000);
+  return `${h}h ${String(m).padStart(2, '0')}m`;
+}
+function mmss(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 /* Only http(s) links with a real hostname may be attached to pixels.
    Blocks javascript:/data: URLs, and the URL parser's habit of happily
@@ -60,6 +174,10 @@ const board = document.createElement('canvas');   board.width = W; board.height 
 const bctx = board.getContext('2d');
 const prevCvs = document.createElement('canvas'); prevCvs.width = W; prevCvs.height = H;
 const pctx = prevCvs.getContext('2d');
+/* the prepaid queue — drawn washed-out over the wall so you can see what's
+   coming, then blitted onto the real board when the reset promotes it */
+const nextCvs = document.createElement('canvas'); nextCvs.width = W; nextCvs.height = H;
+const nctx = nextCvs.getContext('2d');
 const thumb = document.createElement('canvas');   thumb.width = 148; thumb.height = 148;
 const thctx = thumb.getContext('2d');
 let thumbDirty = true;
@@ -108,8 +226,8 @@ const cellAt = (px, py) => {
 function addPixel(i, p, defer) {
   if (pixels.has(i)) removePixel(i);
   pixels.set(i, p);
-  taken++; raised += p.t === 'c' ? PRICE_COMPANY : PRICE_USER;
-  if (p.o === 'YOU') yours.add(i);
+  taken++;
+  if (p.o === myHandle) yours.add(i);
   if (!defer) {
     bctx.fillStyle = p.c;
     bctx.fillRect(i % W, (i / W) | 0, 1, 1);
@@ -119,48 +237,154 @@ function addPixel(i, p, defer) {
 function removePixel(i) {
   const p = pixels.get(i); if (!p) return;
   pixels.delete(i);
-  taken--; raised -= p.t === 'c' ? PRICE_COMPANY : PRICE_USER;
+  taken--;
   yours.delete(i);
   bctx.clearRect(i % W, (i / W) | 0, 1, 1);
   thumbDirty = true;
 }
-function sweep(silent) {
-  const now = simNow(); let n = 0;
-  for (const [i, p] of pixels) if (p.exp < now) { removePixel(i); n++; }
-  if (n && !silent) toast(`&#9200; ${fmt(n)} pixels reached 30 days and faded away`, { cls: 'warn' });
-  if (n) { updateStats(); scheduleSave(); }
-  return n;
+/* Prepaid pixels never touch the live board — they only exist on nextCvs
+   until a reset promotes them. */
+function addReserved(i, p, defer) {
+  reserved.set(i, p);
+  if (!defer) {
+    nctx.fillStyle = p.c;
+    nctx.fillRect(i % W, (i / W) | 0, 1, 1);
+  }
+  thumbDirty = true;
 }
 
-/* ── Persistence ── */
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try {
-      if (pixels.size > 120000) return;
-      const px = [];
-      for (const [i, p] of pixels) px.push([i, p.c, p.o, p.t, p.exp]);
-      const br = [...brands].map(([name, b]) => [name, b.url, b.cta]);
-      localStorage.setItem(LS_KEY, JSON.stringify({ v: 1, paint, help: helpSeen ? 1 : 0, px, br }));
-    } catch (e) { /* storage full — prototype, ignore */ }
-  }, 400);
+/* ── Loading the wall ──
+   One request bootstraps everything: both pixel layers, the brand links, the
+   cycle, and this caller's allowance. Also the recovery path — any time we
+   might have missed an event, we just ask for the whole thing again. */
+async function loadWall() {
+  const res = await fetch(API_BASE + '/api/wall');
+  if (!res.ok) throw new Error(`/api/wall → ${res.status}`);
+  const { meta, a, b } = decodeEnvelope(await res.arrayBuffer());
+
+  pixels.clear(); reserved.clear(); yours.clear();
+  brands.clear(); nextBrands.clear();
+  taken = 0;
+  bctx.clearRect(0, 0, W, H);
+  nctx.clearRect(0, 0, W, H);
+
+  api.on = true; api.rev = meta.rev || 0;
+  cycle = meta.cycle;
+  applyAllowance(meta.allowance);
+  if (meta.prices) priceThePacks(meta.prices.paint);   // badges can't drift from the real rate
+  for (const [name, brand] of Object.entries(meta.brands || {})) {
+    const safe = safeUrl(brand.url);
+    if (safe) brands.set(name, { url: safe, cta: brand.cta || 'VISIT SITE' });
+  }
+  for (const [name, brand] of Object.entries(meta.nextBrands || {})) {
+    const safe = safeUrl(brand.url);
+    if (safe) nextBrands.set(name, { url: safe, cta: brand.cta || 'VISIT SITE' });
+  }
+
+  const owners = meta.owners || [];
+  const own = id => owners[id] || { n: '—', t: 'u' };
+  // defer the per-pixel fill and blit both layers once at the end
+  for (const [i, c, o] of a) { const w = own(o); addPixel(i, { c: hex(c), o: w.n, t: w.t }, true); }
+  for (const [i, c, o] of b) { const w = own(o); addReserved(i, { c: hex(c), o: w.n, t: w.t }, true); }
+  repaintBoards();
+  updateAll();
 }
-function load() {
-  try {
-    const raw = localStorage.getItem(LS_KEY); if (!raw) return false;
-    const d = JSON.parse(raw); if (!d || d.v !== 1) return false;
-    paint = d.paint || 0; helpSeen = !!d.help;
-    for (const [name, url, cta] of (d.br || [])) {
-      const safe = safeUrl(url);
-      if (safe) brands.set(name, { url: safe, cta: cta || 'VISIT SITE' });
+/* Rebuild both offscreen boards from the maps — cheaper than a fillRect per
+   pixel when a whole snapshot lands at once. */
+function repaintBoards() {
+  const img = (m, target) => {
+    const d = target.createImageData(W, H), px = d.data;
+    for (const [i, p] of m) {
+      const c = rgbInt(p.c), o = i * 4;
+      px[o] = (c >> 16) & 255; px[o + 1] = (c >> 8) & 255; px[o + 2] = c & 255; px[o + 3] = 255;
     }
-    for (const [i, c, o, t, exp] of d.px) addPixel(i, { c, o, t, exp });
-    return true;
-  } catch (e) { return false; }
+    target.putImageData(d, 0, 0);
+  };
+  bctx.clearRect(0, 0, W, H); img(pixels, bctx);
+  nctx.clearRect(0, 0, W, H); img(reserved, nctx);
+  thumbDirty = true;
 }
 
-/* ── Selection (preview basket) ── */
-function capReached() { return paint <= 0 && sel.size >= CAP; }
+/* ── Live updates ──
+   Everyone painting on the wall shows up here. Deltas arrive inline; anything
+   too big to ship that way (a brand logo is up to 160k pixels) arrives as a
+   nudge to refetch, as does a reset or a reconnect after a gap. */
+let resyncTimer = null;
+function resync(reason) {
+  clearTimeout(resyncTimer);
+  resyncTimer = setTimeout(() => {
+    loadWall().catch(e => console.warn('resync failed:', e.message));
+  }, 120);
+  if (reason) console.debug('resync:', reason);
+}
+function openStream() {
+  const es = new EventSource(API_BASE + '/api/stream');
+  es.onmessage = ev => {
+    let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (d.rev) api.rev = d.rev;
+    if (d.t === 'paint') {
+      const target = d.layer === 'res' ? addReserved : addPixel;
+      for (const [i, c] of d.px) target(i, { c: hex(c), o: d.o.n, t: d.o.ty });
+      if (d.brand && d.o.ty === 'c') {
+        const safe = safeUrl(d.brand.url);
+        if (safe) (d.layer === 'res' ? nextBrands : brands).set(d.o.n, { url: safe, cta: d.brand.cta });
+      }
+      // another tab on this connection spent our allowance — don't wait for the poll
+      if (d.o.ty === 'u' && d.o.n === myHandle) syncAllowance();
+      updateStats();
+    } else if (d.t === 'reset') {
+      resync('reset');
+      toast('&#128465; The wall reset — prepaid pixels are up on a fresh cycle.', { cls: 'warn', dur: 5200 });
+    } else if (d.t === 'sync') {
+      resync('bulk change');
+    }
+  };
+  // EventSource retries on its own; a gap means we may have missed deltas
+  es.onerror = () => { if (es.readyState === EventSource.CONNECTING) resync('stream reconnect'); };
+  return es;
+}
+
+/* ── Offline ──
+   The wall lives on the server now, so there is no degraded mode to fall
+   back to. Say so plainly rather than showing an empty grid that looks real. */
+function serverDown(err) {
+  api.on = false;
+  console.error('pixel wall: server unreachable —', err && err.message);
+  $('offlineNote').hidden = false;
+  $('btnCheckout').disabled = true;
+  $('btnCompany').disabled = true;
+  $('btnPaintShop').disabled = true;
+}
+
+/* ── Free allowance ── */
+/* You get CAP free pixels; the moment you spend the last one a 30-minute
+   timer starts, and when it lands the batch is back. Paint buys pixels past
+   the batch — those go up on this wall too, and the reset wipes them with
+   everything else. Only brand pre-orders are held over for the next cycle.
+
+   The counter itself is not ours to keep — server.js owns it, keyed on the
+   caller's IP, and /api/claim is what actually decides how many free pixels
+   you get. What lives here is a mirror of that answer plus the countdown. */
+const freeLeft = () => Math.max(0, CAP - freeUsed);
+const waitingOnRefill = () => refillAt > serverNow();
+const refillLeft = () => Math.max(0, refillAt - serverNow());
+
+async function syncAllowance() {
+  try { applyAllowance(await apiJson('/api/allowance')); updateAll(); }
+  catch (e) { console.warn('allowance sync failed:', e.message); }
+}
+/* Our clock says the batch is due — clear it optimistically so the counter
+   doesn't sit at 0:00, then let the server confirm. */
+function checkRefill(silent) {
+  if (!refillAt || serverNow() < refillAt) return false;
+  freeUsed = 0; refillAt = 0;
+  updateAll();
+  syncAllowance();
+  if (!silent) toast(`&#9203; Your <b>${CAP} free pixels</b> are back — keep painting.`);
+  return true;
+}
+const allowance = () => freeLeft() + paint;
+function capReached() { return sel.size >= allowance(); }
 function togglePreview(x, y) {
   const i = idx(x, y);
   if (sel.has(i)) {
@@ -183,31 +407,47 @@ function clearSel() {
 function capHit() {
   const c = $('selCounter');
   c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake');
-  toast(`Preview limit reached — <b>${CAP} pixels</b> max. Buy PAINT to remove the limit.`,
-    { cls: 'warn', action: { label: 'BUY PAINT', fn: () => openModal('modalPaint') } });
+  const msg = freeLeft() > 0
+    ? `That's all <b>${fmt(allowance())} pixels</b> you have. Buy PAINT for more.`
+    : `Your <b>${CAP} free pixels</b> are used up — back in <b>${mmss(refillLeft())}</b>. Buy PAINT to skip the wait.`;
+  toast(msg, { cls: 'warn', action: { label: 'BUY PAINT', fn: () => openModal('modalPaint') } });
 }
 
 /* ── UI updates ── */
 function updateStats() {
   $('statTaken').textContent = fmt(taken);
-  $('statRaised').innerHTML = `${fmt(raised)} <i>EGP</i>`;
+  $('statNext').textContent = fmt(reserved.size);
   $('statYours').textContent = fmt(yours.size);
   $('statPaint').textContent = fmt(paint);
+  updateClock();
+}
+function updateClock() {
+  const end = cycleEndsAt();
+  $('statReset').textContent = countdown(end - serverNow());
+  $('cycleNext').textContent = `NEXT RESET ${shortDate(end)}`;
+  $('freeLine').innerHTML = waitingOnRefill()
+    ? `Free pixels used up — <b class="accent">${mmss(refillLeft())}</b> until your next ${CAP}.`
+    : `<b class="accent">${freeLeft()}</b> free pixels left — a fresh ${CAP} lands 30 min after you run out.`;
 }
 function updateSelUI() {
   const n = sel.size;
   const counter = $('selCounter');
-  counter.textContent = paint > 0 ? `${n}/∞` : `${n}/${CAP}`;
-  counter.classList.toggle('infinite', paint > 0);
-  counter.classList.toggle('full', paint <= 0 && n >= CAP);
+  const full = n >= allowance();
+  // out of free pixels with no paint to fall back on — the counter turns into
+  // the refill clock, since 0/0 tells you nothing you want to know
+  const stalled = full && allowance() === 0 && waitingOnRefill();
+  counter.textContent = stalled ? `⏳ ${mmss(refillLeft())}` : `${n}/${allowance()}`;
+  counter.classList.toggle('full', full && !stalled);
+  counter.classList.toggle('waiting', stalled);
+  counter.classList.toggle('infinite', !full && paint > 0);
   const btn = $('btnCheckout');
   $('btnClear').disabled = n === 0;
   if (n === 0) { btn.disabled = true; btn.textContent = 'CLICK PIXELS TO PAINT'; return; }
   btn.disabled = false;
-  const usePaint = Math.min(paint, n), pay = (n - usePaint) * PRICE_USER;
-  if (usePaint > 0 && pay === 0) btn.textContent = `CLAIM ${n} PX · USE ${usePaint} PAINT`;
-  else if (usePaint > 0) btn.textContent = `CLAIM ${n} PX · ${usePaint}P + ${pay} EGP`;
-  else btn.textContent = `CLAIM ${n} PIXEL${n > 1 ? 'S' : ''} · ${pay} EGP`;
+  const free = Math.min(n, freeLeft()), paid = n - free;
+  if (paid === 0) btn.textContent = `CLAIM ${n} PIXEL${n > 1 ? 'S' : ''} · FREE`;
+  else if (free === 0) btn.textContent = `CLAIM ${n} PX · ${paid} PAINT`;
+  else btn.textContent = `CLAIM ${n} PX · ${free} FREE + ${paid} PAINT`;
 }
 function updateAll() { updateStats(); updateSelUI(); }
 
@@ -232,7 +472,10 @@ document.querySelectorAll('.overlay').forEach(ov => {
   ov.addEventListener('pointerdown', e => { if (e.target === ov) ov.hidden = true; });
   ov.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
     ov.hidden = true;
-    if (ov.id === 'modalHelp' && !helpSeen) { helpSeen = true; scheduleSave(); }
+    if (ov.id === 'modalHelp' && !helpSeen) {
+      helpSeen = true;
+      try { localStorage.setItem(LS_KEY, '1'); } catch (e) { /* private mode — just show it again */ }
+    }
   }));
 });
 
@@ -263,35 +506,68 @@ $('customColor').addEventListener('input', e => setColor(e.target.value, null));
 /* ── Checkout ── */
 $('btnCheckout').onclick = () => {
   const n = sel.size; if (!n) return;
-  const usePaint = Math.min(paint, n), pay = (n - usePaint) * PRICE_USER;
+  const free = Math.min(n, freeLeft()), paid = n - free;
   $('coPixels').textContent = fmt(n);
-  $('coPaintRow').hidden = usePaint === 0;
-  $('coPaint').textContent = `−${fmt(usePaint)}`;
-  $('coTotal').textContent = `${fmt(pay)} EGP`;
-  $('payMethods').style.display = pay === 0 ? 'none' : '';
+  $('coFree').textContent = fmt(free);
+  $('coPaintRow').hidden = paid === 0;
+  $('coPaint').textContent = `−${fmt(paid)}`;
+  $('coTotal').textContent = paid > 0 ? `0 EGP · ${fmt(paid)} PAINT` : 'FREE';
+  $('coFine').innerHTML = paid > 0
+    ? `Prototype — nothing is charged now, the paint is already paid for. Every pixel goes up straight away and stays until the wall resets on ${shortDate(cycleEndsAt())}.`
+    : `Prototype — nothing is charged. Your pixels stay up until the wall resets on ${shortDate(cycleEndsAt())}.`;
   const btn = $('btnPay');
   btn.disabled = false;
-  btn.textContent = pay === 0 ? `CONFIRM · USE ${usePaint} PAINT` : `PAY ${fmt(pay)} EGP`;
+  btn.textContent = paid > 0 ? `CONFIRM · SPEND ${fmt(paid)} PAINT` : 'CLAIM';
   $('coBody').hidden = false; $('coSuccess').hidden = true;
   openModal('modalCheckout');
 };
 $('btnPay').onclick = () => {
   const btn = $('btnPay');
+  const label = btn.textContent;
   btn.disabled = true; btn.textContent = 'PROCESSING…';
-  const commit = () => {
+  const commit = async () => {
     try {
-      const n = sel.size, usePaint = Math.min(paint, n);
-      const exp = simNow() + LIFE;
-      for (const [i, c] of sel) addPixel(i, { c, o: 'YOU', t: 'u', exp });
-      paint -= usePaint;
-      clearSel(); updateAll(); scheduleSave();
+      // The server decides all of this: which cells are still free ground,
+      // how many this IP gets for nothing, and how much paint it spends. It
+      // may place fewer than the modal quoted — another tab, another device
+      // on this connection, or somebody else taking the ground first — so
+      // everything below works off `placedIdx`, not off what we asked for.
+      const d = await apiEnvelope('/api/claim', {}, [...sel].map(([i, c]) => [i, rgbInt(c), 0]));
+      applyAllowance(d);
+
+      for (const i of d.placedIdx) {
+        const c = sel.get(i); if (c === undefined) continue;
+        addPixel(i, { c, o: myHandle, t: 'u' });
+        sel.delete(i);                                  // the rest stay in the basket
+        pctx.clearRect(i % W, (i / W) | 0, 1, 1);
+      }
+      if (d.occupied) {                                 // taken while we were choosing
+        for (const [i] of [...sel]) {
+          if (!pixels.has(i)) continue;
+          sel.delete(i); pctx.clearRect(i % W, (i / W) | 0, 1, 1);
+        }
+      }
+      updateAll();
+
       $('coBody').hidden = true;
-      $('coSuccessMsg').textContent = `${fmt(n)} PIXEL${n > 1 ? 'S' : ''} CLAIMED!`;
+      $('coSuccessMsg').textContent = `${fmt(d.placed)} PIXEL${d.placed === 1 ? '' : 'S'} CLAIMED!`;
+      $('coSuccessSub').textContent = waitingOnRefill()
+        ? `Up until the reset on ${shortDate(cycleEndsAt())}. Your next ${CAP} free pixels land in ${mmss(refillLeft())}.`
+        : `They're yours until the wall resets on ${shortDate(cycleEndsAt())}.`;
       $('coSuccess').hidden = false;
+      if (d.occupied) {
+        toast(`${fmt(d.occupied)} pixel${d.occupied === 1 ? ' was' : 's were'} claimed by someone else first — dropped from your basket.`, { cls: 'warn' });
+      }
+      if (d.short > 0) {
+        toast(`${fmt(d.short)} pixel${d.short === 1 ? '' : 's'} left in your basket — you're out of free pixels` +
+          (waitingOnRefill() ? ` for another <b>${mmss(refillLeft())}</b>.` : '.'),
+          { cls: 'warn', action: { label: 'BUY PAINT', fn: () => openModal('modalPaint') } });
+      }
       setTimeout(() => closeModal('modalCheckout'), 1700);
     } catch (err) {
-      btn.disabled = false; btn.textContent = 'PAY';
+      btn.disabled = false; btn.textContent = label;
       toast('Something went wrong — please try again.', { cls: 'err' });
+      resync('claim failed');
     }
   };
   // hidden/backgrounded pages throttle timers up to 60s — commit instantly there
@@ -301,11 +577,24 @@ $('btnClear').onclick = () => { clearSel(); };
 
 /* ── Paint shop ── */
 $('btnPaintShop').onclick = () => openModal('modalPaint');
-document.querySelectorAll('.pack').forEach(p => p.addEventListener('click', () => {
+/* Prices and the per-pixel rate both come from the server, so the discount
+   badges can't drift away from what a pack actually costs. */
+function priceThePacks(perPixel) {
+  document.querySelectorAll('.pack').forEach(p => {
+    const save = Math.round((1 - p.dataset.price / (p.dataset.paint * perPixel)) * 100);
+    p.querySelector('.pk-save').textContent = save > 0 ? `SAVE ${save}%` : `${perPixel} EGP/PX`;
+  });
+}
+document.querySelectorAll('.pack').forEach(p => p.addEventListener('click', async () => {
   const amt = +p.dataset.paint;
-  paint += amt;
-  updateAll(); scheduleSave(); closeModal('modalPaint');
-  toast(`&#129699; <b>+${amt} paint</b> added! The ${CAP}-pixel limit is gone — keep painting.`);
+  p.disabled = true;
+  try {
+    applyAllowance(await apiJson('/api/paint', { pack: amt }));
+    updateAll(); closeModal('modalPaint');
+    toast(`&#129699; <b>+${amt} paint</b> added! No waiting on the refill — paint straight past your free ${CAP}.`);
+  } catch (e) {
+    toast('The paint shop is unreachable — try again.', { cls: 'err' });
+  } finally { p.disabled = false; }
 }));
 
 /* ── Help ── */
@@ -782,16 +1071,17 @@ function cancelPlacing() {
   cvs.classList.remove('placing');
   $('placementHint').hidden = true;
 }
-/* A big logo will almost always clip a few stray pixels on a busy wall, so
-   a small overlap is allowed: those cells are skipped (never overwritten)
-   and never charged for. Anything beyond OVERLAP_MAX is rejected. */
+/* Pre-orders are booked against next cycle's wall, so the only thing in the
+   way is what somebody else already prepaid — never the live pixels, which
+   the reset wipes anyway. A small overlap is allowed: those cells are skipped
+   (never overwritten) and never charged for. Beyond OVERLAP_MAX is rejected. */
 const OVERLAP_MAX = 0.02;
 let ghostOverlap = 0;
 
 function countOverlap(gx, gy, cells, bail) {
   let n = 0;
   for (const [dx, dy] of cells) {
-    if (pixels.has(idx(gx + dx, gy + dy))) { n++; if (bail && n > bail) return n; }
+    if (reserved.has(idx(gx + dx, gy + dy))) { n++; if (bail && n > bail) return n; }
   }
   return n;
 }
@@ -807,7 +1097,7 @@ function updateGhost(cell) {
   ghostValid = ghostOverlap <= budget;
   const el = $('phOverlap');
   if (el) {
-    el.textContent = ghostOverlap ? `${fmt(ghostOverlap)} taken px here` : 'clear';
+    el.textContent = ghostOverlap ? `${fmt(ghostOverlap)} booked px here` : 'clear';
     el.className = ghostValid ? 'ok' : 'bad';
   }
 }
@@ -835,10 +1125,10 @@ function findFreeSpot() {
   view.oy = ch / 2 - (best.gy + placing.h / 2) * view.s;
   userMovedView = true; clampView();
   const el = $('phOverlap');
-  if (el) { el.textContent = ghostValid ? 'clear' : `${fmt(best.n)} taken px here`; el.className = ghostValid ? 'ok' : 'bad'; }
+  if (el) { el.textContent = ghostValid ? 'clear' : `${fmt(best.n)} booked px here`; el.className = ghostValid ? 'ok' : 'bad'; }
   toast(ghostValid
-    ? `&#128269; Found a spot at <b>${best.gx}, ${best.gy}</b> — click to place.`
-    : `The wall is crowded — the emptiest spot still has ${fmt(best.n)} taken pixels.`,
+    ? `&#128269; Found a spot at <b>${best.gx}, ${best.gy}</b> — click to book it.`
+    : `${nextCycleName()} is filling up — the emptiest spot still has ${fmt(best.n)} booked pixels.`,
     { cls: ghostValid ? '' : 'warn' });
 }
 $('btnFindSpot').onclick = findFreeSpot;
@@ -847,15 +1137,15 @@ let pendingPlace = null;             // snapshot taken when the spot is clicked 
 function tryPlace() {
   if (!placing || !ghostPos) return;
   if (!ghostValid) {
-    toast(`Too crowded here — <b>${fmt(ghostOverlap)}</b> pixels are already taken. Try FIND FREE SPOT.`,
+    toast(`Too crowded here — <b>${fmt(ghostOverlap)}</b> pixels are already booked. Try FIND FREE SPOT.`,
       { cls: 'err', action: { label: 'FIND SPOT', fn: findFreeSpot } });
     return;
   }
   const { x: gx, y: gy } = ghostPos;
-  // only cells landing on free ground are painted, and only those are billed
-  const cells = placing.cells.filter(([dx, dy]) => !pixels.has(idx(gx + dx, gy + dy)));
+  // only cells landing on unbooked ground are reserved, and only those are billed
+  const cells = placing.cells.filter(([dx, dy]) => !reserved.has(idx(gx + dx, gy + dy)));
   const skipped = placing.cells.length - cells.length;
-  if (!cells.length) { toast('Nothing to place here — every pixel is taken.', { cls: 'err' }); return; }
+  if (!cells.length) { toast('Nothing to book here — every pixel is already taken.', { cls: 'err' }); return; }
 
   const ghost = document.createElement('canvas');
   ghost.width = placing.w; ghost.height = placing.h;
@@ -869,31 +1159,30 @@ function tryPlace() {
   $('cfSkip').textContent = fmt(skipped);
   $('cfLinkRow').hidden = !pendingPlace.url;
   if (pendingPlace.url) $('cfLink').textContent = pendingPlace.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  $('cfGoLive').textContent = `${shortDate(cycleEndsAt())} · ${nextCycleName()}`;
   $('cfTotal').textContent = `${fmt(cells.length * PRICE_COMPANY)} EGP`;
-  const btn = $('btnConfirmPlace'); btn.disabled = false; btn.textContent = 'PAY & PLACE';
+  const btn = $('btnConfirmPlace'); btn.disabled = false; btn.textContent = 'PAY & BOOK';
   openModal('modalConfirm');
 }
 $('btnConfirmPlace').onclick = () => {
   if (!pendingPlace) return;
   const btn = $('btnConfirmPlace');
   btn.disabled = true; btn.textContent = 'PROCESSING…';
-  const commit = () => {
+  const commit = async () => {
     try {
-      const { cells, name, url, cta, ghost, gx, gy } = pendingPlace;
-      const exp = simNow() + LIFE;
-      if (url) brands.set(name, { url, cta });
-      for (const [dx, dy, col] of cells) {
-        const i = idx(gx + dx, gy + dy);
-        if (sel.has(i)) { sel.delete(i); pctx.clearRect(gx + dx, gy + dy, 1, 1); }
-        addPixel(i, { c: col, o: name, t: 'c', exp }, true);
-      }
-      bctx.drawImage(ghost, gx, gy);       // one blit instead of N fillRects
+      const { cells, name, url, cta, gx, gy } = pendingPlace;
+      // up to 160k cells — the binary envelope keeps this at ~1.4 MB
+      const d = await apiEnvelope('/api/book', { name, url, cta },
+        cells.map(([dx, dy, col]) => [idx(gx + dx, gy + dy), rgbInt(col), 0]));
       pendingPlace = null;
       closeModal('modalConfirm');
-      toast(`&#127970; <b>${name}</b> is live! ${fmt(cells.length)} px · ${fmt(cells.length * PRICE_COMPANY)} EGP donated.`);
-      cancelPlacing(); updateAll(); scheduleSave();
+      toast(`&#127970; <b>${name}</b> is booked — ${fmt(d.booked)} px for ${fmt(d.cost)} EGP. ` +
+        `It goes live on ${shortDate(d.goesLive)}, when the wall resets.`, { dur: 5200 });
+      if (d.skipped) toast(`${fmt(d.skipped)} pixels were already booked and were skipped — you weren't charged for them.`, { cls: 'warn' });
+      cancelPlacing();
+      // the pixels themselves arrive over the stream, as they do for everyone else
     } catch (err) {
-      btn.disabled = false; btn.textContent = 'PAY & PLACE';
+      btn.disabled = false; btn.textContent = 'PAY & BOOK';
       toast('Something went wrong — please try again.', { cls: 'err' });
     }
   };
@@ -1006,7 +1295,7 @@ function endPointer(e) {
   try { if (pointers.has(e.pointerId)) cvs.releasePointerCapture(e.pointerId); } catch (err) {}
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinchState = null;
-  if (stroke && e.type === 'pointerup') { stroke = null; scheduleSave(); }
+  if (stroke && e.type === 'pointerup') stroke = null;
   else if (stroke) stroke = null;
   if (panState && !panState.moved && e.type === 'pointerup') {
     const cell = cellAt(e.offsetX, e.offsetY);
@@ -1063,20 +1352,24 @@ function tapCell(cell, e) {
 function maybeTooltip(e) {
   if (!hover) return hideTooltip();
   const i = idx(hover.x, hover.y);
-  if (!pixels.has(i)) return hideTooltip();
+  if (!pixels.has(i) && !reserved.has(i)) return hideTooltip();
   if (i !== tooltipCell) showTooltip(hover, e, false);
   else positionTooltip(e);
 }
 function showTooltip(cell, e, pinned) {
   const i = idx(cell.x, cell.y);
-  const p = pixels.get(i); if (!p) return;
+  const p = pixels.get(i) || reserved.get(i); if (!p) return;
+  const booked = !pixels.has(i);
   tooltipCell = i;
-  const days = Math.max(0, Math.ceil((p.exp - simNow()) / DAY));
-  const icon = p.t === 'c' ? '&#127970;' : (p.o === 'YOU' ? '&#11088;' : '&#129489;');
-  const who = p.o === 'YOU' ? '<span class="tt-you">YOU</span>' : p.o;
-  const b = brandOf(p);
+  const mine = p.o === myHandle && p.t === 'u';
+  const icon = booked ? '&#128274;' : (p.t === 'c' ? '&#127970;' : (mine ? '&#11088;' : '&#129489;'));
+  const who = mine ? '<span class="tt-you">YOU</span>' : p.o;
+  const b = booked ? null : brandOf(p);
   const cta = b ? `<span class="tt-cta">${b.cta} &#8594;</span>` : '';
-  tooltipEl.innerHTML = `<b>${icon} ${who}</b><span class="tt-exp">(${cell.x}, ${cell.y}) · expires in ${days}d</span>${cta}`;
+  const when = booked
+    ? `goes live ${shortDate(cycleEndsAt())}`
+    : `clears ${shortDate(cycleEndsAt())}`;
+  tooltipEl.innerHTML = `<b>${icon} ${who}</b><span class="tt-exp">(${cell.x}, ${cell.y}) · ${when}</span>${cta}`;
   tooltipEl.hidden = false;
   positionTooltip(e);
   if (pinned) { clearTimeout(tooltipTimer); tooltipTimer = setTimeout(hideTooltip, 2200); }
@@ -1147,6 +1440,13 @@ function loop(t) {
 
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(board, ox, oy, bw, bh);
+
+  // prepaid queue — faint, so it reads as "coming after the reset", not as taken
+  if (reserved.size) {
+    ctx.globalAlpha = 0.26;
+    ctx.drawImage(nextCvs, ox, oy, bw, bh);
+    ctx.globalAlpha = 1;
+  }
 
   // visible world range
   const x0 = Math.max(0, Math.floor(-ox / s)), x1 = Math.min(W, Math.ceil((cw - ox) / s));
@@ -1224,6 +1524,11 @@ function loop(t) {
     thctx.fillStyle = '#fff'; thctx.fillRect(0, 0, 148, 148);
     thctx.imageSmoothingEnabled = true;
     thctx.drawImage(board, 0, 0, 148, 148);
+    if (reserved.size) {
+      thctx.globalAlpha = 0.26;
+      thctx.drawImage(nextCvs, 0, 0, 148, 148);
+      thctx.globalAlpha = 1;
+    }
     thumbDirty = false;
   }
   mmctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1239,13 +1544,6 @@ function loop(t) {
 /* ═══════════ DEMO SEEDING ═══════════ */
 const logoImg = new Image(); logoImg.src = 'assets/logo-icon.png';
 
-function stampCells(cells, ox, oy, owner, type, exp) {
-  for (const [dx, dy, col] of cells) {
-    const x = ox + dx, y = oy + dy;
-    if (x < 0 || y < 0 || x >= W || y >= H) continue;
-    addPixel(idx(x, y), { c: col, o: owner, t: type, exp });
-  }
-}
 function cellsFromCanvas(t, snap) {
   const d = t.getContext('2d').getImageData(0, 0, t.width, t.height).data, out = [];
   for (let y = 0; y < t.height; y++) for (let x = 0; x < t.width; x++) {
@@ -1318,13 +1616,29 @@ function nikeCells(w, h) {
   return cellsFromCanvas(t, ['#111118']);
 }
 
+/* The demo artwork is drawn with canvas, which the server has no way to do,
+   so it's composed here and uploaded — the server just takes the pixels. */
 async function seedDemo() {
-  wipeBoard(true);
+  const seed = { live: [], queue: [], owners: [], ids: new Map(), brands: {}, nextBrands: {} };
+  const seedOwner = (name, type) => {
+    const k = name + ' ' + type;
+    if (!seed.ids.has(k)) { seed.ids.set(k, seed.owners.length); seed.owners.push({ n: name, t: type }); }
+    return seed.ids.get(k);
+  };
+  const stamp = (cells, ox, oy, owner, type, queue) => {
+    const o = seedOwner(owner, type);
+    const into = queue ? seed.queue : seed.live;
+    for (const [dx, dy, col] of cells) {
+      const x = ox + dx, y = oy + dy;
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      into.push([idx(x, y), rgbInt(col), o]);
+    }
+  };
+
   // Hidden/background tabs can stall font & image loading forever — never
   // let the seed (and init) hang on them.
   const assets = Promise.all([document.fonts.load('10px "Press Start 2P"'), logoImg.decode()]).catch(() => {});
   await Promise.race([assets, new Promise(r => setTimeout(r, 2500))]);
-  const exp = () => simNow() + LIFE - Math.floor(Math.random() * 16 + 2) * DAY;
 
   // center: The Reel Recipe logo + wordmark
   if (logoImg.naturalWidth > 0) {
@@ -1332,73 +1646,100 @@ async function seedDemo() {
     const [lt, lc] = makeCanvas(lw, lh);
     lc.imageSmoothingEnabled = true;
     lc.drawImage(logoImg, 0, 0, lw, lh);
-    stampCells(cellsFromCanvas(lt, ['#221F4E', '#3DD9A5', '#ffffff']), 425, 285, 'THE REEL RECIPE', 'c', simNow() + LIFE);
+    stamp(cellsFromCanvas(lt, ['#221F4E', '#3DD9A5', '#ffffff']), 425, 285, 'THE REEL RECIPE', 'c');
   }
   const title = textCells('THE REEL RECIPE', '10px "Press Start 2P"', '#23205A', 2);
   const titleW = title.reduce((m, c) => Math.max(m, c[0]), 0);
-  stampCells(title, Math.round(500 - titleW / 2), 505, 'THE REEL RECIPE', 'c', simNow() + LIFE);
+  stamp(title, Math.round(500 - titleW / 2), 505, 'THE REEL RECIPE', 'c');
 
-  // sponsor logos (company pre-orders) — each with a clickable CTA link
-  brands.set('THE REEL RECIPE', { url: 'https://thereelrecipe.com', cta: 'VISIT SITE' });
-  brands.set('COCA-COLA',   { url: 'https://www.coca-cola.com', cta: 'VISIT SITE' });
-  brands.set('PEPSI',       { url: 'https://www.pepsi.com', cta: 'VISIT SITE' });
-  brands.set('NIKE',        { url: 'https://www.nike.com', cta: 'SHOP NOW' });
-  brands.set("MCDONALD'S",  { url: 'https://www.mcdonalds.com', cta: 'ORDER NOW' });
-  brands.set('SAMSUNG',     { url: 'https://www.samsung.com', cta: 'EXPLORE' });
-  stampCells(badgeCells('Coca-Cola', { font: 'italic bold 17px "Brush Script MT","Segoe Script",serif', fg: '#ffffff', bg: '#F40009', w: 72, h: 26 }), 130, 105, 'COCA-COLA', 'c', exp());
-  stampCells(pepsiCells(30), 745, 140, 'PEPSI', 'c', exp());
-  stampCells(nikeCells(52, 20), 730, 450, 'NIKE', 'c', exp());
-  stampCells(badgeCells('M', { font: '900 30px Georgia,serif', fg: '#FFC72C', bg: '#DA291C', w: 32, h: 30 }), 795, 610, "MCDONALD'S", 'c', exp());
-  stampCells(badgeCells('SAMSUNG', { font: 'bold 12px Arial', fg: '#ffffff', bg: '#1B4DE4', w: 78, h: 20, spacing: 1 }), 120, 690, 'SAMSUNG', 'c', exp());
+  // sponsor logos — brands that prepaid last cycle, so the reset put them up
+  seed.brands = {
+    'THE REEL RECIPE': { url: 'https://thereelrecipe.com', cta: 'VISIT SITE' },
+    'COCA-COLA':  { url: 'https://www.coca-cola.com', cta: 'VISIT SITE' },
+    'PEPSI':      { url: 'https://www.pepsi.com', cta: 'VISIT SITE' },
+    'NIKE':       { url: 'https://www.nike.com', cta: 'SHOP NOW' },
+    "MCDONALD'S": { url: 'https://www.mcdonalds.com', cta: 'ORDER NOW' }
+  };
+  stamp(badgeCells('Coca-Cola', { font: 'italic bold 17px "Brush Script MT","Segoe Script",serif', fg: '#ffffff', bg: '#F40009', w: 72, h: 26 }), 130, 105, 'COCA-COLA', 'c');
+  stamp(pepsiCells(30), 745, 140, 'PEPSI', 'c');
+  stamp(nikeCells(52, 20), 730, 450, 'NIKE', 'c');
+  stamp(badgeCells('M', { font: '900 30px Georgia,serif', fg: '#FFC72C', bg: '#DA291C', w: 32, h: 30 }), 795, 610, "MCDONALD'S", 'c');
+
+  // …and one that has already prepaid for the *next* cycle, so the queue layer
+  // is visible from the start
+  seed.nextBrands = { SAMSUNG: { url: 'https://www.samsung.com', cta: 'EXPLORE' } };
+  stamp(badgeCells('SAMSUNG', { font: 'bold 12px Arial', fg: '#ffffff', bg: '#1B4DE4', w: 78, h: 20, spacing: 1 }), 120, 690, 'SAMSUNG', 'c', true);
 
   // confetti pixels from random fans
   const confColors = ['#3DDFA6', '#22C55E', '#59C2FF', '#2E6BE6', '#8B5CF6', '#FF5D8F', '#E63946', '#FF8C42', '#FFD23F', '#14B8A6'];
+  const used = new Set(seed.live.map(e => e[0]));
   for (let n = 0; n < 260; n++) {
     const x = 8 + Math.floor(Math.random() * (W - 16)), y = 8 + Math.floor(Math.random() * (H - 16));
     const i = idx(x, y);
-    if (pixels.has(i)) continue;
-    addPixel(i, {
-      c: confColors[Math.floor(Math.random() * confColors.length)],
-      o: `Pixel fan #${Math.floor(Math.random() * 900 + 100)}`,
-      t: 'u',
-      exp: simNow() + LIFE - Math.floor(Math.random() * 26) * DAY
-    });
+    if (used.has(i)) continue;
+    used.add(i);
+    seed.live.push([i, rgbInt(confColors[Math.floor(Math.random() * confColors.length)]),
+      seedOwner(`Pixel fan #${Math.floor(Math.random() * 900 + 100)}`, 'u')]);
   }
-  updateAll(); scheduleSave();
-}
-function wipeBoard(silent) {
-  pixels.clear(); yours.clear(); brands.clear(); taken = 0; raised = 0;
-  bctx.clearRect(0, 0, W, H);
-  clearSel(); thumbDirty = true;
-  updateAll(); scheduleSave();
-  if (!silent) toast('Wall wiped — fully empty 1,000×1,000 grid.');
+
+  await apiEnvelope('/api/dev/seed',
+    { owners: seed.owners, brands: seed.brands, nextBrands: seed.nextBrands },
+    seed.live, seed.queue);
+  await loadWall();                      // …and read back what the server stored
 }
 
-/* Demo controls */
-$('demoTime').onclick = () => {
-  simOffset += 7 * DAY;
-  const n = sweep(true);
-  updateAll(); scheduleSave();
-  toast(`&#9193; Time traveled <b>+7 days</b> — ${fmt(n)} expired pixels faded away.`, { cls: 'warn' });
+/* Demo controls — every one of these is a server call now, because the wall
+   isn't ours to change. */
+async function devCall(path, done) {
+  try { const d = await apiJson(path, {}); done(d); }
+  catch (e) { toast('The server turned that down — dev routes may be off (DEV=0).', { cls: 'err' }); }
+}
+$('demoTime').onclick = () => devCall('/api/dev/reset', d => {
+  toast(`&#128465; Reset run — ${fmt(d.live)} prepaid pixels went live on a fresh wall.`, { cls: 'warn', dur: 5200 });
+});
+$('demoRefill').onclick = () => devCall('/api/dev/refill', d => {
+  applyAllowance(d); updateAll();
+  toast(`&#9203; Free pixels topped back up to <b>${CAP}</b>.`);
+});
+$('demoReseed').onclick = async () => {
+  try { await seedDemo(); toast('Demo artwork reseeded.'); }
+  catch (e) { toast('Reseed failed — is the server running with dev routes on?', { cls: 'err' }); }
 };
-$('demoReseed').onclick = async () => { await seedDemo(); toast('Demo artwork reseeded.'); };
-$('demoWipe').onclick = () => wipeBoard(false);
+$('demoWipe').onclick = () => devCall('/api/dev/wipe', () => {
+  toast('Wall wiped — fully empty 1,000×1,000 grid.');
+});
 
 /* ═══════════ INIT ═══════════ */
 (async function init() {
+  try { helpSeen = localStorage.getItem(LS_KEY) === '1'; } catch (e) { /* private mode */ }
   buildPalette();
   resizeCanvas();
   new ResizeObserver(resizeCanvas).observe(wrap);
+  requestAnimationFrame(loop);
 
-  const had = load();
-  if (!had) {
-    try { await seedDemo(); }
-    catch (e) { window.__seedErr = (e && e.stack) || String(e); console.warn('demo seed failed:', e); }
+  try {
+    await loadWall();
+    // an empty wall on a fresh server: draw the demo artwork and upload it
+    if (!pixels.size && !reserved.size) {
+      try { await seedDemo(); }
+      catch (e) { window.__seedErr = (e && e.stack) || String(e); console.warn('demo seed failed:', e); }
+    }
+    openStream();
+  } catch (e) {
+    serverDown(e);
   }
-  sweep(true);
+
   fit();
   updateAll();
-  requestAnimationFrame(loop);
-  setInterval(() => sweep(false), 60000);
+  // 1s so the refill clock actually counts down instead of jumping
+  let ticks = 0;
+  setInterval(() => {
+    if (!api.on) return;
+    if (checkRefill(false)) return;
+    // re-check now and then: another tab or device on this connection may have
+    // spent pixels we never saw
+    if (++ticks % 30 === 0) syncAllowance();
+    updateClock(); updateSelUI();
+  }, 1000);
   if (!helpSeen) openModal('modalHelp');
 })();

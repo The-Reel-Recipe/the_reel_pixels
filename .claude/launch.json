@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "pixelwall",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["--yes", "http-server", ".", "-p", "5174", "-c-1"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js", "5174"],
       "port": 5174
     }
   ]

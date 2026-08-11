@@ -7,7 +7,7 @@
        or user-scalable=no — pinch-zooming the page stays available. -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>The Reel Recipe — Pixel Wall</title>
-  <meta name="description" content="1,000,000 pixel charity wall by The Reel Recipe. Claim a pixel for 2 EGP — all proceeds go to charity.">
+  <meta name="description" content="1,000,000 pixel wall by The Reel Recipe. 20 free pixels every 30 minutes, wiped clean on the 1st of every month. Brands pre-order their logo spot for the next cycle.">
   <meta name="theme-color" content="#14142c">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -43,11 +43,11 @@
         </div>
       </div>
     </div>
-    <div class="charity-badge">
-      <svg class="px-heart" viewBox="0 0 14 12" aria-hidden="true"><path fill="currentColor" d="M2 0h3v1h1v1h2V1h1V0h3v1h1v3h-1v2h-1v1h-1v1h-1v1h-1v1h-1v1H6v-1H5V9H4V8H3V7H2V6H1V4H0V1h1V0h1z"/></svg>
-      <div class="charity-text">
-        <b>ALL PROCEEDS GO TO CHARITY</b>
-        <span>THANK YOU!</span>
+    <div class="cycle-badge">
+      <svg class="px-cal" viewBox="0 0 14 14" aria-hidden="true"><path fill="currentColor" d="M3 0h2v2H3V0zm6 0h2v2H9V0zM0 2h14v12H0V2zm2 4v2h2V6H2zm4 0v2h2V6H6zm4 0v2h2V6h-2zM2 10v2h2v-2H2zm4 0v2h2v-2H6zm4 0v2h2v-2h-2z"/></svg>
+      <div class="cycle-text">
+        <b>THE WALL RESETS EVERY MONTH</b>
+        <span id="cycleNext">NEXT RESET —</span>
       </div>
     </div>
   </header>
@@ -57,8 +57,8 @@
     <div class="stat price-stat">
       <span class="pxswatch" aria-hidden="true"></span>
       <div class="price-lines">
-        <b>1 PIXEL = 2 EGP</b>
-        <span>Click any white pixel to claim it! Pixels live for 30 days.</span>
+        <b>PIXELS ARE FREE</b>
+        <span id="freeLine">20 free pixels — a fresh 20 lands 30 min after you run out.</span>
       </div>
     </div>
     <div class="stat num-stat">
@@ -66,16 +66,21 @@
       <b id="statTaken" class="accent">0</b>
     </div>
     <div class="stat num-stat">
-      <label>TOTAL RAISED</label>
-      <b id="statRaised" class="accent">0 <i>EGP</i></b>
+      <label>RESETS IN</label>
+      <b id="statReset" class="accent">—</b>
+    </div>
+    <div class="stat num-stat next-stat" title="Prepaid pixels waiting for the next reset">
+      <label>NEXT CYCLE</label>
+      <b id="statNext">0</b>
     </div>
     <div class="legend" aria-hidden="true">
       <span class="lg"><i class="chip chip-taken"></i>TAKEN</span>
       <span class="lg"><i class="chip chip-yours"></i>YOURS</span>
+      <span class="lg"><i class="chip chip-next"></i>NEXT CYCLE</span>
       <span class="lg"><i class="chip chip-avail"></i>AVAILABLE</span>
     </div>
     <div class="stats-actions">
-      <button id="btnCompany" class="btn-company" title="Pre-order a logo spot for your brand">&#127970; COMPANY PRE-ORDER <i>10 EGP/PX</i></button>
+      <button id="btnCompany" class="btn-company" title="Pre-order a logo spot on next month's wall">&#127970; BRAND PRE-ORDER <i>10 EGP/PX</i></button>
       <button id="btnHelp" class="btn-help" title="How it works" aria-label="How it works">?</button>
     </div>
   </section>
@@ -91,8 +96,14 @@
     <div class="coords" id="coords">0, 0</div>
     <canvas id="minimap" width="148" height="148" title="Minimap — click to jump"></canvas>
     <div class="tooltip" id="tooltip" hidden></div>
+    <!-- the wall lives on the server now, so there's nothing to show without it -->
+    <div class="offline-note" id="offlineNote" hidden>
+      <b>&#128268; CAN'T REACH THE WALL</b>
+      <p>The pixels live on the server. Start it and reload:</p>
+      <code>node server.js</code>
+    </div>
     <div class="placement-hint" id="placementHint" hidden>
-      <span>CLICK A SPOT TO PLACE &middot; <span class="ok">GREEN = OK</span> &middot; <span class="bad">RED = TOO CROWDED</span> &middot; ESC TO CANCEL</span>
+      <span>PICK YOUR SPOT ON NEXT MONTH'S WALL &middot; <span class="ok">GREEN = FREE</span> &middot; <span class="bad">RED = ALREADY BOOKED</span> &middot; ESC TO CANCEL</span>
       <span class="ph-actions">
         <b id="phOverlap"></b>
         <button id="btnFindSpot" type="button">&#128269; FIND FREE SPOT</button>
@@ -105,7 +116,8 @@
          buttons once the phone layout got short -->
     <div class="demo-pill">
       <span class="dp-label">PROTOTYPE DEMO</span>
-      <button id="demoTime" title="Simulate one week passing — expired pixels get auto-deleted">&#9193; +7 DAYS</button>
+      <button id="demoTime" title="Jump to the 1st — wipes the wall and puts the prepaid pixels up">&#9193; RUN RESET</button>
+      <button id="demoRefill" title="Skip the 30-minute wait for your free pixels">&#9203; REFILL</button>
       <button id="demoReseed" title="Restore the demo artwork">RESEED</button>
       <button id="demoWipe" title="Wipe the wall to a fully empty grid">WIPE</button>
     </div>
@@ -155,16 +167,17 @@
       <button class="modal-x" data-close aria-label="Close">&times;</button>
       <img class="modal-logo" src="assets/logo-icon.png" alt="">
       <h2 id="helpTitle">THE PIXEL WALL</h2>
-      <p class="modal-sub">1,000,000 pixels. One wall. All for charity.</p>
+      <p class="modal-sub">1,000,000 pixels. One wall. Wiped clean every month.</p>
       <div class="steps">
         <div class="step"><span class="step-n">1</span><div><b>PICK &amp; PAINT</b><p>Choose a color and click up to <b>20 empty pixels</b> to preview your art on the wall.</p></div></div>
-        <div class="step"><span class="step-n">2</span><div><b>CLAIM THEM</b><p>Happy with the preview? Check out at <b>2 EGP per pixel</b>. Every pound goes to charity.</p></div></div>
-        <div class="step"><span class="step-n">3</span><div><b>30 DAYS OF FAME</b><p>Each pixel lives for <b>30 days</b>, then fades away so the wall stays fresh.</p></div></div>
+        <div class="step"><span class="step-n">2</span><div><b>CLAIM THEM FREE</b><p>Your 20 pixels cost <b>nothing</b>. Claim them and they go live on the wall straight away.</p></div></div>
+        <div class="step"><span class="step-n">3</span><div><b>WAIT 30 MINUTES</b><p>Used all 20? A fresh <b>20 free pixels</b> land <b>30 minutes</b> later. Come back and keep going.</p></div></div>
+        <div class="step"><span class="step-n">4</span><div><b>THE 1st WIPES IT</b><p>On the <b>1st of every month</b> the whole wall resets to white and everyone starts over.</p></div></div>
       </div>
       <div class="help-notes">
         <p>&#128396; Switch to <b>BRUSH mode</b> (B) to paint continuously while holding the mouse down.</p>
-        <p>&#129699; Want more than 20 pixels at once? Buy <b>PAINT</b> — prepaid pixels that remove the preview limit.</p>
-        <p>&#127970; Companies can <b>pre-order logo space</b> at 10 EGP/pixel — with a clickable link on their logo.</p>
+        <p>&#129699; Don't want to wait? Buy <b>PAINT</b> at 10 EGP/pixel — it paints past the free 20 right now, and comes down at the monthly reset like everything else.</p>
+        <p>&#127970; Brands <b>pre-order logo space</b> at 10 EGP/pixel for the <b>next</b> cycle — booked now, up on the fresh wall the moment it resets.</p>
       </div>
       <button class="btn-claim modal-cta" data-close>START PAINTING</button>
     </div>
@@ -174,26 +187,21 @@
   <div class="overlay" id="modalCheckout" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="coTitle">
       <button class="modal-x" data-close aria-label="Close">&times;</button>
-      <h2 id="coTitle">CHECKOUT</h2>
+      <h2 id="coTitle">CLAIM YOUR PIXELS</h2>
       <div id="coBody">
         <div class="co-rows">
-          <div class="co-row"><span>PIXELS</span><b id="coPixels">0</b></div>
-          <div class="co-row" id="coPaintRow" hidden><span>PAINT APPLIED</span><b id="coPaint" class="accent">−0</b></div>
-          <div class="co-row co-total"><span>TO PAY</span><b id="coTotal">0 EGP</b></div>
+          <div class="co-row"><span>PIXELS SELECTED</span><b id="coPixels">0</b></div>
+          <div class="co-row"><span>FREE PIXELS USED</span><b id="coFree" class="accent">0</b></div>
+          <div class="co-row" id="coPaintRow" hidden><span>PAINT APPLIED</span><b id="coPaint">0</b></div>
+          <div class="co-row co-total"><span>TO PAY</span><b id="coTotal">FREE</b></div>
         </div>
-        <div class="pay-methods" id="payMethods">
-          <label class="pm"><input type="radio" name="pm" value="card" checked><span>&#128179; CARD</span></label>
-          <label class="pm"><input type="radio" name="pm" value="vf"><span>&#128241; VODAFONE CASH</span></label>
-          <label class="pm"><input type="radio" name="pm" value="insta"><span>&#9889; INSTAPAY</span></label>
-          <label class="pm"><input type="radio" name="pm" value="fawry"><span>&#127978; FAWRY</span></label>
-        </div>
-        <p class="fine">Prototype — no real payment happens. 100% of proceeds go to charity. Pixels expire after 30 days.</p>
-        <button class="btn-claim modal-cta" id="btnPay">PAY</button>
+        <p class="fine" id="coFine">Prototype — nothing is charged. Free pixels stay up until the wall resets on the 1st.</p>
+        <button class="btn-claim modal-cta" id="btnPay">CLAIM</button>
       </div>
       <div id="coSuccess" class="co-success" hidden>
         <div class="big-emoji">&#127881;</div>
         <h3 id="coSuccessMsg">PIXELS CLAIMED!</h3>
-        <p>They're yours for the next 30 days. Thank you for donating!</p>
+        <p id="coSuccessSub">They're yours until the wall resets.</p>
       </div>
     </div>
   </div>
@@ -203,23 +211,23 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="psTitle">
       <button class="modal-x" data-close aria-label="Close">&times;</button>
       <h2 id="psTitle">&#129699; PAINT SHOP</h2>
-      <p class="modal-sub">Paint = prepaid pixels. Any paint in your bucket <b>removes the 20-pixel preview limit</b> and is spent first at checkout.</p>
+      <p class="modal-sub">Paint = prepaid pixels at <b>10 EGP each</b>. It takes you straight past the 20 free ones with no 30-minute wait. Painted pixels go up right away and come down with the rest of the wall at the monthly reset.</p>
       <div class="packs">
-        <button class="pack" data-paint="25" data-price="45">
+        <button class="pack" data-paint="25" data-price="225">
           <b class="pk-amt">25</b><span class="pk-unit">PAINT</span>
-          <span class="pk-price">45 EGP</span><span class="pk-save">SAVE 10%</span>
+          <span class="pk-price">225 EGP</span><span class="pk-save">SAVE 10%</span>
         </button>
-        <button class="pack pack-pop" data-paint="100" data-price="160">
+        <button class="pack pack-pop" data-paint="100" data-price="800">
           <i class="pk-tag">POPULAR</i>
           <b class="pk-amt">100</b><span class="pk-unit">PAINT</span>
-          <span class="pk-price">160 EGP</span><span class="pk-save">SAVE 20%</span>
+          <span class="pk-price">800 EGP</span><span class="pk-save">SAVE 20%</span>
         </button>
-        <button class="pack" data-paint="500" data-price="700">
+        <button class="pack" data-paint="500" data-price="3500">
           <b class="pk-amt">500</b><span class="pk-unit">PAINT</span>
-          <span class="pk-price">700 EGP</span><span class="pk-save">SAVE 30%</span>
+          <span class="pk-price">3,500 EGP</span><span class="pk-save">SAVE 30%</span>
         </button>
       </div>
-      <p class="fine">Prototype — clicking a pack instantly adds paint (mock payment).</p>
+      <p class="fine">Prototype — clicking a pack instantly adds paint (mock payment). Paint never expires, so it keeps until you want it.</p>
     </div>
   </div>
 
@@ -227,8 +235,8 @@
   <div class="overlay" id="modalCompany" hidden>
     <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="cpTitle">
       <button class="modal-x" data-close aria-label="Close">&times;</button>
-      <h2 id="cpTitle">&#127970; COMPANY PRE-ORDER</h2>
-      <p class="modal-sub">Reserve a spot for your logo at <b>10 EGP per pixel</b> — it stays on the wall for 30 days.</p>
+      <h2 id="cpTitle">&#127970; BRAND PRE-ORDER</h2>
+      <p class="modal-sub">Book a spot for your logo at <b>10 EGP per pixel</b>. Pre-orders are prepaid for the <b>next cycle</b> — your logo goes up the moment the wall resets and owns that spot for the whole month.</p>
       <div class="cp-grid">
         <div class="cp-form">
           <label class="fld">
@@ -338,7 +346,7 @@
         </div>
       </div>
       <div class="modal-foot">
-        <button class="btn-claim modal-cta" id="btnPlaceLogo" disabled>PLACE ON THE WALL &#8594;</button>
+        <button class="btn-claim modal-cta" id="btnPlaceLogo" disabled>PICK YOUR SPOT &#8594;</button>
       </div>
     </div>
   </div>
@@ -351,12 +359,19 @@
       <div class="co-rows">
         <div class="co-row"><span>COMPANY</span><b id="cfName">—</b></div>
         <div class="co-row"><span>PIXELS</span><b id="cfPixels">0</b></div>
-        <div class="co-row" id="cfSkipRow" hidden><span>SKIPPED (TAKEN)</span><b id="cfSkip" class="warn-txt">0</b></div>
+        <div class="co-row"><span>GOES LIVE</span><b id="cfGoLive" class="accent">—</b></div>
+        <div class="co-row" id="cfSkipRow" hidden><span>SKIPPED (BOOKED)</span><b id="cfSkip" class="warn-txt">0</b></div>
         <div class="co-row" id="cfLinkRow" hidden><span>CTA LINK</span><b id="cfLink" class="cf-link">—</b></div>
         <div class="co-row co-total"><span>TO PAY</span><b id="cfTotal">0 EGP</b></div>
       </div>
-      <p class="fine">Prototype — mock payment. Your logo stays up for 30 days.</p>
-      <button class="btn-claim modal-cta" id="btnConfirmPlace">PAY &amp; PLACE</button>
+      <div class="pay-methods" id="payMethods">
+        <label class="pm"><input type="radio" name="pm" value="card" checked><span>&#128179; CARD</span></label>
+        <label class="pm"><input type="radio" name="pm" value="vf"><span>&#128241; VODAFONE CASH</span></label>
+        <label class="pm"><input type="radio" name="pm" value="insta"><span>&#9889; INSTAPAY</span></label>
+        <label class="pm"><input type="radio" name="pm" value="fawry"><span>&#127978; FAWRY</span></label>
+      </div>
+      <p class="fine">Prototype — mock payment. Prepaid now, live for the whole next cycle.</p>
+      <button class="btn-claim modal-cta" id="btnConfirmPlace">PAY &amp; BOOK</button>
     </div>
   </div>
 

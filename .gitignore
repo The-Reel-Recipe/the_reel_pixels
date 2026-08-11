@@ -12,3 +12,7 @@ $RECYCLE.BIN/
 # Logs
 *.log
 npm-debug.log*
+
+# server.js state: the wall itself and the per-IP free-pixel ledger
+.wall.bin
+.allowance.json

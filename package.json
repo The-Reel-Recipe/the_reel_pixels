@@ -1,0 +1,13 @@
+{
+  "name": "the-reel-pixels",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The Reel Recipe pixel wall — 1,000,000 pixels, free to paint, wiped clean every month.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js 5174"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
