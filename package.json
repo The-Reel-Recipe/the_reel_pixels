@@ -5,9 +5,14 @@
   "description": "The Reel Recipe pixel wall — 1,000,000 pixels, free to paint, wiped clean every month.",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js 5174"
+    "dev": "node server.js 5174",
+    "test": "node --test test/*.test.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "22.x"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "pngjs": "^7.0.0"
   }
 }

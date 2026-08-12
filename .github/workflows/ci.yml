@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+    branches: [main, production]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # better-sqlite3 pulls a prebuilt binary here; if that ever fails the
+      # install falls back to a source build and this step is where it shows
+      - run: npm ci
+
+      - run: npm test
+
+      # moderate findings are a heads-up, high and above fail the build
+      - run: npm audit --audit-level=high

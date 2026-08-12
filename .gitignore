@@ -13,6 +13,24 @@ $RECYCLE.BIN/
 *.log
 npm-debug.log*
 
+# Dependencies (the lockfile is committed, the tree is not)
+node_modules/
+
+# Secrets — .env.example is the committed template
+.env
+.env.*
+!.env.example
+
 # server.js state: the wall itself and the per-IP free-pixel ledger
 .wall.bin
 .allowance.json
+
+# SQLite and everything it drags along (Phase 1+)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# runtime data: database, uploaded payment screenshots, backups, exports
+data/
+archive/

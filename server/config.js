@@ -1,0 +1,141 @@
+/* ═══════════════════════════════════════════════════════════════
+   config — every knob the process reads, parsed once
+
+   Reads the environment, checks the shapes, and in production
+   refuses to boot when a secret the running code actually needs is
+   missing. Dev fills safe defaults instead and collects a warning
+   for index.js to print, so requiring this file stays quiet.
+
+   .env.example documents the lot.
+   ═══════════════════════════════════════════════════════════════ */
+'use strict';
+
+const os = require('os');
+const path = require('path');
+
+const env = process.env;
+const ROOT = path.join(__dirname, '..');
+const ON_VERCEL = !!env.VERCEL;
+const PROD = env.NODE_ENV === 'production';
+const warnings = [];
+
+const bad = msg => { throw new Error('config: ' + msg); };
+
+/* ── shapes ───────────────────────────────────────────────────── */
+
+function port(v, dflt) {
+  if (v === undefined || v === '') return dflt;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) bad(`PORT must be 1-65535, got "${v}"`);
+  return n;
+}
+/* comma-separated, blanks dropped */
+const list = v => String(v || '').split(',').map(s => s.trim()).filter(Boolean);
+
+function ids(name, v) {
+  return list(v).map(s => {
+    if (!/^-?\d+$/.test(s)) bad(`${name} takes numeric telegram ids, got "${s}"`);
+    return Number(s);
+  });
+}
+function href(name, v, dflt) {
+  if (v === undefined || v === '') return dflt;
+  let u;
+  try { u = new URL(v); } catch (e) { bad(`${name} is not a url: "${v}"`); }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') bad(`${name} must be http(s), got "${v}"`);
+  return v.replace(/\/+$/, '');
+}
+function oneOf(name, v, allowed, dflt) {
+  if (v === undefined || v === '') return dflt;
+  if (!allowed.includes(v)) bad(`${name} must be one of ${allowed.join('|')}, got "${v}"`);
+  return v;
+}
+
+/* ── secrets that gate a production boot ──────────────────────── */
+
+/* `phase` is the plan phase that starts *reading* the value. A var is
+   only enforced once the code needing it is in the tree — otherwise
+   Phase 0 would demand a bot token for a server that has no bot yet,
+   and every deploy between here and Phase 4 would refuse to start.
+   Raise PHASE as each phase lands and the list enforces itself. */
+const PHASE = 0;
+const SECRETS = [
+  { k: 'SESSION_SECRET', phase: 2, why: 'HMAC key for guest + brand cookies' },
+  { k: 'TG_BOT_TOKEN', phase: 4, why: 'moderation bot' },
+  { k: 'TG_CHAT_ID', phase: 4, why: 'moderation group' },
+  { k: 'TG_WEBHOOK_SECRET', phase: 4, why: 'authenticates telegram callbacks' },
+  { k: 'TG_MOD_IDS', phase: 4, why: 'who is allowed to press the buttons' },
+  { k: 'PUBLIC_URL', phase: 4, why: 'webhook registration + links on cards' },
+  { k: 'INSTAPAY_URL', phase: 5, why: 'where payers are sent' }
+];
+
+/* exported so a test can drive it with its own table */
+function missingSecrets(src, phase, spec) {
+  return (spec || SECRETS).filter(s => s.phase <= phase && !String(src[s.k] || '').trim());
+}
+
+const gaps = PROD ? missingSecrets(env, PHASE) : [];
+if (gaps.length) {
+  console.error('config: refusing to boot in production, missing:');
+  for (const g of gaps) console.error(`  ${g.k}  —  ${g.why}`);
+  bad('missing required env — ' + gaps.map(g => g.k).join(', '));
+}
+
+/* ── values ───────────────────────────────────────────────────── */
+
+/* `node server.js 5174` still works; anything non-numeric in argv[2]
+   is somebody else's argument (the test runner's file, say). */
+const argvPort = /^\d+$/.test(process.argv[2] || '') ? process.argv[2] : '';
+/* Serverless ships a read-only bundle, so state goes to the temp dir
+   there — per-instance, gone on a cold start. */
+const STATE_DIR = path.resolve(env.STATE_DIR || (ON_VERCEL ? os.tmpdir() : ROOT));
+
+const DEV_SECRET = 'dev-insecure-session-secret';
+let SESSION_SECRET = String(env.SESSION_SECRET || '');
+if (!SESSION_SECRET) {
+  SESSION_SECRET = DEV_SECRET;
+  warnings.push('SESSION_SECRET unset — using the dev default (cookies are forgeable)');
+} else if (SESSION_SECRET.length < 16) {
+  bad('SESSION_SECRET needs at least 16 characters');
+}
+
+module.exports = Object.freeze({
+  ROOT, PROD, ON_VERCEL, PHASE, SECRETS, missingSecrets, warnings,
+
+  PORT: port(env.PORT || argvPort, 5174),
+  /* Vercel always terminates in front of the function, so its forwarded
+     IP is the real one — anywhere else this stays opt-in, or anyone can
+     spoof the header and mint themselves unlimited pixels. */
+  TRUST_PROXY: env.TRUST_PROXY === '1' || ON_VERCEL,
+  DEV: env.DEV !== '0',
+  ALLOW_ORIGIN: env.ALLOW_ORIGIN || '',
+
+  /* files */
+  STATE_DIR,
+  DATA_DIR: path.resolve(env.DATA_DIR || path.join(ROOT, 'data')),
+  WALL_FILE: path.join(STATE_DIR, '.wall.bin'),
+  LEDGER_FILE: path.join(STATE_DIR, '.allowance.json'),
+  SEED_FILE: path.join(ROOT, 'seed.bin'),          // committed starting artwork
+
+  /* wall shape and pricing — these move into the runtime `config`
+     table in Phase 6; the values here become its defaults */
+  W: 1000, H: 1000,
+  CAP: 20,                                          // free pixels per caller
+  REFILL: 30 * 60 * 1000,                           // …back this long after the last one goes
+  PRICE_PAINT: 10, PRICE_COMPANY: 10,
+  PACKS: { 25: 225, 100: 800, 500: 3500 },          // paint amount -> EGP
+  IDLE_DROP: 24 * 60 * 60 * 1000,
+  DELTA_MAX: 2000,                                  // bigger changes tell clients to refetch
+
+  /* secrets + integrations (unused until their phase; parsed now so a
+     typo surfaces at boot rather than three phases later) */
+  SESSION_SECRET,
+  TG_BOT_TOKEN: env.TG_BOT_TOKEN || '',
+  TG_CHAT_ID: env.TG_CHAT_ID || '',
+  TG_WEBHOOK_SECRET: env.TG_WEBHOOK_SECRET || '',
+  TG_MOD_IDS: ids('TG_MOD_IDS', env.TG_MOD_IDS),
+  TG_MODE: oneOf('TG_MODE', env.TG_MODE, ['webhook', 'poll', 'off'], PROD ? 'webhook' : 'off'),
+  INSTAPAY_URL: href('INSTAPAY_URL', env.INSTAPAY_URL, ''),
+  PUBLIC_URL: href('PUBLIC_URL', env.PUBLIC_URL, ''),
+  ADMIN_IP_ALLOW: list(env.ADMIN_IP_ALLOW)
+});
