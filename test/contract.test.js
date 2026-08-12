@@ -100,14 +100,32 @@ const SEED_HASH = bodyHash(fs.readFileSync(path.join(__dirname, '..', 'seed.bin'
 const server = http.createServer(app);
 let base = '';
 
+/* Phase 2 moved identity from the caller's IP onto a signed cookie, so the
+   suite has to keep one like a browser does: without a jar every request
+   would mint a fresh guest, the allowance assertions below would each be
+   about a different person, and the sixth would hit the per-IP cap. */
+const jar = new Map();
+const jarHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+function keepCookies(res) {
+  for (const line of res.headers['set-cookie'] || []) {
+    const pair = line.split(';')[0];
+    const eq = pair.indexOf('=');
+    if (eq > 0) jar.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+  }
+}
+
 function req(method, url, body, type) {
   return new Promise((resolve, reject) => {
-    const r = http.request(base + url, {
-      method, headers: body ? { 'content-type': type || 'application/json' } : {}
-    }, res => {
+    const headers = body ? { 'content-type': type || 'application/json' } : {};
+    if (jar.size) headers.cookie = jarHeader();
+    const r = http.request(base + url, { method, headers }, res => {
+      keepCookies(res);
       const chunks = [];
       res.on('data', c => chunks.push(c));
-      res.on('end', () => resolve({ code: res.statusCode, type: res.headers['content-type'], body: Buffer.concat(chunks) }));
+      res.on('end', () => resolve({
+        code: res.statusCode, type: res.headers['content-type'],
+        setCookie: res.headers['set-cookie'] || [], body: Buffer.concat(chunks)
+      }));
     });
     r.on('error', reject);
     r.end(body);
@@ -147,12 +165,19 @@ test('GET /api/wall serves the seed as a decodable envelope', async () => {
   assert.ok(Array.isArray(meta.owners) && meta.owners.length, 'owner table');
   assert.equal(meta.dev, true);
   assert.deepEqual(meta.prices, { paint: 10, company: 10, packs: { 25: 225, 100: 800, 500: 3500 } });
-  assert.match(meta.me, /^Pixel fan #\d{4}$/);
+  /* meta.me carried just the display name until Phase 2; it is the caller's
+     whole standing now, because the page routes the pre-order button off it
+     (guest / brand, and how the application went). app.js never read the old
+     string — it takes the handle from meta.allowance — so nothing on the wire
+     that the client uses actually moved. */
+  assert.equal(meta.me.kind, 'guest');
+  assert.equal(meta.me.brandStatus, null);
+  assert.match(meta.me.handle, /^Pixel fan #\d{4}$/);
   assert.equal(meta.allowance.cap, 20);
   assert.equal(meta.allowance.free, 20);
   assert.equal(meta.allowance.paint, 0);
   assert.equal(meta.allowance.refillMs, 30 * 60 * 1000);
-  assert.equal(meta.allowance.handle, meta.me);
+  assert.equal(meta.allowance.handle, meta.me.handle);
   assert.equal(typeof meta.brands, 'object');
   assert.equal(typeof meta.nextBrands, 'object');
 

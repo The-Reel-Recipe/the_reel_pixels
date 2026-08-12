@@ -42,6 +42,10 @@ let freeUsed = 0;                     // free pixels spent out of the current ba
 let refillAt = 0;                     // when the batch comes back (0 = not waiting)
 let cycle = 0;                        // start of the cycle currently on the wall
 let myHandle = '';                    // what the server calls this caller
+/* who the cookie says we are — {kind:'guest'|'brand', handle, brandStatus}.
+   The server decides it; the pre-order button reads it to know whether to
+   open the booking flow or the application form. */
+let me = { kind: 'guest', handle: '', brandStatus: null };
 let helpSeen = false;
 let taken = 0;
 let selColor = PALETTE[0];
@@ -109,13 +113,33 @@ function decodeEnvelope(buf) {
   };
   return { meta, a: readList(), b: readList() };
 }
+/* A refused request usually has something to say — which cap was hit, which
+   field was wrong, why the booking is closed — so the body comes back on the
+   error rather than being thrown away with the status code. */
+async function readError(path, res) {
+  const err = new Error(`${path} → ${res.status}`);
+  err.code = res.status;
+  try { err.data = await res.json(); } catch (e) { err.data = {}; }
+  return err;
+}
 async function apiEnvelope(path, meta, a, b) {
   const res = await fetch(API_BASE + path, {
     method: 'POST', headers: { 'content-type': 'application/octet-stream' },
     body: encodeEnvelope(meta, a, b)
   });
-  if (!res.ok) throw new Error(`${path} → ${res.status}`);
+  if (!res.ok) throw await readError(path, res);
   return res.json();
+}
+/* POST that treats a 4xx as an answer, not an accident — the auth forms
+   render the server's own field errors. */
+async function apiPost(path, body) {
+  const res = await fetch(API_BASE + path, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body || {})
+  });
+  let data = {};
+  try { data = await res.json(); } catch (e) { /* empty or not json */ }
+  return { ok: res.ok, code: res.status, data: data || {} };
 }
 
 function applyAllowance(d) {
@@ -259,7 +283,7 @@ function addReserved(i, p, defer) {
    might have missed an event, we just ask for the whole thing again. */
 async function loadWall() {
   const res = await fetch(API_BASE + '/api/wall');
-  if (!res.ok) throw new Error(`/api/wall → ${res.status}`);
+  if (!res.ok) throw await readError('/api/wall', res);
   const { meta, a, b } = decodeEnvelope(await res.arrayBuffer());
 
   pixels.clear(); reserved.clear(); yours.clear();
@@ -271,6 +295,7 @@ async function loadWall() {
   api.on = true; api.rev = meta.rev || 0;
   cycle = meta.cycle;
   applyAllowance(meta.allowance);
+  setMe(meta.me);
   if (meta.prices) priceThePacks(meta.prices.paint);   // badges can't drift from the real rate
   // /api/dev/* is unauthenticated by design (it's a prototype affordance), so a
   // deployment with DEV=0 shouldn't show controls that can only fail
@@ -362,7 +387,17 @@ function openStream() {
 function serverDown(err) {
   api.on = false;
   console.error('pixel wall: server unreachable —', err && err.message);
-  $('offlineNote').hidden = false;
+  /* …or reachable and saying no. A shared connection that has minted its
+     five identities for the day gets the wall withheld, which is nothing
+     like the server being off — say which one it is. */
+  const capped = err && err.code === 429 && err.data && err.data.message;
+  const note = $('offlineNote');
+  if (capped) {
+    note.querySelector('b').textContent = '\u{1F6A6} TOO MANY VISITORS FROM YOUR CONNECTION';
+    note.querySelector('p').textContent = err.data.message;
+    note.querySelector('code').hidden = true;
+  }
+  note.hidden = false;
   $('btnCheckout').disabled = true;
   $('btnCompany').disabled = true;
   $('btnPaintShop').disabled = true;
@@ -578,8 +613,10 @@ $('btnPay').onclick = () => {
       setTimeout(() => closeModal('modalCheckout'), 1700);
     } catch (err) {
       btn.disabled = false; btn.textContent = label;
-      toast('Something went wrong — please try again.', { cls: 'err' });
-      resync('claim failed');
+      // a daily cap has something specific to say; anything else doesn't
+      const said = err.data && err.data.message;
+      toast(said || 'Something went wrong — please try again.', { cls: said ? 'warn' : 'err', dur: said ? 6000 : 3600 });
+      if (!said) resync('claim failed');
     }
   };
   // hidden/backgrounded pages throttle timers up to 60s — commit instantly there
@@ -611,6 +648,194 @@ document.querySelectorAll('.pack').forEach(p => p.addEventListener('click', asyn
 
 /* ── Help ── */
 $('btnHelp').onclick = () => openModal('modalHelp');
+
+/* ═══════════ BRAND ACCOUNT ═══════════
+   Painting needs nobody's permission — the cookie the server hands out on
+   the first request is the whole of a guest identity. Booking logo space
+   does: a brand applies with real business details, a person reads the
+   application, and only an approved account can open the pre-order flow.
+   The server enforces every word of that; this is the screen for it. */
+
+const BRAND_STATUS = {
+  pending: {
+    chip: '⏳ UNDER REVIEW',
+    note: 'Your application is with the team. We read every one by hand — usually the same day. ' +
+          'You will get an email the moment it is approved, and the pre-order flow opens here.'
+  },
+  approved: {
+    chip: '✅ APPROVED',
+    note: 'You are cleared to book logo space on next month\'s wall.'
+  },
+  rejected: {
+    chip: '❌ NOT APPROVED',
+    note: 'We could not verify this business from the details given. Reply to the email we sent ' +
+          'if you think that is wrong — a real answer will reopen it.'
+  }
+};
+
+const isBrand = () => me.kind === 'brand';
+const canBook = () => isBrand() && me.brandStatus === 'approved';
+
+function setMe(d) {
+  if (d && typeof d === 'object') {
+    me = { kind: d.kind || 'guest', handle: d.handle || '', brandStatus: d.brandStatus || null };
+  }
+  renderAuth();
+}
+
+/* Asks the server who we are. The wall snapshot already says, so this is
+   for the moments between snapshots — after a decision lands, or after a
+   request comes back saying the account no longer holds what it did. */
+async function refreshMe() {
+  try {
+    const d = await apiJson('/api/me');
+    setMe(d);
+    if (d.allowance) applyAllowance(d.allowance);
+    updateAll();
+  } catch (e) { console.warn('identity refresh failed:', e.message); }
+}
+
+/* Everything that changes when the account does, in one place. */
+function renderAuth() {
+  const state = BRAND_STATUS[me.brandStatus] || null;
+  $('authWho').textContent = me.handle || '—';
+  $('authChip').textContent = state ? state.chip : '—';
+  $('authChip').className = 'status-chip ' + (me.brandStatus || '');
+  $('authNote').textContent = state ? state.note : '';
+  $('btnGoBook').hidden = !canBook();
+
+  $('cpBrand').hidden = !canBook();
+  $('cpBrandName').textContent = me.handle || '—';
+
+  const btn = $('btnCompany');
+  btn.classList.toggle('needs-account', isBrand() && !canBook());
+  btn.title = canBook() ? 'Pre-order a logo spot on next month\'s wall'
+    : isBrand() ? 'Your brand application is still being reviewed'
+      : 'Brands book logo space — apply once, then pre-order any month';
+}
+
+/* Which of the three panes the modal opens on: an applicant sees where
+   their application got to, everyone else sees the form. */
+function openAuth(tab) {
+  const pane = tab || (isBrand() ? 'status' : 'signup');
+  $('paneSignup').hidden = pane !== 'signup';
+  $('paneLogin').hidden = pane !== 'login';
+  $('paneStatus').hidden = pane !== 'status';
+  $('authTabs').hidden = pane === 'status';
+  $('tabSignup').classList.toggle('sel', pane === 'signup');
+  $('tabLogin').classList.toggle('sel', pane === 'login');
+  $('auSub').textContent = pane === 'status'
+    ? 'Where your brand application stands.'
+    : 'Logo spots are for real businesses, so a person reads every application. It takes two minutes and you only do it once.';
+  openModal('modalAuth');
+}
+$('tabSignup').onclick = () => openAuth('signup');
+$('tabLogin').onclick = () => openAuth('login');
+
+/* signup field id -> the server's name for it, which is also the key it
+   reports errors under */
+const SIGNUP_FIELDS = {
+  suName: 'business_name', suCategory: 'category', suContact: 'contact_name',
+  suPhone: 'phone', suEmail: 'email', suPass: 'password', suSite: 'website',
+  suSocials: 'socials', suInstapay: 'instapay_handle', suReg: 'reg_number', suDesc: 'description'
+};
+const errIdFor = id => 'err' + id[0].toUpperCase() + id.slice(1);
+
+function clearSignupErrors() {
+  for (const id of Object.keys(SIGNUP_FIELDS)) {
+    const err = $(errIdFor(id));
+    if (err) err.hidden = true;
+    $(id).classList.remove('bad');
+  }
+  $('errSignup').hidden = true;
+}
+/* The server is the only validator that counts, so its answer is what the
+   form renders — field by field where it named one, at the foot where it
+   didn't (a rate limit, say). */
+function showSignupErrors(data) {
+  const fields = data.fields || {};
+  let first = null;
+  for (const [id, name] of Object.entries(SIGNUP_FIELDS)) {
+    if (!fields[name]) continue;
+    const err = $(errIdFor(id));
+    if (err) showErr(errIdFor(id), fields[name]);
+    $(id).classList.add('bad');
+    if (!first) first = id;
+  }
+  /* anything the server flagged that this form has no box for, plus the
+     messages that aren't about a field at all (a rate limit, say) */
+  const spare = Object.entries(fields)
+    .filter(([name]) => !Object.values(SIGNUP_FIELDS).includes(name))
+    .map(([, msg]) => msg);
+  const rest = [data.message, ...spare].filter(Boolean).join(' ');
+  if (rest) showErr('errSignup', rest);
+  if (first) $(first).focus();
+}
+
+const DESC_MIN = 200;
+$('suDesc').addEventListener('input', () => {
+  const n = $('suDesc').value.trim().length;
+  const el = $('suDescCount');
+  el.textContent = n >= DESC_MIN ? `${fmt(n)} characters` : `${fmt(n)} / ${DESC_MIN} minimum`;
+  el.classList.toggle('ok', n >= DESC_MIN);
+});
+
+$('paneSignup').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('btnSignup');
+  clearSignupErrors();
+  const body = {};
+  for (const [id, name] of Object.entries(SIGNUP_FIELDS)) body[name] = $(id).value;
+  body.socials = $('suSocials').value.split('\n').map(s => s.trim()).filter(Boolean);
+
+  btn.disabled = true; btn.textContent = 'SENDING…';
+  try {
+    const r = await apiPost('/api/auth/signup', body);
+    if (!r.ok) { showSignupErrors(r.data); return; }
+    setMe(r.data);
+    if (r.data.allowance) applyAllowance(r.data.allowance);
+    await loadWall();                    // the account is a different caller now
+    openAuth('status');
+    toast('&#127970; <b>Application sent.</b> We will email you as soon as it is reviewed.', { dur: 5200 });
+  } catch (err) {
+    showErr('errSignup', 'Could not reach the server — try again in a moment.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'APPLY FOR A BRAND ACCOUNT';
+  }
+});
+
+$('paneLogin').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('btnLogin');
+  clearErr('errLogin');
+  btn.disabled = true; btn.textContent = 'CHECKING…';
+  try {
+    const r = await apiPost('/api/auth/login', { email: $('liEmail').value, password: $('liPass').value });
+    if (!r.ok) { showErr('errLogin', r.data.message || 'Wrong email or password.'); return; }
+    $('liPass').value = '';
+    setMe(r.data);
+    if (r.data.allowance) applyAllowance(r.data.allowance);
+    await loadWall();
+    if (canBook()) { closeModal('modalAuth'); openCompany(); }
+    else openAuth('status');
+  } catch (err) {
+    showErr('errLogin', 'Could not reach the server — try again in a moment.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'LOG IN';
+  }
+});
+
+/* Logging out drops the brand cookie; the next request mints a plain guest
+   again, so the wall is reloaded to pick up whose pixels are whose. */
+async function logout() {
+  try { await apiPost('/api/auth/logout'); } catch (e) { /* the cookie goes either way */ }
+  try { await loadWall(); } catch (e) { /* offline handling already covers this */ }
+  closeModal('modalAuth'); closeModal('modalCompany');
+  toast('Logged out — you are painting as a guest again.');
+}
+$('btnLogout').onclick = logout;
+$('cpBrandOut').onclick = logout;
+$('btnGoBook').onclick = () => { closeModal('modalAuth'); openCompany(); };
 
 /* ═══════════ COMPANY PRE-ORDER ═══════════ */
 const MIN_PX = 8, MAX_PX = 400, SRC_MAX = 560;
@@ -1034,7 +1259,11 @@ function validateCompany() {
 ['cpName', 'cpLink', 'cpCta'].forEach(id => $(id).addEventListener('input', validateCompany));
 
 /* ── Wiring ── */
-$('btnCompany').onclick = () => { markPreset(); rebuildCpPreview(); openModal('modalCompany'); };
+function openCompany() { markPreset(); rebuildCpPreview(); openModal('modalCompany'); }
+/* The button is the door to the whole brand flow. An approved account walks
+   straight in; anyone else lands on the application form, or on the note
+   saying where their application got to. */
+$('btnCompany').onclick = () => { if (canBook()) openCompany(); else openAuth(); };
 $('cpPick').onclick = () => $('cpFile').click();
 $('cpFile').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
@@ -1195,6 +1424,16 @@ $('btnConfirmPlace').onclick = () => {
       // the pixels themselves arrive over the stream, as they do for everyone else
     } catch (err) {
       btn.disabled = false; btn.textContent = 'PAY & BOOK';
+      /* the account stopped being allowed to book between opening the flow
+         and confirming it — approval revoked, or a session that outlived it */
+      if (err.data && err.data.error === 'brand-required') {
+        closeModal('modalConfirm');
+        cancelPlacing();
+        await refreshMe();
+        toast(err.data.message, { cls: 'warn', dur: 6000 });
+        openAuth();
+        return;
+      }
       toast('Something went wrong — please try again.', { cls: 'err' });
     }
   };

@@ -105,14 +105,16 @@ function decodeEnvelope(buf) {
   return { meta, a: readList(), b: readList() };
 }
 
-function snapshotFor(key, now) {
-  const e = identity.rowFor(key, now);
+/* `e` is the caller's identity row (see identity.resolve) — the snapshot is
+   personal from here on: their handle, their standing as a brand, their
+   allowance, and from Phase 3 their own pending pixels. */
+function snapshotFor(e, now) {
   const meta = {
     v: 1, cycle: wall.cycle, cycleEnd: cycleEnd(now), rev: wall.rev,
     owners: wall.owners,
     brands: Object.fromEntries(wall.brands),
     nextBrands: Object.fromEntries(wall.nextBrands),
-    me: e.handle,
+    me: identity.meta(e),
     dev: cfg.DEV,                        // the page hides the demo controls when this is off
     prices: { paint: cfg.PRICE_PAINT, company: cfg.PRICE_COMPANY, packs: cfg.PACKS },
     allowance: identity.allowanceOf(e, now)
@@ -272,8 +274,7 @@ function claimTx(e, want, now) {
   return { sid, placed, usedFree, usedPaint, after };
 }
 
-function claimPixels(key, entries, now) {
-  const e = identity.rowFor(key, now);
+function claimPixels(e, entries, now) {
   const want = entries.filter(([idx]) => validIdx(idx) && !wall.live.has(idx));
   let occupied = entries.length - want.length;
   const wanted = Math.min(want.length, Math.max(0, cfg.CAP - e.used) + e.paint);
@@ -321,9 +322,11 @@ function bookTx(e, name, meta, want, now) {
   return { sid, placed, url, cta };
 }
 
-function bookBrand(key, meta, entries, now) {
-  const name = String(meta.name || 'YOUR BRAND').slice(0, 24).toUpperCase();
-  const e = identity.rowFor(key, now);
+/* `e` is the approved brand's own user — http.js won't call this for anyone
+   else (§3), so the submission and the cells are filed against the account
+   that will be invoiced, not against whoever happened to be at the keyboard. */
+function bookBrand(e, meta, entries, now) {
+  const name = String(meta.name || e.handle || 'YOUR BRAND').slice(0, 24).toUpperCase();
   const want = entries.filter(([idx]) => validIdx(idx) && !wall.reserved.has(idx));
   let skipped = entries.length - want.length;
   if (!want.length) return { booked: 0, skipped, cost: 0 };

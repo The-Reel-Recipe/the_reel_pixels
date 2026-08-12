@@ -36,8 +36,20 @@ db.pragma('foreign_keys = ON');
 /* Every .sql file in migrations/ runs exactly once, in filename order,
    inside its own transaction. The recorded sha is a tripwire: editing a
    migration that has already run somewhere is how schemas drift apart, so
-   it is a hard error rather than a silent no-op. */
-function migrate() {
+   it is a hard error rather than a silent no-op.
+
+   A file whose first line reads `-- @manual` is the exception: the boot
+   lists it and walks past. Some migrations aren't safe to apply the moment
+   they land in the tree — dropping legacy_keys (003) has to wait out a
+   grace period while returning visitors are still being moved onto cookies
+   — and a deploy that ran it on its way up would take that decision away
+   from whoever is doing the cutover. Naming one on the command line
+   (`npm run migrate -- 003_drop_legacy_keys.sql`) is that decision. */
+const MANUAL = /^[ \t]*--[ \t]*@manual\b/;
+
+function migrate(opts) {
+  const only = opts && opts.only ? new Set([].concat(opts.only)) : null;
+
   db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
              name       TEXT PRIMARY KEY,
              sha        TEXT NOT NULL,
@@ -51,9 +63,13 @@ function migrate() {
   const files = fs.existsSync(cfg.MIGRATIONS_DIR)
     ? fs.readdirSync(cfg.MIGRATIONS_DIR).filter(f => f.endsWith('.sql')).sort()
     : [];
+  if (only) {
+    for (const name of only) if (!files.includes(name)) throw new Error(`db: no migration named ${name}`);
+  }
 
-  const applied = [];
+  const applied = [], deferred = [];
   for (const name of files) {
+    if (only && !only.has(name)) continue;
     const sql = fs.readFileSync(path.join(cfg.MIGRATIONS_DIR, name), 'utf8');
     const sha = crypto.createHash('sha256').update(sql).digest('hex').slice(0, 16);
     const seen = done.get(name);
@@ -64,14 +80,19 @@ function migrate() {
       }
       continue;
     }
+    /* asked for by name = applied, marker or not */
+    if (!only && MANUAL.test(sql)) { deferred.push(name); continue; }
     db.transaction(() => { db.exec(sql); record.run(name, sha, Date.now()); })();
     applied.push(name);
   }
-  return applied;
+  return { applied, deferred };
 }
 
-const applied = migrate();
-if (applied.length) console.log(`db: applied ${applied.length} migration(s) — ${applied.join(', ')}`);
+const boot = migrate();
+if (boot.applied.length) {
+  console.log(`db: applied ${boot.applied.length} migration(s) — ${boot.applied.join(', ')}`);
+}
+if (boot.deferred.length) console.log(`db: holding ${boot.deferred.join(', ')} — marked @manual`);
 
 /* ── Transactions ─────────────────────────────────────────────── */
 

@@ -50,6 +50,18 @@ function oneOf(name, v, allowed, dflt) {
   if (!allowed.includes(v)) bad(`${name} must be one of ${allowed.join('|')}, got "${v}"`);
   return v;
 }
+function count(name, v, dflt) {
+  if (v === undefined || v === '') return dflt;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 0) bad(`${name} must be a whole number ≥ 0, got "${v}"`);
+  return n;
+}
+/* tri-state: "1" on, "0" off, unset = whatever the deploy implies */
+function flag(v, dflt) {
+  if (v === '1') return true;
+  if (v === '0') return false;
+  return dflt;
+}
 
 /* ── secrets that gate a production boot ──────────────────────── */
 
@@ -58,7 +70,7 @@ function oneOf(name, v, allowed, dflt) {
    Phase 0 would demand a bot token for a server that has no bot yet,
    and every deploy between here and Phase 4 would refuse to start.
    Raise PHASE as each phase lands and the list enforces itself. */
-const PHASE = 1;
+const PHASE = 2;
 const SECRETS = [
   { k: 'SESSION_SECRET', phase: 2, why: 'HMAC key for guest + brand cookies' },
   { k: 'TG_BOT_TOKEN', phase: 4, why: 'moderation bot' },
@@ -137,6 +149,26 @@ module.exports = Object.freeze({
   PACKS: { 25: 225, 100: 800, 500: 3500 },          // paint amount -> EGP
   IDLE_DROP: 24 * 60 * 60 * 1000,
   DELTA_MAX: 2000,                                  // bigger changes tell clients to refetch
+
+  /* identity — §3. The caps move into the runtime `config` table in
+     Phase 6 the same way the prices do; these are their defaults, with
+     an env override so a suite (or a bad afternoon) can move them
+     without a deploy. */
+  IP_GUEST_CAP: count('IP_GUEST_CAP', env.IP_GUEST_CAP, 5),      // new identities per ip per day
+  IP_CLAIM_CAP: count('IP_CLAIM_CAP', env.IP_CLAIM_CAP, 40),     // claim submissions per ip per day
+  IP_SIGNUP_CAP: count('IP_SIGNUP_CAP', env.IP_SIGNUP_CAP, 3),   // brand signups per ip per day
+  /* a guest cookie is the only copy of who somebody is, so it outlives
+     the wall it painted; a brand session is a login and expires like one */
+  GUEST_TTL: 365 * 24 * 60 * 60 * 1000,
+  BRAND_TTL: 30 * 24 * 60 * 60 * 1000,
+  /* Secure would make the cookie invisible over plain http, which is
+     every local dev session — on by default only where TLS is certain */
+  COOKIE_SECURE: flag(env.COOKIE_SECURE, PROD),
+  /* scrypt at the parameters node:crypto can afford synchronously:
+     128·N·r = 16 MB and ~60 ms per hash on the target VPS */
+  SCRYPT: { N: 16384, r: 8, p: 1, keylen: 32, saltlen: 32 },
+  PASS_MIN: 10,
+  DESC_MIN: 200,
 
   /* secrets + integrations (unused until their phase; parsed now so a
      typo surfaces at boot rather than three phases later) */

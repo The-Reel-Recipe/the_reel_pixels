@@ -30,6 +30,11 @@ fs.mkdirSync(STATE_DIR, { recursive: true });
 
 process.env.STATE_DIR = STATE_DIR;
 process.env.DATA_DIR = DATA_DIR;
+/* This file fires ~60 claims from one address to prove the race and burst
+   properties — well past the 40/day an IP gets in real life (§3). The cap
+   itself is what identity.test.js is for; here it would only be measuring
+   the test's own appetite. */
+process.env.IP_CLAIM_CAP = '1000';
 delete process.env.VERCEL;
 delete process.env.DEV;
 delete process.env.ALLOW_ORIGIN;
@@ -64,11 +69,18 @@ function encodeEnvelope(meta, a, b = []) {
 const server = http.createServer(app);
 let base = '';
 
+/* One cookie jar for the file: identity rides on a signed cookie now, and
+   these tests are all about one caller spending one allowance. */
+const jar = new Map();
 function req(method, url, body, type) {
   return new Promise((resolve, reject) => {
-    const r = http.request(base + url, {
-      method, headers: body ? { 'content-type': type || 'application/json' } : {}
-    }, res => {
+    const headers = body ? { 'content-type': type || 'application/json' } : {};
+    if (jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+    const r = http.request(base + url, { method, headers }, res => {
+      for (const line of res.headers['set-cookie'] || []) {
+        const pair = line.split(';')[0], eq = pair.indexOf('=');
+        if (eq > 0) jar.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+      }
       const chunks = [];
       res.on('data', c => chunks.push(c));
       res.on('end', () => resolve({ code: res.statusCode, body: Buffer.concat(chunks) }));
@@ -83,6 +95,9 @@ const getJson = async (m, u, b, t) => {
 };
 const claim = px => getJson('POST', '/api/claim',
   encodeEnvelope({}, px), 'application/octet-stream');
+
+/* the user id inside the jar's cookie — `<id>.<exp>.<sig>` (§3) */
+const meId = () => Number(String(jar.get('uid') || '').split('.')[0]);
 
 const cellsAt = idx => dbm.db.prepare(
   "SELECT COUNT(*) n FROM cells WHERE cycle = ? AND layer = 'live' AND idx = ?"
@@ -146,8 +161,16 @@ test.after(() => {
 /* ── boot ─────────────────────────────────────────────────────── */
 
 test('a clean DATA_DIR migrates and imports the seed once', () => {
+  /* 003 is missing on purpose: it drops legacy_keys, it is marked `-- @manual`
+     in its first line, and the runner is required to hold it back until the
+     cutover applies it by name (see server/db.js). */
   const applied = dbm.db.prepare('SELECT name FROM schema_migrations ORDER BY name').all();
-  assert.deepEqual(applied.map(r => r.name), ['001_init.sql', '002_legacy_keys.sql']);
+  assert.deepEqual(applied.map(r => r.name),
+    ['001_init.sql', '002_legacy_keys.sql', '004_identity.sql']);
+  assert.deepEqual(dbm.migrate().deferred, ['003_drop_legacy_keys.sql'], 'the manual one ran anyway');
+  assert.ok(dbm.db.prepare(
+    "SELECT 1 n FROM sqlite_master WHERE type = 'table' AND name = 'legacy_keys'").get(),
+  'legacy_keys is still needed — a visitor who has not been back yet is on it');
 
   assert.equal(wall.wall.live.size, SEED_LIVE);
   assert.equal(wall.wall.reserved.size, SEED_BOOKED);
@@ -259,8 +282,9 @@ test('50 parallel claims never exceed the cap plus paint', async () => {
   /* the DB agrees — the allowance and the cells committed together */
   const live = idxs.filter(i => cellsAt(i) === 1).length;
   assert.equal(live, placed);
-  const row = dbm.db.prepare(
-    'SELECT used, paint FROM allowances WHERE user_id = (SELECT user_id FROM legacy_keys LIMIT 1)').get();
+  /* the caller is the cookie in the jar, not the connection — read the row
+     back through the same identity the requests carried */
+  const row = dbm.db.prepare('SELECT used, paint FROM allowances WHERE user_id = ?').get(meId());
   assert.equal(row.used, cfg.CAP);
   assert.equal(row.paint, after.json.paint);
 });

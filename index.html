@@ -231,12 +231,131 @@
     </div>
   </div>
 
+  <!-- Brand account — apply, log in, or see where the application got to -->
+  <div class="overlay" id="modalAuth" hidden>
+    <div class="modal modal-auth" role="dialog" aria-modal="true" aria-labelledby="auTitle">
+      <button class="modal-x" data-close aria-label="Close">&times;</button>
+      <h2 id="auTitle">&#127970; BRAND ACCOUNT</h2>
+      <p class="modal-sub" id="auSub">Logo spots are for real businesses, so a person reads every application. It takes two minutes and you only do it once.</p>
+
+      <div class="auth-tabs" id="authTabs">
+        <button type="button" class="auth-tab sel" id="tabSignup">APPLY</button>
+        <button type="button" class="auth-tab" id="tabLogin">LOG IN</button>
+      </div>
+
+      <!-- Apply -->
+      <form class="auth-pane" id="paneSignup" novalidate>
+        <div class="auth-grid">
+          <label class="fld">
+            <span class="lbl">BUSINESS NAME</span>
+            <input type="text" id="suName" maxlength="80" placeholder="Nile Soda Co." autocomplete="organization">
+            <span class="fld-err" id="errSuName" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">CATEGORY</span>
+            <input type="text" id="suCategory" maxlength="40" placeholder="Drinks" list="catList">
+            <datalist id="catList">
+              <option value="Food &amp; drink"></option><option value="Restaurant"></option>
+              <option value="Fashion"></option><option value="Beauty"></option>
+              <option value="Electronics"></option><option value="Education"></option>
+              <option value="Services"></option><option value="Other"></option>
+            </datalist>
+            <span class="fld-err" id="errSuCategory" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">CONTACT NAME</span>
+            <input type="text" id="suContact" maxlength="80" placeholder="Sara Fahmy" autocomplete="name">
+            <span class="fld-err" id="errSuContact" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">PHONE</span>
+            <input type="tel" id="suPhone" maxlength="32" placeholder="+20 100 555 0134" autocomplete="tel">
+            <span class="fld-err" id="errSuPhone" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">EMAIL</span>
+            <input type="email" id="suEmail" maxlength="160" placeholder="hello@nile-soda.com" autocomplete="email" spellcheck="false">
+            <span class="fld-err" id="errSuEmail" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">PASSWORD</span>
+            <input type="password" id="suPass" maxlength="200" placeholder="10 characters or more" autocomplete="new-password">
+            <span class="fld-err" id="errSuPass" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">WEBSITE</span>
+            <input type="text" id="suSite" maxlength="200" placeholder="nile-soda.com" inputmode="url" spellcheck="false">
+            <span class="cp-hint">A website <b>or</b> a social account is required — that is how we check you are real.</span>
+            <span class="fld-err" id="errSuSite" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">SOCIAL ACCOUNTS</span>
+            <textarea id="suSocials" rows="2" maxlength="600" placeholder="instagram.com/nilesoda&#10;facebook.com/nilesoda" spellcheck="false"></textarea>
+            <span class="cp-hint">One per line.</span>
+          </label>
+          <label class="fld">
+            <span class="lbl">INSTAPAY HANDLE</span>
+            <input type="text" id="suInstapay" maxlength="64" placeholder="nilesoda@instapay" spellcheck="false">
+            <span class="cp-hint">Where a refund goes if a booking is turned down.</span>
+            <span class="fld-err" id="errSuInstapay" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">COMMERCIAL REG / TAX ID <i class="lbl-opt">OPTIONAL</i></span>
+            <input type="text" id="suReg" maxlength="64" placeholder="CR-99112" spellcheck="false">
+            <span class="fld-err" id="errSuReg" hidden></span>
+          </label>
+          <label class="fld auth-wide">
+            <span class="lbl">WHAT THE BUSINESS DOES</span>
+            <textarea id="suDesc" rows="5" maxlength="4000" placeholder="What you sell, who you sell it to, how long you have been going, where you are based — the more real detail, the faster this gets approved."></textarea>
+            <span class="char-count" id="suDescCount">0 / 200 minimum</span>
+            <span class="fld-err" id="errSuDesc" hidden></span>
+          </label>
+        </div>
+        <span class="fld-err" id="errSignup" hidden></span>
+        <button class="btn-claim modal-cta" id="btnSignup" type="submit">APPLY FOR A BRAND ACCOUNT</button>
+        <p class="fine">We use this to check the business is real and to send booking receipts. Nothing here goes on the wall.</p>
+      </form>
+
+      <!-- Log in -->
+      <form class="auth-pane" id="paneLogin" hidden novalidate>
+        <label class="fld">
+          <span class="lbl">EMAIL</span>
+          <input type="email" id="liEmail" maxlength="160" autocomplete="email" spellcheck="false">
+        </label>
+        <label class="fld">
+          <span class="lbl">PASSWORD</span>
+          <input type="password" id="liPass" maxlength="200" autocomplete="current-password">
+        </label>
+        <span class="fld-err" id="errLogin" hidden></span>
+        <button class="btn-claim modal-cta" id="btnLogin" type="submit">LOG IN</button>
+        <p class="fine">Painting as a guest needs no account at all — this is only for booking logo space.</p>
+      </form>
+
+      <!-- Where the application got to -->
+      <div class="auth-pane" id="paneStatus" hidden>
+        <div class="status-card">
+          <b id="authWho">—</b>
+          <span class="status-chip" id="authChip">PENDING</span>
+          <p id="authNote"></p>
+        </div>
+        <button class="btn-claim modal-cta" id="btnGoBook" hidden>START A PRE-ORDER &#8594;</button>
+        <button class="btn-mini auth-logout" id="btnLogout" type="button">LOG OUT</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Company pre-order -->
   <div class="overlay" id="modalCompany" hidden>
     <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="cpTitle">
       <button class="modal-x" data-close aria-label="Close">&times;</button>
       <h2 id="cpTitle">&#127970; BRAND PRE-ORDER</h2>
       <p class="modal-sub">Book a spot for your logo at <b>10 EGP per pixel</b>. Pre-orders are prepaid for the <b>next cycle</b> — your logo goes up the moment the wall resets and owns that spot for the whole month.</p>
+      <div class="brand-strip" id="cpBrand" hidden>
+        <span class="bs-tick" aria-hidden="true">&#9989;</span>
+        <b id="cpBrandName">—</b>
+        <span class="bs-note">APPROVED BRAND</span>
+        <button type="button" class="btn-mini" id="cpBrandOut">LOG OUT</button>
+      </div>
       <div class="cp-grid">
         <div class="cp-form">
           <label class="fld">

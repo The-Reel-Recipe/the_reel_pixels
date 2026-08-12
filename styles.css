@@ -617,6 +617,97 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 .pk-price { font-family: var(--fp); font-size: 9px; margin-top: 7px; }
 .pk-save { font-size: 10.5px; color: var(--warn); font-weight: 600; }
 
+/* ── Brand account modal ── */
+.modal-auth { width: min(760px, 100%); text-align: left; }
+.modal-auth h2, .modal-auth > .modal-sub { text-align: center; }
+
+.auth-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  margin-bottom: 20px;
+}
+.auth-tabs[hidden] { display: none; }
+.auth-tab {
+  font-family: var(--fp); font-size: 8px; letter-spacing: 0.5px;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px 8px;
+  transition: border-color .12s, color .12s, background .12s;
+}
+.auth-tab:hover { border-color: var(--border-2); color: var(--text); }
+.auth-tab.sel { border-color: var(--accent); color: var(--text); background: var(--accent-dim); }
+
+.auth-pane { display: flex; flex-direction: column; gap: 14px; }
+.auth-pane[hidden] { display: none; }
+.auth-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+.auth-wide { grid-column: 1 / -1; }
+.lbl-opt { font-style: normal; color: var(--border-2); }
+
+/* the description box and the socials list read like the inputs beside them */
+.fld textarea {
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--fb); font-size: 14px; line-height: 1.5;
+  padding: 9px 11px;
+  width: 100%; resize: vertical;
+  transition: border-color .12s, box-shadow .12s;
+}
+.fld textarea::placeholder { color: var(--text-dim); opacity: 0.6; }
+.fld textarea:hover { border-color: var(--border-2); }
+.fld textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-dim); }
+.fld textarea.bad, .fld textarea.bad:focus { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(230,57,70,0.18); }
+
+.char-count {
+  align-self: flex-end;
+  font-family: var(--fp); font-size: 7px; letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+.char-count.ok { color: var(--accent); }
+
+.status-card {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  border-radius: var(--r);
+  padding: 24px 20px;
+  text-align: center;
+}
+.status-card b { font-family: var(--fp); font-size: 12px; }
+.status-card p { font-size: 13px; color: var(--text-dim); line-height: 1.55; max-width: 46ch; }
+.status-chip {
+  font-family: var(--fp); font-size: 8px; letter-spacing: 0.5px;
+  border: 2px solid var(--border-2);
+  border-radius: 99px;
+  padding: 7px 12px;
+  color: var(--text-dim);
+}
+.status-chip.pending  { border-color: var(--warn); color: var(--warn); background: rgba(255,210,63,0.08); }
+.status-chip.approved { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.status-chip.rejected { border-color: var(--danger); color: var(--danger); background: rgba(230,57,70,0.09); }
+.auth-logout { align-self: center; }
+
+/* the same standing, shown where the booking actually happens */
+.brand-strip {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--accent-dim);
+  border: 2px solid var(--accent);
+  border-radius: var(--r);
+  padding: 10px 14px;
+  margin-bottom: 18px;
+  text-align: left;
+}
+.brand-strip[hidden] { display: none; }
+.brand-strip b { font-family: var(--fp); font-size: 10px; }
+.bs-tick { font-size: 14px; line-height: 1; }
+.bs-note { font-family: var(--fp); font-size: 7px; color: var(--accent); letter-spacing: 1px; }
+.brand-strip .btn-mini { margin-left: auto; }
+
+/* an applicant still waiting gets a quieter button than an approved brand */
+.btn-company.needs-account { border-style: dashed; }
+
 /* ── Company modal ── */
 .cp-grid {
   display: grid;
@@ -631,7 +722,10 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 
 .fld input[type="text"],
 .fld input[type="number"],
-.fld input[type="url"] {
+.fld input[type="url"],
+.fld input[type="email"],
+.fld input[type="password"],
+.fld input[type="tel"] {
   background: var(--surface-2);
   border: 2px solid var(--border);
   border-radius: var(--r);
@@ -917,6 +1011,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   .ab-center { order: 3; width: 100%; justify-content: center; }
   .palette-dock { margin-top: -52px; max-width: 96vw; }
   .cp-grid, .cp-grid > .cp-col:last-child { grid-template-columns: 1fr; grid-column: auto; }
+  .auth-grid { grid-template-columns: 1fr; }
   #toasts { bottom: 12px; }
   /* the dock goes near-full-width here and is pulled 52px up into the canvas,
      so both bottom-anchored overlays have to clear it */
@@ -969,7 +1064,12 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
      that zoom then strands the user mid-form with no way back. */
   .fld input[type="text"],
   .fld input[type="number"],
-  .fld input[type="url"] { font-size: 16px; padding: 11px 12px; }
+  .fld input[type="url"],
+  .fld input[type="email"],
+  .fld input[type="password"],
+  .fld input[type="tel"],
+  .fld textarea { font-size: 16px; padding: 11px 12px; }
+  .auth-tab { padding: 15px 8px; }
 
   .swatch { width: 38px; height: 38px; }
   .palette { gap: 8px; }

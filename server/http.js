@@ -107,14 +107,23 @@ async function handler(req, res) {
 
   const now = Date.now();
   wall.checkCycle(now);
-  const key = identity.callerKey(req);
-  const row = identity.rowFor(key, now);
-  identity.touch(row, now);
+
+  /* Who is asking (§3). A caller without a valid cookie gets a fresh guest
+     identity and the Set-Cookie that carries it — attached here rather than
+     per route, so every reply on the minting request keeps it, envelope and
+     event stream included. An IP that has spent its guest budget for the day
+     gets no identity at all, and there is nothing personal to serve without
+     one. */
+  const ses = identity.resolve(req, now, { mint: !urlPath.startsWith('/api/auth/') });
+  if (ses.cookie) res.setHeader('set-cookie', ses.cookie);
+  if (ses.capped) return sendJson(res, 429, ses.capped);
+  const row = ses.e;                      // null only on the auth routes
+  if (row) identity.touch(row, now);
 
   try {
     // everything the page needs to draw itself, in one shot
     if (urlPath === '/api/wall' && req.method === 'GET') {
-      const buf = wall.snapshotFor(key, now);
+      const buf = wall.snapshotFor(row, now);
       res.writeHead(200, { 'content-type': 'application/octet-stream', 'cache-control': 'no-store' });
       return res.end(buf);
     }
@@ -139,14 +148,48 @@ async function handler(req, res) {
       return;
     }
 
+    if (urlPath === '/api/me' && req.method === 'GET') {
+      return sendJson(res, 200, identity.me(row, now));
+    }
+
+    /* ── accounts ── */
+    if (urlPath === '/api/auth/signup' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req, 64 << 10)).toString('utf8'));
+      const r = identity.signup(ses.ip, body, now);
+      if (r.error) return sendJson(res, r.status, { error: r.error, fields: r.fields, message: r.message });
+      res.setHeader('set-cookie', r.cookie);           // the application signs them in
+      return sendJson(res, 200, identity.me(r.e, now));
+    }
+
+    if (urlPath === '/api/auth/login' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req, 4096)).toString('utf8'));
+      const r = identity.login(body, now);
+      if (r.error) return sendJson(res, r.status, { error: r.error, message: r.message });
+      /* the guest identity keeps its own pixels and history — this is a
+         different account, not a promotion of the old one */
+      res.setHeader('set-cookie', r.cookie);
+      return sendJson(res, 200, identity.me(r.e, now));
+    }
+
+    if (urlPath === '/api/auth/logout' && req.method === 'POST') {
+      res.setHeader('set-cookie', identity.clearCookie());
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (urlPath === '/api/claim' && req.method === 'POST') {
+      // checked before the body is read: the cap exists to make a flood cheap
+      const capped = identity.takeClaim(ses.ip, row, now);
+      if (capped) return sendJson(res, 429, capped);
       const { a } = wall.decodeEnvelope(await readBody(req, 1 << 20));
-      return sendJson(res, 200, wall.claimPixels(key, a, now));
+      return sendJson(res, 200, wall.claimPixels(row, a, now));
     }
 
     if (urlPath === '/api/book' && req.method === 'POST') {
+      // approved brands only (§3) — the reason code is what the client renders
+      const gate = identity.bookGate(row);
+      if (gate) return sendJson(res, 403, gate);
       const { meta, a } = wall.decodeEnvelope(await readBody(req, 16 << 20));
-      return sendJson(res, 200, wall.bookBrand(key, meta, a, now));
+      return sendJson(res, 200, wall.bookBrand(row, meta, a, now));
     }
 
     if (urlPath === '/api/paint' && req.method === 'POST') {

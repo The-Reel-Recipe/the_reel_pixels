@@ -1,0 +1,23 @@
+-- @manual
+-- ═══════════════════════════════════════════════════════════════
+-- 003_drop_legacy_keys — retire the Phase 1 → Phase 2 IP bridge
+--
+-- NOT APPLIED AUTOMATICALLY. The `-- @manual` marker on the first
+-- line tells the runner in db.js to list this file and walk past it;
+-- only an explicit `node tools/migrate.js 003_drop_legacy_keys.sql`
+-- runs it, and Phase 8 (cutover) is when that happens.
+--
+-- Why it waits: legacy_keys maps a prototype-era caller (a normalized
+-- IP) onto the users row that holds their pixels. Phase 2 mints a uid
+-- cookie on the first request and, when the caller's IP still has a
+-- row here, adopts that user instead of minting a new one — then
+-- deletes the row. A visitor who hasn't been back since the switch
+-- still has one waiting, so the table has to outlive the deploy that
+-- stopped writing to it. One grace period (a month of the wall, say)
+-- and every identity worth keeping has moved onto a cookie.
+--
+-- identity.js prepares its legacy statements only if the table is
+-- still there, so applying this needs nothing but a restart after it.
+-- ═══════════════════════════════════════════════════════════════
+
+DROP TABLE legacy_keys;

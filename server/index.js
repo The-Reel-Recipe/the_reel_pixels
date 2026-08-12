@@ -52,7 +52,9 @@ function listen(port) {
     console.log(`pixel wall  →  http://localhost:${p}`);
     console.log(`database    →  ${db.file}`);
     console.log(`wall        →  server-owned, ${wall.wall.live.size} live · ${wall.wall.reserved.size} booked`);
-    console.log(`allowance   →  ${cfg.CAP} free pixels per IP, refilling ${cfg.REFILL / 60000} min after they run out`);
+    console.log(`allowance   →  ${cfg.CAP} free pixels per visitor, refilling ${cfg.REFILL / 60000} min after they run out`);
+    console.log(`identity    →  signed uid cookie${cfg.COOKIE_SECURE ? ' (Secure)' : ''} · ` +
+      `${cfg.IP_GUEST_CAP} new guests / ${cfg.IP_CLAIM_CAP} claims / ${cfg.IP_SIGNUP_CAP} signups per IP per day`);
     console.log(`trust proxy →  ${cfg.TRUST_PROXY ? 'yes (CF-Connecting-IP / X-Forwarded-For)' : 'no (socket address)'}`);
     if (cfg.DEV) console.log('dev routes  →  /api/dev/* enabled (DEV=0 to disable)');
   });
