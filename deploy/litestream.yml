@@ -1,0 +1,62 @@
+# ═══════════════════════════════════════════════════════════════
+# litestream — continuous replication of the pixel wall to R2
+#
+# PLAN.md §10.1. Litestream tails the SQLite WAL and ships it to
+# object storage, so the recovery point is seconds rather than "last
+# night". It is a sidecar process, not a library: the app knows
+# nothing about it and needs no change to be replicated.
+#
+#   install   https://litestream.io/install  (single static binary)
+#   validate  litestream databases -config deploy/litestream.yml
+#   watch     litestream replicate -config deploy/litestream.yml
+#   restore   litestream restore -config deploy/litestream.yml \
+#               -o /srv/reelpixels/data/pixels.db /srv/reelpixels/data/pixels.db
+#
+# Every value below comes from the environment — nothing secret is
+# committed. Litestream expands ${VAR} itself, so these stay literal.
+#
+# Needed from the user before Phase 8 (see PLAN.md §14):
+#   an R2 bucket + an S3-compatible access key pair.
+#
+#   LITESTREAM_ACCESS_KEY_ID       R2 access key id
+#   LITESTREAM_SECRET_ACCESS_KEY   R2 secret access key
+#   R2_BUCKET                      e.g. reelpixels-backups
+#   R2_ENDPOINT                    https://<accountid>.r2.cloudflarestorage.com
+#   DATA_DIR                       must match the app's (default /srv/reelpixels/data)
+#
+# systemd (Phase 8) reads them from the same EnvironmentFile as the app:
+#
+#   [Service]
+#   EnvironmentFile=/etc/reelpixels.env
+#   ExecStart=/usr/bin/litestream replicate -config /srv/reelpixels/deploy/litestream.yml
+#   Restart=always
+# ═══════════════════════════════════════════════════════════════
+
+# credentials are read from LITESTREAM_ACCESS_KEY_ID /
+# LITESTREAM_SECRET_ACCESS_KEY when they are not written here — which is
+# how they should be supplied. Do not add access-key-id below.
+
+# a 9090 metrics endpoint for the uptime checks in §11; bind to localhost
+# and let Caddy or the monitor reach it over the tunnel, never publicly
+addr: ":9090"
+
+dbs:
+  - path: ${DATA_DIR}/pixels.db
+    replicas:
+      - name: r2
+        type: s3
+        bucket: ${R2_BUCKET}
+        path: pixels
+        endpoint: ${R2_ENDPOINT}
+        # R2 is region-less but the S3 client insists on a value
+        region: auto
+        force-path-style: true
+
+        # a full snapshot daily, WAL segments in between: restoring never
+        # has to replay more than 24h of frames
+        snapshot-interval: 24h
+        sync-interval: 10s
+
+        # keep a month of history, matching tools/backup-nightly.js
+        retention: 720h
+        retention-check-interval: 1h

@@ -6,8 +6,9 @@
    the Phase 0 module split (and everything after it) can't quietly
    change what app.js receives.
 
-   STATE_DIR is a fresh temp dir: no .wall.bin, so the server loads
-   seed.bin, and nothing the test paints touches the repo.
+   STATE_DIR and DATA_DIR are fresh temp dirs: no .wall.bin and no
+   database, so the server migrates, imports seed.bin and serves that
+   — and nothing the test paints touches the repo or a previous run.
    ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -20,13 +21,17 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 /* has to be set before server.js is required — it reads env at load */
-const STATE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'reelpixel-test-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'reelpixel-test-'));
+const STATE_DIR = path.join(TMP, 'state');
+fs.mkdirSync(STATE_DIR);
 process.env.STATE_DIR = STATE_DIR;
+process.env.DATA_DIR = path.join(TMP, 'data');
 delete process.env.VERCEL;
 delete process.env.DEV;
 delete process.env.ALLOW_ORIGIN;
 
 const app = require('../server.js');
+const db = require('../server/db.js');
 
 /* what seed.bin holds — the numbers the whole test file hangs off */
 const SEED_LIVE = 17600, SEED_BOOKED = 1556;
@@ -68,11 +73,27 @@ function decodeEnvelope(buf) {
   return { meta, a: readList(), b: readList(), bodyAt };
 }
 /* meta carries clocks (now, cycleEnd, refillAt); the pixel payload
-   doesn't, so it's the part worth hashing. */
+   doesn't, so it's the part worth hashing.
+
+   Sorted by index first, which Phase 0 did not need to do. The wall is
+   now a projection of the `cells` table and comes back in primary-key
+   order, where seed.bin stores its entries grouped by owner — same
+   pixels, same colours, same owner ids, different order on the wire.
+   The client builds a Map out of them and never looks at the order, so
+   the contract is the *set*, and comparing it as one is what keeps this
+   test honest instead of re-baselining it every time the read path
+   changes. Order-sensitivity would also break the moment two claims
+   land in a different sequence, which says nothing about the wire. */
 const bodyHash = buf => {
-  const { bodyAt } = decodeEnvelope(buf);
-  return crypto.createHash('sha256').update(buf.subarray(bodyAt)).digest('hex').slice(0, 16);
+  const { a, b } = decodeEnvelope(buf);
+  const byIdx = list => list.slice().sort((x, y) => x[0] - y[0]);
+  return crypto.createHash('sha256')
+    .update(encodeEnvelope({}, byIdx(a), byIdx(b))).digest('hex').slice(0, 16);
 };
+/* the same hash taken straight off the committed file, so the assertion
+   below is anchored to seed.bin rather than to whatever the server said
+   the day the constant was written */
+const SEED_HASH = bodyHash(fs.readFileSync(path.join(__dirname, '..', 'seed.bin')));
 
 /* ── in-process server ────────────────────────────────────────── */
 
@@ -102,7 +123,8 @@ test.before(() => new Promise(done => {
 }));
 test.after(() => {
   server.close();
-  fs.rmSync(STATE_DIR, { recursive: true, force: true });
+  db.close();                              // Windows won't unlink an open .db
+  fs.rmSync(TMP, { recursive: true, force: true });
 });
 
 /* ── the snapshot ─────────────────────────────────────────────── */
@@ -142,7 +164,15 @@ test('GET /api/wall serves the seed as a decodable envelope', async () => {
   }
 
   seedBody = bodyHash(r.body);
-  assert.equal(seedBody, '42d6551f26557be2', 'pixel payload drifted from the seed');
+  assert.equal(SEED_HASH, '8e2a0067e023829b', 'seed.bin itself changed');
+  assert.equal(seedBody, SEED_HASH, 'pixel payload drifted from the seed');
+
+  /* the owner table is index-addressed by every entry above, so it has to
+     survive the round trip through users/submissions exactly */
+  const seedMeta = decodeEnvelope(fs.readFileSync(path.join(__dirname, '..', 'seed.bin'))).meta;
+  assert.deepEqual(meta.owners, seedMeta.owners, 'owner table');
+  assert.deepEqual(meta.brands, seedMeta.brands);
+  assert.deepEqual(meta.nextBrands, seedMeta.nextBrands);
 });
 
 test('round-trips through the client codec unchanged', async () => {

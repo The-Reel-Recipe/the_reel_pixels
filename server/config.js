@@ -58,7 +58,7 @@ function oneOf(name, v, allowed, dflt) {
    Phase 0 would demand a bot token for a server that has no bot yet,
    and every deploy between here and Phase 4 would refuse to start.
    Raise PHASE as each phase lands and the list enforces itself. */
-const PHASE = 0;
+const PHASE = 1;
 const SECRETS = [
   { k: 'SESSION_SECRET', phase: 2, why: 'HMAC key for guest + brand cookies' },
   { k: 'TG_BOT_TOKEN', phase: 4, why: 'moderation bot' },
@@ -89,6 +89,12 @@ const argvPort = /^\d+$/.test(process.argv[2] || '') ? process.argv[2] : '';
 /* Serverless ships a read-only bundle, so state goes to the temp dir
    there — per-instance, gone on a cold start. */
 const STATE_DIR = path.resolve(env.STATE_DIR || (ON_VERCEL ? os.tmpdir() : ROOT));
+/* Same story for the database and everything filed next to it. Vercel's
+   bundle is read-only, so an unconfigured function gets a temp dir it can
+   actually open — ephemeral, which is exactly why §1 of the plan moves the
+   deploy to a VPS with a real volume. */
+const DATA_DIR = path.resolve(env.DATA_DIR ||
+  (ON_VERCEL ? path.join(os.tmpdir(), 'reelpixel-data') : path.join(ROOT, 'data')));
 
 const DEV_SECRET = 'dev-insecure-session-secret';
 let SESSION_SECRET = String(env.SESSION_SECRET || '');
@@ -112,9 +118,14 @@ module.exports = Object.freeze({
 
   /* files */
   STATE_DIR,
-  DATA_DIR: path.resolve(env.DATA_DIR || path.join(ROOT, 'data')),
+  DATA_DIR,
+  DB_FILE: path.join(DATA_DIR, 'pixels.db'),
+  ARCHIVE_DIR: path.join(DATA_DIR, 'archive'),     // one PNG per finished cycle
+  BACKUP_DIR: path.join(DATA_DIR, 'backup'),       // nightly VACUUM INTO snapshots
+  MIGRATIONS_DIR: path.join(ROOT, 'migrations'),
+  /* prototype-era files. Nothing writes these any more; the wall importer
+     reads .wall.bin once if it happens to be there and then leaves it be. */
   WALL_FILE: path.join(STATE_DIR, '.wall.bin'),
-  LEDGER_FILE: path.join(STATE_DIR, '.allowance.json'),
   SEED_FILE: path.join(ROOT, 'seed.bin'),          // committed starting artwork
 
   /* wall shape and pricing — these move into the runtime `config`

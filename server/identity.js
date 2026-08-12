@@ -1,16 +1,22 @@
 /* ═══════════════════════════════════════════════════════════════
    identity — who is asking, and what they have left
 
-   Still IP-keyed: a cleared browser or a private window gets you
-   nothing, and gets you nothing back either. Phase 2 moves the key
-   onto a signed cookie and the ledger into SQLite; the shape of
-   rowFor/allowanceOf is what the rest of the server talks to, so
-   that swap stays local to this file.
+   Still IP-keyed, but the ledger is gone: a caller is now a real
+   users row with an allowances row beside it, and the Map in here is
+   only a write-through cache so the common path doesn't hit SQLite
+   for every request. Phase 2 swaps the key for a signed cookie by
+   rewriting keyToUser() and dropping legacy_keys — rowFor and
+   allowanceOf keep their shape, so nothing above this file moves.
+
+   writeAllowance() deliberately runs bare statements rather than its
+   own transaction: wall.js calls it from inside the claim transaction,
+   which is what makes §4.6 true (a burst of parallel claims cannot
+   overspend, because the spend commits with the pixels or not at all).
    ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
-const fs = require('fs');
 const cfg = require('./config.js');
+const { db, tx } = require('./db.js');
 
 /* ── Who is asking ────────────────────────────────────────────── */
 
@@ -49,46 +55,67 @@ function handleFor(key) {
   return `Pixel fan #${(h >>> 0) % 9000 + 1000}`;
 }
 
-/* ── Per-caller ledger ────────────────────────────────────────── */
+/* ── Statements ───────────────────────────────────────────────── */
 
-const ledger = new Map();             // key -> { used, refillAt, paint, handle, seen }
-let ledgerTimer = null;
+const findKey = db.prepare(
+  `SELECT u.id, u.handle, u.last_seen, a.used, a.refill_at, a.paint
+     FROM legacy_keys k JOIN users u ON u.id = k.user_id
+     LEFT JOIN allowances a ON a.user_id = u.id
+    WHERE k.key = ?`);
+const insUser = db.prepare(
+  "INSERT INTO users (kind, handle, created_at, last_seen) VALUES ('guest', ?, ?, ?)");
+const insKey = db.prepare('INSERT INTO legacy_keys (key, user_id, created_at) VALUES (?, ?, ?)');
+const insAllowance = db.prepare('INSERT INTO allowances (user_id) VALUES (?)');
+const setAllowance = db.prepare(
+  'UPDATE allowances SET used = ?, refill_at = ?, paint = ? WHERE user_id = ?');
+const bumpPaint = db.prepare('UPDATE allowances SET paint = paint + ? WHERE user_id = ?');
+const readAllowance = db.prepare('SELECT used, refill_at, paint FROM allowances WHERE user_id = ?');
+const clearAllowances = db.prepare('UPDATE allowances SET used = 0, refill_at = 0');
+const seenStmt = db.prepare('UPDATE users SET last_seen = ? WHERE id = ?');
 
-function saveLedger() {
-  clearTimeout(ledgerTimer);
-  ledgerTimer = setTimeout(() => {
-    const keys = {};
-    for (const [k, e] of ledger) keys[k] = e;
-    fs.writeFile(cfg.LEDGER_FILE, JSON.stringify({ v: 2, cap: cfg.CAP, keys }), err => {
-      if (err) console.warn('ledger: save failed —', err.message);
-    });
-  }, 250);
-  if (ledgerTimer.unref) ledgerTimer.unref();
-}
-function loadLedger() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(cfg.LEDGER_FILE, 'utf8'));
-    for (const [key, e] of Object.entries(raw.keys || {})) {
-      if (!Number.isFinite(e.used)) continue;
-      // seen has to come back too, or a restored row is never idle-swept
-      // (now - undefined is NaN, and NaN > IDLE_DROP is false forever)
-      ledger.set(key, {
-        used: e.used, refillAt: e.refillAt || 0, paint: e.paint || 0,
-        handle: e.handle || handleFor(key), seen: e.seen || Date.now()
-      });
-    }
-    console.log(`ledger: restored ${ledger.size} caller(s)`);
-  } catch (e) { /* first run, or a mangled file — start clean */ }
+/* ── Per-caller row ───────────────────────────────────────────── */
+
+/* key -> { id, used, refillAt, paint, handle, seen, wrote }
+   A pure cache: every field also lives in SQLite, and dropping an entry
+   costs one SELECT, so the idle sweep below can be as brutal as it likes. */
+const cache = new Map();
+
+function keyToUser(key, now) {
+  return tx(() => {
+    const found = findKey.get(key);
+    if (found) return found;
+    const id = Number(insUser.run(handleFor(key), now, now).lastInsertRowid);
+    insKey.run(key, id, now);
+    insAllowance.run(id);
+    return { id, handle: handleFor(key), last_seen: now, used: 0, refill_at: 0, paint: 0 };
+  });
 }
 
 /* Fetches the caller's row, applying an elapsed refill first so the rest of
    the code never has to think about expiry. */
 function rowFor(key, now) {
-  let e = ledger.get(key);
-  if (!e) { e = { used: 0, refillAt: 0, paint: 0, handle: handleFor(key), seen: now }; ledger.set(key, e); }
-  if (e.refillAt && now >= e.refillAt) { e.used = 0; e.refillAt = 0; }
+  let e = cache.get(key);
+  if (!e) {
+    const u = keyToUser(key, now);
+    e = {
+      id: u.id, handle: u.handle, seen: u.last_seen || now, wrote: u.last_seen || 0,
+      used: u.used || 0, refillAt: u.refill_at || 0, paint: u.paint || 0
+    };
+    cache.set(key, e);
+  }
+  if (e.refillAt && now >= e.refillAt) {
+    e.used = 0; e.refillAt = 0;
+    writeAllowance(e);
+  }
   return e;
 }
+
+/* Bare UPDATE — no transaction of its own, so it joins whichever one the
+   caller is already inside (see the header). */
+function writeAllowance(e) {
+  setAllowance.run(e.used, e.refillAt, e.paint, e.id);
+}
+
 function allowanceOf(e, now) {
   return {
     cap: cfg.CAP, free: Math.max(0, cfg.CAP - e.used), paint: e.paint,
@@ -97,22 +124,48 @@ function allowanceOf(e, now) {
     refillMs: cfg.REFILL, handle: e.handle, now
   };
 }
-/* the monthly wipe hands everyone their free pixels back */
-function resetAllowances() {
-  for (const e of ledger.values()) { e.used = 0; e.refillAt = 0; }
+
+/* last_seen is only interesting to the minute — a write per request would
+   dirty a page on every poll of /api/allowance for nothing. */
+function touch(e, now) {
+  e.seen = now;
+  if (now - e.wrote < 60000) return;
+  e.wrote = now;
+  seenStmt.run(now, e.id);
 }
 
+/* the monthly wipe hands everyone their free pixels back. Runs inside the
+   reset transaction, so again: no transaction of its own. */
+function resetAllowances() {
+  clearAllowances.run();
+  for (const e of cache.values()) { e.used = 0; e.refillAt = 0; }
+}
+
+function refill(e) {
+  e.used = 0; e.refillAt = 0;
+  tx(writeAllowance, e);
+  return e;
+}
+
+/* the paint shop. Reads the row back so a concurrent write can't be lost. */
+function creditPaint(e, n) {
+  tx(() => {
+    bumpPaint.run(n, e.id);
+    e.paint = readAllowance.get(e.id).paint;
+  });
+  return e;
+}
+
+/* An idle row costs a Map entry and nothing else; SQLite keeps the truth. */
 setInterval(() => {
   const now = Date.now();
-  let dropped = 0;
-  for (const [k, e] of ledger) {
-    if (e.refillAt && now >= e.refillAt) { e.used = 0; e.refillAt = 0; }
-    if (!e.used && !e.refillAt && !e.paint && now - e.seen > cfg.IDLE_DROP) { ledger.delete(k); dropped++; }
+  for (const [k, e] of cache) {
+    if (e.refillAt && now >= e.refillAt) { e.used = 0; e.refillAt = 0; tx(writeAllowance, e); }
+    if (now - e.seen > cfg.IDLE_DROP) cache.delete(k);
   }
-  if (dropped) saveLedger();
 }, 10 * 60 * 1000).unref();
 
 module.exports = {
   ipv6Prefix, callerKey, handleFor,
-  ledger, loadLedger, saveLedger, rowFor, allowanceOf, resetAllowances
+  cache, rowFor, allowanceOf, writeAllowance, touch, refill, creditPaint, resetAllowances
 };

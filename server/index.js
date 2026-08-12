@@ -17,27 +17,40 @@
 
 const http = require('http');
 const cfg = require('./config.js');
-const identity = require('./identity.js');
+const db = require('./db.js');
 const wall = require('./wall.js');
 const { handler } = require('./http.js');
 
-/* Boot once per process — on a serverless host that means once per cold
-   start, which is exactly when the seed needs to be read back in. */
+/* Boot once per process. Requiring db.js has already opened the database and
+   run any pending migrations by this point; all that's left is projecting the
+   wall cache off it — and, on a virgin database, importing the seed first. */
 let booted = false;
 function boot() {
   if (booted) return;
   booted = true;
   for (const w of cfg.warnings) console.warn('config:', w);
-  identity.loadLedger();
-  if (!wall.loadWall()) console.log('wall: empty — the page will seed the demo artwork on first load');
-  if (cfg.ON_VERCEL) console.log(`state dir   →  ${cfg.STATE_DIR} (per-instance; set STATE_DIR for durable storage)`);
+  wall.load();
+  if (cfg.ON_VERCEL) console.log(`data dir    →  ${cfg.DATA_DIR} (per-instance; set DATA_DIR for durable storage)`);
 }
 boot();
+
+/* Graceful shutdown: flush the WAL back into the database file so a restart
+   (or a backup taken between them) never sees a half-written page. */
+let closing = false;
+function shutdown(sig) {
+  if (closing) return;
+  closing = true;
+  console.log(`\n${sig} — closing the database`);
+  db.close();
+  process.exit(0);
+}
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => shutdown(sig));
 
 function listen(port) {
   const p = port || cfg.PORT;
   return http.createServer(handler).listen(p, () => {
     console.log(`pixel wall  →  http://localhost:${p}`);
+    console.log(`database    →  ${db.file}`);
     console.log(`wall        →  server-owned, ${wall.wall.live.size} live · ${wall.wall.reserved.size} booked`);
     console.log(`allowance   →  ${cfg.CAP} free pixels per IP, refilling ${cfg.REFILL / 60000} min after they run out`);
     console.log(`trust proxy →  ${cfg.TRUST_PROXY ? 'yes (CF-Connecting-IP / X-Forwarded-For)' : 'no (socket address)'}`);

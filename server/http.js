@@ -62,9 +62,15 @@ function serveStatic(req, res, urlPath) {
   if (rel.endsWith('/')) rel += 'index.html';
   const file = path.resolve(ROOT, '.' + rel.replace(/\\/g, '/'));
   // no climbing out of the project, and nothing dot-prefixed (that covers
-  // .wall.bin, .allowance.json and .git)
+  // .git and any prototype-era .wall.bin / .allowance.json still lying about)
   if (file !== ROOT && !file.startsWith(ROOT + path.sep)) return send(res, 403, 'text/plain', 'Forbidden');
   if (path.relative(ROOT, file).split(path.sep).some(p => p.startsWith('.'))) {
+    return send(res, 404, 'text/plain', 'Not found');
+  }
+  // DATA_DIR defaults to ./data, which is inside the root and not dot-prefixed
+  // — without this the database, its WAL and the payment screenshots to come
+  // would all be a plain GET away
+  if (file === cfg.DATA_DIR || file.startsWith(cfg.DATA_DIR + path.sep)) {
     return send(res, 404, 'text/plain', 'Not found');
   }
   fs.readFile(file, (err, buf) => {
@@ -103,7 +109,7 @@ async function handler(req, res) {
   wall.checkCycle(now);
   const key = identity.callerKey(req);
   const row = identity.rowFor(key, now);
-  row.seen = now;
+  identity.touch(row, now);
 
   try {
     // everything the page needs to draw itself, in one shot
@@ -147,8 +153,7 @@ async function handler(req, res) {
       const { pack } = JSON.parse((await readBody(req, 4096)).toString('utf8'));
       const price = cfg.PACKS[pack];
       if (!price) return sendJson(res, 400, { error: 'unknown pack' });
-      row.paint += Number(pack);
-      identity.saveLedger();
+      identity.creditPaint(row, Number(pack));
       return sendJson(res, 200, { bought: Number(pack), price, ...identity.allowanceOf(row, now) });
     }
 
@@ -157,7 +162,7 @@ async function handler(req, res) {
       if (!cfg.DEV) return sendJson(res, 404, { error: 'not found' });
 
       if (urlPath === '/api/dev/refill' && req.method === 'POST') {
-        row.used = 0; row.refillAt = 0; identity.saveLedger();
+        identity.refill(row);
         return sendJson(res, 200, identity.allowanceOf(row, now));
       }
       if (urlPath === '/api/dev/seed' && req.method === 'POST') {

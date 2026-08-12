@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js 5174",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "backup": "node tools/backup-nightly.js",
+    "export-wall": "node tools/export-wall-png.js"
   },
   "engines": {
     "node": "22.x"
