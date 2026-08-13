@@ -19,6 +19,7 @@ const http = require('http');
 const cfg = require('./config.js');
 const db = require('./db.js');
 const wall = require('./wall.js');
+const telegram = require('./telegram.js');
 const { handler } = require('./http.js');
 
 /* Boot once per process. Requiring db.js has already opened the database and
@@ -30,6 +31,7 @@ function boot() {
   booted = true;
   for (const w of cfg.warnings) console.warn('config:', w);
   wall.load();
+  telegram.start();
   if (cfg.ON_VERCEL) console.log(`data dir    →  ${cfg.DATA_DIR} (per-instance; set DATA_DIR for durable storage)`);
 }
 boot();

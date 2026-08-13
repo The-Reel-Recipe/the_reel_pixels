@@ -176,10 +176,17 @@ test('a clean DATA_DIR migrates and imports the seed once', () => {
   /* 003 is missing on purpose: it drops legacy_keys, it is marked `-- @manual`
      in its first line, and the runner is required to hold it back until the
      cutover applies it by name (see server/db.js). */
+  /* Read off disk rather than listed here: the point of the assertion is
+     "everything except the held-back one ran", and a literal list turns
+     every new migration into a failing test about nothing. */
+  const onDisk = fs.readdirSync(cfg.MIGRATIONS_DIR).filter(f => f.endsWith('.sql')).sort();
+  const manual = onDisk.filter(f =>
+    /^[ \t]*--[ \t]*@manual\b/.test(fs.readFileSync(path.join(cfg.MIGRATIONS_DIR, f), 'utf8')));
+  assert.ok(manual.length, 'the @manual marker is what this test is about');
+
   const applied = dbm.db.prepare('SELECT name FROM schema_migrations ORDER BY name').all();
-  assert.deepEqual(applied.map(r => r.name),
-    ['001_init.sql', '002_legacy_keys.sql', '004_identity.sql']);
-  assert.deepEqual(dbm.migrate().deferred, ['003_drop_legacy_keys.sql'], 'the manual one ran anyway');
+  assert.deepEqual(applied.map(r => r.name), onDisk.filter(f => !manual.includes(f)));
+  assert.deepEqual(dbm.migrate().deferred, manual, 'the manual one ran anyway');
   assert.ok(dbm.db.prepare(
     "SELECT 1 n FROM sqlite_master WHERE type = 'table' AND name = 'legacy_keys'").get(),
   'legacy_keys is still needed — a visitor who has not been back yet is on it');

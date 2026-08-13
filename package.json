@@ -10,7 +10,8 @@
     "migrate": "node tools/migrate.js",
     "backup": "node tools/backup-nightly.js",
     "export-wall": "node tools/export-wall-png.js",
-    "make-brand": "node tools/make-brand.js"
+    "make-brand": "node tools/make-brand.js",
+    "tg": "node tools/tg-setup.js"
   },
   "engines": {
     "node": "22.x"

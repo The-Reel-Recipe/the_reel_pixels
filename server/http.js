@@ -13,6 +13,7 @@ const cfg = require('./config.js');
 const identity = require('./identity.js');
 const wall = require('./wall.js');
 const submissions = require('./submissions.js');
+const telegram = require('./telegram.js');
 
 const ROOT = cfg.ROOT;
 
@@ -109,6 +110,25 @@ async function handler(req, res) {
   const now = Date.now();
   wall.checkCycle(now);
 
+  /* Before identity: Telegram is not a visitor and must not be handed a
+     guest cookie, spend an IP's budget of them, or be turned away because
+     the moderators' office connection has minted five today. */
+  if (urlPath === '/api/tg/webhook') {
+    if (req.method !== 'POST') return send(res, 405, 'text/plain', 'Method not allowed');
+    if (!telegram.secretOk(req.headers['x-telegram-bot-api-secret-token'])) {
+      return send(res, 403, 'text/plain', 'Forbidden');
+    }
+    let update;
+    try { update = JSON.parse((await readBody(req, 64 << 10)).toString('utf8')); }
+    catch (err) { return sendJson(res, 400, { error: 'bad update' }); }
+    /* Answer immediately and work afterwards. Telegram retries anything it
+       does not get a 200 for within seconds, and a redelivered callback is
+       a second tap — harmless by §4.5, but pointless. */
+    sendJson(res, 200, { ok: true });
+    telegram.onUpdate(update).catch(err => console.warn('telegram update:', err.message));
+    return;
+  }
+
   /* Who is asking (§3). A caller without a valid cookie gets a fresh guest
      identity and the Set-Cookie that carries it — attached here rather than
      per route, so every reply on the minting request keeps it, envelope and
@@ -168,7 +188,8 @@ async function handler(req, res) {
       const body = JSON.parse((await readBody(req, 64 << 10)).toString('utf8'));
       const r = identity.signup(ses.ip, body, now);
       if (r.error) return sendJson(res, r.status, { error: r.error, fields: r.fields, message: r.message });
-      res.setHeader('set-cookie', r.cookie);           // the application signs them in
+      telegram.cardForBrand(r.e.id, now);               // a person reads every one (§3)
+      res.setHeader('set-cookie', r.cookie);            // the application signs them in
       return sendJson(res, 200, identity.me(r.e, now));
     }
 

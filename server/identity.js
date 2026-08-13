@@ -521,6 +521,40 @@ function brandStatus(e) {
   return row ? row.status : 'pending';
 }
 
+/* Guarded the same way a submission decision is (§4.5): conditional on the
+   status it is moving away from, so a double-tapped Approve is one
+   transition and the second tap can be told who beat it. `revoke` is the
+   admin panel's (§7.2) — an approved brand that stops being one, which
+   blocks new bookings and leaves what is already on the wall alone. */
+const brandMoves = {
+  approved: db.prepare(
+    `UPDATE brand_profiles SET status = 'approved', reviewed_by = ?, reviewed_at = ?, reject_reason = NULL
+       WHERE user_id = ? AND status = 'pending'`),
+  rejected: db.prepare(
+    `UPDATE brand_profiles SET status = 'rejected', reviewed_by = ?, reviewed_at = ?, reject_reason = ?
+       WHERE user_id = ? AND status = 'pending'`),
+  revoked: db.prepare(
+    `UPDATE brand_profiles SET status = 'rejected', reviewed_by = ?, reviewed_at = ?, reject_reason = ?
+       WHERE user_id = ? AND status = 'approved'`)
+};
+const selBrandStatus = db.prepare(
+  'SELECT status, reviewed_by FROM brand_profiles WHERE user_id = ?');
+
+function decideBrand(userId, status, actor, reason, now = Date.now()) {
+  const stmt = brandMoves[status];
+  if (!stmt) return { ok: false, error: 'unknown-status' };
+  const before = selBrandStatus.get(userId);
+  if (!before) return { ok: false, missing: true };
+
+  const changed = status === 'rejected' || status === 'revoked'
+    ? stmt.run(actor, now, reason || null, userId).changes
+    : stmt.run(actor, now, userId).changes;
+  if (!changed) return { ok: false, already: before.status, by: before.reviewed_by || null };
+
+  logEvent(actor, 'brand-' + status, { user: userId, reason: reason || null }, now);
+  return { ok: true, userId, status: status === 'revoked' ? 'rejected' : status };
+}
+
 const GATE = {
   'not-brand': 'Booking a logo spot needs a brand account — it takes a minute to apply.',
   pending: 'Your brand application is still being reviewed. We will email you the moment it is approved.',
@@ -589,5 +623,5 @@ module.exports = {
   dayKey, ipCounts, takeIp: take, takeClaim, CAPPED,
   /* accounts */
   hashPassword, verifyPassword, validateSignup, signup, login,
-  brandStatus, bookGate, meta, me
+  brandStatus, decideBrand, bookGate, meta, me
 };

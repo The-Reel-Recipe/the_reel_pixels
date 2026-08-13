@@ -35,6 +35,21 @@ const { db, tx, logEvent } = require('./db.js');
 let wall = null;
 const attach = w => { wall = w; };
 
+/* Announcements, not calls. This file knows a submission was created and
+   that one was decided; telegram.js decides that means a card, and
+   registers here rather than being required — same one-way rule as the
+   wall, and it keeps the state machine testable without a bot. */
+const created = [], decidedHooks = [];
+const onCreated = fn => created.push(fn);
+const onDecided = fn => decidedHooks.push(fn);
+
+function announce(list, args) {
+  for (const fn of list) {
+    try { fn(...args); }
+    catch (err) { console.warn('submissions: hook failed —', err.message); }
+  }
+}
+
 /* ── Statements ───────────────────────────────────────────────── */
 
 const selSub = db.prepare(
@@ -132,7 +147,7 @@ function approveTx(sid, actor, now) {
 function approve(sid, actor, now = Date.now()) {
   const r = tx(approveTx, sid, actor, now);
   if (r.ok) wall.publishApproval(r.sub, r.cells);
-  notifyOwner(r, 'approved');
+  notifyOwner(r, 'approved', actor);
   return r;
 }
 
@@ -153,14 +168,14 @@ function eraseTx(stmt, action, sid, actor, reason, now) {
 function reject(sid, actor, reason, now = Date.now()) {
   const r = tx(eraseTx, goRejected, 'reject', sid, actor, reason, now);
   if (r.ok) wall.publishErasure(r.sub, r.cells);
-  notifyOwner(r, 'rejected');
+  notifyOwner(r, 'rejected', actor, reason);
   return r;
 }
 
 function expire(sid, actor, reason, now = Date.now()) {
   const r = tx(eraseTx, goExpired, 'expire', sid, actor, reason, now);
   if (r.ok) wall.publishErasure(r.sub, r.cells);
-  notifyOwner(r, 'expired');
+  notifyOwner(r, 'expired', actor, reason);
   return r;
 }
 
@@ -170,7 +185,7 @@ function expire(sid, actor, reason, now = Date.now()) {
 function takedown(sid, actor, reason, now = Date.now()) {
   const r = tx(eraseTx, takeDown, 'takedown', sid, actor, reason, now);
   if (r.ok) wall.publishErasure(r.sub, r.cells);
-  notifyOwner(r, 'rejected');
+  notifyOwner(r, 'taken_down', actor, reason);
   return r;
 }
 
@@ -178,8 +193,14 @@ function takedown(sid, actor, reason, now = Date.now()) {
    its own, which it can tell from its cached history — cheaper than a
    per-user channel, and no way to leak somebody else's submission id into
    anything but a refetch of the caller's own history. */
-function notifyOwner(r, status) {
-  if (r.ok && wall) wall.notify({ t: 'mod', sid: r.sid, status });
+/* Two audiences, two words for the same event. The submitter's history and
+   the SSE line carry the status the row actually holds; the Telegram card
+   carries what the moderator did, which is why a takedown says "taken down"
+   on the card and "rejected" everywhere a status is a status. */
+function notifyOwner(r, label, actor, reason) {
+  if (!r.ok) return;
+  if (wall) wall.notify({ t: 'mod', sid: r.sid, status: r.status });
+  announce(decidedHooks, [r.sub, label, actor, reason || null]);
 }
 
 /* ── Auto-approve (TG_MODE=off) ───────────────────────────────── */
@@ -191,7 +212,9 @@ function notifyOwner(r, status) {
 const pendingTimers = new Set();
 
 function afterCreate(sid) {
-  if (cfg.TG_MODE !== 'off' || !sid) return null;
+  if (!sid) return null;
+  announce(created, [sid]);
+  if (cfg.TG_MODE !== 'off') return null;
   const t = setTimeout(() => {
     pendingTimers.delete(t);
     try { approve(sid, 'system:auto', Date.now()); }
@@ -323,7 +346,8 @@ const pendingCount = () => countPending.get().n;
 const get = sid => selSub.get(sid);
 
 module.exports = {
-  attach, approve, reject, expire, takedown,
+  attach, onCreated, onDecided,
+  approve, reject, expire, takedown,
   afterCreate, cancelPending,
   sweepAtReset, sweepStaleBookings,
   historyFor, recordOf, queue, pendingCount, get, thumbOf
