@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>S37 — admin</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#1A0D13">
+  <link rel="icon" type="image/png" href="/assets/logo-icon.png">
+  <style>
+    /* Enough to render the sign-in form. The panel's own stylesheet is
+       behind the session, so an unauthenticated visitor gets this and
+       nothing else (§11). */
+    :root {
+      --bg: #211118; --surface: #1A0D13; --surface-2: #2B1721;
+      --border: #3E2532; --border-2: #5E3A4B;
+      --accent: #F5C4C1; --accent-ink: #1A0D13;
+      --text: #F8F0F2; --text-dim: #C3A6AF; --danger: #E23B2E;
+      --fp: 'Courier New', monospace;
+      --fb: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --r: 6px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh; background: var(--bg); color: var(--text);
+      font-family: var(--fb); display: grid; place-items: center; padding: 24px;
+    }
+    .gate { width: min(360px, 100%); }
+    .mark { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+    .mark img { height: 40px; image-rendering: pixelated; }
+    .mark b { font-family: var(--fp); font-size: 18px; letter-spacing: 2px; }
+    .mark span { font-size: 12px; color: var(--text-dim); }
+    form { display: flex; flex-direction: column; gap: 14px; }
+    label { display: flex; flex-direction: column; gap: 6px; }
+    label span { font-family: var(--fp); font-size: 11px; color: var(--text-dim); letter-spacing: 1px; }
+    input {
+      background: var(--surface-2); border: 2px solid var(--border);
+      border-radius: var(--r); color: var(--text); padding: 11px 13px;
+      font-family: inherit; font-size: 15px;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--border-2); }
+    #code { font-family: var(--fp); letter-spacing: 6px; font-size: 19px; text-align: center; }
+    button {
+      background: var(--accent); color: var(--accent-ink); border: none;
+      border-radius: var(--r); padding: 13px; font-family: var(--fp);
+      font-size: 13px; letter-spacing: 1px; cursor: pointer;
+    }
+    button:disabled { opacity: .55; cursor: default; }
+    .err {
+      background: rgba(226,59,46,0.14); border: 1px solid var(--danger);
+      color: var(--text); border-radius: var(--r); padding: 10px 12px; font-size: 13px;
+    }
+    [hidden] { display: none !important; }
+    .fine { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="gate" id="gate">
+    <div class="mark">
+      <img src="/assets/logo-icon.png" alt="">
+      <div>
+        <b>S37 ADMIN</b><br>
+        <span>shakhbat 3al 7eet</span>
+      </div>
+    </div>
+    <form id="signin" novalidate>
+      <label><span>USERNAME</span><input id="username" autocomplete="username" autocapitalize="off" spellcheck="false"></label>
+      <label><span>PASSWORD</span><input id="password" type="password" autocomplete="current-password"></label>
+      <label><span>AUTHENTICATOR CODE</span><input id="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000"></label>
+      <div class="err" id="err" hidden></div>
+      <button type="submit" id="go">SIGN IN</button>
+      <p class="fine">Password and a live code, every time. Accounts are made with
+        <code>tools/add-admin.js</code> and nowhere else.</p>
+    </form>
+  </div>
+
+  <script>
+  /* The whole of the unauthenticated surface: post the three fields, and on
+     success pull in the panel — whose script and stylesheet the server
+     refuses to serve without the cookie this call just set.
+
+     Wrapped, because panel.js loads into the same global scope and declares
+     its own `$`; two top-level consts of one name is a SyntaxError that
+     takes the whole panel down with it. */
+  (() => {
+    const $ = id => document.getElementById(id);
+
+    async function boot() {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = '/admin/panel.css';
+      document.head.appendChild(css);
+      const js = document.createElement('script');
+      js.src = '/admin/panel.js';
+      document.body.appendChild(js);
+      $('gate').remove();
+      /* panel.css undoes the rest of this page's body styling itself — see
+         the note there about justify-items outliving a display change. */
+    }
+
+    $('signin').onsubmit = async e => {
+      e.preventDefault();
+      const go = $('go');
+      go.disabled = true; go.textContent = 'CHECKING…';
+      $('err').hidden = true;
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            username: $('username').value, password: $('password').value, code: $('code').value
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          $('err').textContent = data.message || 'That did not work.';
+          $('err').hidden = false;
+          $('code').value = '';
+          $('code').focus();
+          return;
+        }
+        boot();
+      } catch (err) {
+        $('err').textContent = 'Could not reach the server.';
+        $('err').hidden = false;
+      } finally {
+        go.disabled = false; go.textContent = 'SIGN IN';
+      }
+    };
+
+    /* already signed in? skip the form */
+    fetch('/api/admin/me').then(r => { if (r.ok) boot(); }).catch(() => {});
+  })();
+  </script>
+</body>
+</html>

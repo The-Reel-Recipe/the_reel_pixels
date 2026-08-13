@@ -30,6 +30,7 @@
 'use strict';
 
 const cfg = require('./config.js');
+const { S } = require('./settings.js');
 const { db, tx, logEvent } = require('./db.js');
 const identity = require('./identity.js');
 
@@ -38,6 +39,8 @@ const identity = require('./identity.js');
 let hooks = { card: () => {}, edit: () => {}, notify: () => {} };
 const attach = h => { hooks = Object.assign(hooks, h); };
 
+/* The default hold. The live value is S.HOLD_TTL, which the panel can move
+   without a deploy (§7.2) — this is what it starts as. */
 const HOLD_MS = 48 * 60 * 60 * 1000;            // §6: brand reservations, and unpaid orders
 const REMIND_MS = 24 * 60 * 60 * 1000;          // §6: how often a refund_due card comes back
 
@@ -100,8 +103,8 @@ const listFor = db.prepare(
 /* Everything in integer piasters (§2) — EGP has 100 of them and a float
    here would eventually be off by one in somebody's favour. */
 const piasters = egp => Math.round(egp * 100);
-const packPrice = pack => cfg.PACKS[pack];
-const bookingPrice = px => piasters(px * cfg.PRICE_COMPANY);
+const packPrice = pack => S.PACKS[pack];
+const bookingPrice = px => piasters(px * S.PRICE_COMPANY);
 
 /* ── Creating an order ────────────────────────────────────────── */
 
@@ -113,10 +116,11 @@ function createOrder(userId, kind, opts, now = Date.now()) {
   if (!amount || amount < 0) return null;
 
   const code = newCode();
-  const id = Number(insPayment.run(userId, kind, pack, amount, code, now + HOLD_MS, now).lastInsertRowid);
+  const hold = now + S.HOLD_TTL;
+  const id = Number(insPayment.run(userId, kind, pack, amount, code, hold, now).lastInsertRowid);
   if (opts.sid) linkSub.run(id, opts.sid);
   logEvent(`user:${userId}`, 'order', { payment: id, kind, pack, amount, code, sid: opts.sid || null }, now);
-  return { id, code, amount, kind, pack, holdExpires: now + HOLD_MS };
+  return { id, code, amount, kind, pack, holdExpires: hold };
 }
 
 /* What the checkout modal needs to say. The QR is the user's own official
@@ -137,7 +141,7 @@ function instructionsFor(order) {
     handle: cfg.INSTAPAY_HANDLE || null,
     qr: fs.existsSync(QR_FILE) ? 'assets/instapay-qr.png' : null,
     holdExpires: order.holdExpires || null,
-    holdHours: HOLD_MS / 3600000
+    holdHours: Math.round(S.HOLD_TTL / 3600000)
   };
 }
 

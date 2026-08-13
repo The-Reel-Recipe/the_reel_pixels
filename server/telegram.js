@@ -27,6 +27,8 @@
 
 const fs = require('fs');
 const cfg = require('./config.js');
+const settings = require('./settings.js');
+const { S } = settings;
 const { db, tx, logEvent } = require('./db.js');
 const submissions = require('./submissions.js');
 const identity = require('./identity.js');
@@ -200,7 +202,7 @@ function captionFor(sub, now) {
   ];
   if (sub.type === 'brand') {
     if (sub.brand_url) bits.push(esc(sub.brand_url));
-    bits.push(money(sub.px_count * cfg.PRICE_COMPANY * 100));
+    bits.push(money(sub.px_count * S.PRICE_COMPANY * 100));
   }
   bits.push(`${sub.kind === 'brand' ? 'brand' : 'guest'} since ${ago(now - (sub.created_at || now))}`);
   bits.push(`${rec.approved} prior approved / ${rec.rejected} rejected`);
@@ -511,6 +513,19 @@ async function onCallback(q) {
     return r;
   }
 
+  if (verb === 'fz') {
+    const to = a === '1';
+    const r = settings.set('maintenance', to, actor, now);
+    if (r.error) { await answer(q.id, r.message, true); return r; }
+    await call('editMessageText', {
+      chat_id: q.message.chat.id, message_id: q.message.message_id,
+      text: to ? `🧊 Wall frozen by ${esc(actor)}.` : `☀️ Wall open again — ${esc(actor)}.`,
+      parse_mode: 'HTML', reply_markup: { inline_keyboard: [] }
+    }).catch(() => {});
+    await answer(q.id, to ? 'Frozen.' : 'Open.');
+    return r;
+  }
+
   if (verb === 'mv' || verb === 'mn' || verb === 'rf') {
     const pid = Number(a);
     const r = verb === 'mv' ? payments.verify(pid, actor, now)
@@ -553,7 +568,25 @@ async function onCommand(msg) {
   if (text === '/stats') {
     const d = outboxDepth.get();
     return say(`🖼 ${wall.wall.live.size} live · ${wall.wall.reserved.size} booked · ` +
-      `⏳ ${submissions.pendingCount()} waiting · 📤 outbox ${d.n}`);
+      `⏳ ${submissions.pendingCount()} waiting · 📤 outbox ${d.n}` +
+      (settings.S.MAINTENANCE ? '\n\n🧊 <b>The wall is frozen.</b>' : ''));
+  }
+
+  /* §7.3. Freezing the wall is the one command here that changes anything,
+     so it asks first — a fat thumb in a group chat should not be able to
+     close the wall. */
+  if (text === '/freeze' || text === '/unfreeze') {
+    const to = text === '/freeze';
+    if (settings.S.MAINTENANCE === to) {
+      return say(to ? 'Already frozen.' : 'The wall is already open.');
+    }
+    return call('sendMessage', {
+      chat_id: msg.chat.id,
+      text: to
+        ? '🧊 Freeze the wall? Reading keeps working; claims, bookings and orders will say “back soon”.'
+        : '☀️ Open the wall back up?',
+      reply_markup: { inline_keyboard: [[btn(to ? 'Yes, freeze it' : 'Yes, open it', `fz:${to ? 1 : 0}`)]] }
+    }).catch(() => {});
   }
   return null;
 }

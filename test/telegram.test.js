@@ -448,3 +448,30 @@ test('/pending and /stats answer in the group', async () => {
   await telegram.onCommand({ text: '/stats', chat: { id: -1 }, from: { id: 1 } });
   assert.equal(calls.length, 0, 'not for strangers');
 });
+
+test('/freeze asks before it closes the wall', async () => {
+  const settings = require('../server/settings.js');
+  calls.length = 0;
+  await telegram.onCommand({ text: '/freeze', chat: { id: -1 }, from: { id: 4242 } });
+  assert.equal(settings.S.MAINTENANCE, false, 'asking is not doing');
+  const ask = calls.find(c => c.method === 'sendMessage');
+  assert.ok(ask, 'it asked');
+  assert.deepEqual(asObj(ask.params.reply_markup).inline_keyboard[0].map(b => b.callback_data), ['fz:1']);
+
+  await telegram.onCallback({
+    id: 'cb', data: 'fz:1', from: { id: 4242, username: 'sara' },
+    message: { message_id: 7, chat: { id: -1 } }
+  });
+  assert.equal(settings.S.MAINTENANCE, true, 'and the tap does it');
+
+  await telegram.onCallback({
+    id: 'cb2', data: 'fz:0', from: { id: 4242, username: 'sara' },
+    message: { message_id: 8, chat: { id: -1 } }
+  });
+  assert.equal(settings.S.MAINTENANCE, false);
+
+  /* a stranger cannot even ask */
+  calls.length = 0;
+  await telegram.onCommand({ text: '/freeze', chat: { id: -1 }, from: { id: 1 } });
+  assert.equal(calls.length, 0);
+});

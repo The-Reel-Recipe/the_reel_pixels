@@ -1,0 +1,152 @@
+/* ═══════════════════════════════════════════════════════════════
+   S37 admin — the panel behind the door
+
+   Same tokens as the public wall so the two do not feel like
+   different products, but denser: this is a tool somebody uses for
+   an hour at a time, not a page they land on.
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg: #211118; --surface: #1A0D13; --surface-2: #2B1721;
+  --border: #3E2532; --border-2: #5E3A4B;
+  --accent: #F5C4C1; --accent-dim: rgba(245,196,193,0.18); --accent-ink: #1A0D13;
+  --text: #F8F0F2; --text-dim: #C3A6AF;
+  --danger: #E23B2E; --warn: #FFC24B; --ok: #5BD98A;
+  --fp: ui-monospace, 'Cascadia Mono', 'Courier New', monospace;
+  --fb: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --r: 6px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+/* The sign-in page centres its form with `display: grid; place-items:
+   center`, and this stylesheet lands on top of that same document. Setting
+   display back is not enough: justify-items survives, and on a block
+   container it shrink-wraps every block child — which quietly squeezed the
+   whole panel into a 500px column. Everything the gate set gets undone
+   here, so the panel's layout does not depend on the login screen's. */
+body {
+  margin: 0; padding: 0;
+  display: block; place-items: normal;
+  background: var(--bg); color: var(--text);
+  font-family: var(--fb); font-size: 14px;
+}
+a { color: var(--accent); }
+code { font-family: var(--fp); font-size: .92em; }
+
+/* ── shell ── */
+.top {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 18px;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.top img { height: 26px; image-rendering: pixelated; }
+.top b { font-family: var(--fp); letter-spacing: 2px; }
+.top .who { margin-left: auto; color: var(--text-dim); font-size: 12.5px; display: flex; gap: 12px; align-items: center; }
+
+.tabs { display: flex; gap: 2px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--border);
+  overflow-x: auto; scrollbar-width: none; position: sticky; top: 47px; z-index: 19; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--text-dim); font-family: var(--fp); font-size: 11.5px; letter-spacing: 1px;
+  padding: 11px 13px; cursor: pointer; white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tab.sel { color: var(--accent); border-bottom-color: var(--accent); }
+.tab .pip {
+  display: inline-block; min-width: 17px; margin-left: 6px; padding: 1px 5px;
+  background: var(--accent); color: var(--accent-ink); border-radius: 99px; font-size: 10px;
+}
+main { padding: 18px; max-width: 1400px; margin: 0 auto; }
+
+/* ── bits ── */
+h2 { font-family: var(--fp); font-size: 14px; letter-spacing: 1px; margin: 0 0 12px; font-weight: 600; }
+.muted { color: var(--text-dim); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.spread { justify-content: space-between; }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 14px; }
+.stat b { display: block; font-family: var(--fp); font-size: 21px; color: var(--accent); margin-top: 4px; }
+.stat span { font-family: var(--fp); font-size: 10px; letter-spacing: 1px; color: var(--text-dim); }
+.stat i { display: block; font-style: normal; font-size: 12px; color: var(--text-dim); margin-top: 5px; }
+
+button, .btn {
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border-2);
+  border-radius: var(--r); padding: 8px 12px; font-family: var(--fp); font-size: 11px;
+  letter-spacing: .5px; cursor: pointer; text-decoration: none; display: inline-block;
+}
+button:hover, .btn:hover { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; border-color: var(--border); }
+button.go { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.bad { border-color: var(--danger); color: var(--danger); }
+button.bad:hover { background: rgba(226,59,46,0.12); }
+
+input, select, textarea {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r);
+  color: var(--text); padding: 8px 10px; font-family: inherit; font-size: 13px;
+}
+input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent); border-color: var(--border-2); }
+input.wide { flex: 1; min-width: 180px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-family: var(--fp); font-size: 10px; letter-spacing: 1px;
+  color: var(--text-dim); padding: 8px 10px; border-bottom: 1px solid var(--border); position: sticky; top: 88px;
+  background: var(--bg); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tbody tr:hover { background: var(--surface); }
+.num { font-family: var(--fp); }
+
+.chip { font-family: var(--fp); font-size: 10px; padding: 3px 7px; border-radius: 99px;
+  border: 1px solid currentColor; white-space: nowrap; }
+.c-ok { color: var(--ok); } .c-warn { color: var(--warn); }
+.c-bad { color: var(--danger); } .c-dim { color: var(--text-dim); }
+.c-accent { color: var(--accent); }
+
+.alert { border-radius: var(--r); padding: 10px 13px; margin-bottom: 10px; font-size: 13px;
+  border: 1px solid currentColor; }
+.alert.warn { color: var(--warn); } .alert.bad { color: var(--danger); }
+.alert b { color: var(--text); }
+
+.toast-wrap { position: fixed; right: 16px; bottom: 16px; z-index: 60; display: flex;
+  flex-direction: column; gap: 8px; }
+.toast { background: var(--surface-2); border: 1px solid var(--border-2); border-left: 3px solid var(--accent);
+  border-radius: var(--r); padding: 11px 14px; font-size: 13px; max-width: 340px; }
+.toast.bad { border-left-color: var(--danger); }
+
+/* ── moderation queue ── */
+.q-card { display: flex; gap: 14px; align-items: flex-start; }
+.q-card img { max-width: 380px; width: 100%; border-radius: var(--r); background: #fff; }
+.q-side { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 10px; }
+.q-meta { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-dim); }
+.q-meta b { color: var(--text); font-family: var(--fp); font-size: 12px; }
+.q-empty { padding: 40px; text-align: center; color: var(--text-dim); }
+
+/* ── wall inspector ── */
+.wall-wrap { position: relative; display: inline-block; border: 1px solid var(--border); background: #fff; }
+#wallCanvas { display: block; image-rendering: pixelated; cursor: crosshair; touch-action: none; }
+.sel-box { position: absolute; border: 2px dashed var(--danger); background: rgba(226,59,46,.12);
+  pointer-events: none; }
+.inspect { font-family: var(--fp); font-size: 12px; white-space: pre-wrap; line-height: 1.6; }
+
+/* ── config ── */
+.cfg-row { display: grid; grid-template-columns: 200px 1fr auto; gap: 12px; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--border); }
+.cfg-row .k { font-family: var(--fp); font-size: 12px; }
+.cfg-row .why { font-size: 12px; color: var(--text-dim); }
+
+/* ── audit ── */
+.payload { font-family: var(--fp); font-size: 11.5px; color: var(--text-dim); white-space: pre-wrap;
+  word-break: break-word; max-width: 560px; }
+
+.danger-zone { border-color: var(--danger); }
+.danger-zone h2 { color: var(--danger); }
+
+@media (max-width: 720px) {
+  main { padding: 12px; }
+  .q-card { flex-direction: column; }
+  .cfg-row { grid-template-columns: 1fr; }
+  th { position: static; }
+}

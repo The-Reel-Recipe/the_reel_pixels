@@ -49,11 +49,13 @@ function prune(dir, before) {
   return dropped;
 }
 
-function main() {
-  if (!fs.existsSync(cfg.DB_FILE)) {
-    console.error(`backup: no database at ${cfg.DB_FILE} — nothing to snapshot`);
-    process.exit(1);
-  }
+/* The work, without the exit. The admin panel's System page (§7.2) triggers
+   this inside the running server, where closing the database — which the
+   command-line path does on its way out — would take the wall down with it. */
+function runBackup(opts = {}) {
+  const keep = Number(opts.keep === undefined ? KEEP_DAYS : opts.keep);
+  const log = opts.quiet ? () => {} : say;
+  if (!fs.existsSync(cfg.DB_FILE)) throw new Error(`no database at ${cfg.DB_FILE}`);
   fs.mkdirSync(cfg.BACKUP_DIR, { recursive: true });
 
   const dbmod = require('../server/db.js');
@@ -64,24 +66,28 @@ function main() {
   // VACUUM INTO refuses to overwrite, so a same-day re-run replaces its own file
   fs.rmSync(dbOut, { force: true });
   dbmod.db.prepare('VACUUM INTO ?').run(dbOut);
-  say(`backup: ${dbOut} — ${(fs.statSync(dbOut).size / 1048576).toFixed(1)} MB`);
+  const bytes = fs.statSync(dbOut).size;
+  log(`backup: ${dbOut} — ${(bytes / 1048576).toFixed(1)} MB`);
 
   const png = require('./export-wall-png.js').exportFromDb(pngOut, 'live');
-  say(`backup: ${pngOut} — ${png.pixels} live pixel(s)`);
+  log(`backup: ${pngOut} — ${png.pixels} live pixel(s)`);
 
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - KEEP_DAYS);
+  cutoff.setDate(cutoff.getDate() - keep);
   cutoff.setHours(0, 0, 0, 0);
   const dropped = prune(cfg.BACKUP_DIR, cutoff.getTime());
-  say(`backup: pruned ${dropped} file(s) older than ${KEEP_DAYS} days`);
+  log(`backup: pruned ${dropped} file(s) older than ${keep} days`);
 
-  dbmod.close();
+  return { file: dbOut, png: pngOut, bytes, pixels: png.pixels, pruned: dropped };
 }
 
-module.exports = { prune, stamp, NAMED };
+module.exports = { runBackup, prune, stamp, NAMED };
 
 if (require.main === module) {
-  try { main(); } catch (err) {
+  try {
+    runBackup();
+    require('../server/db.js').close();
+  } catch (err) {
     console.error('backup: failed —', err.message);
     process.exit(1);
   }

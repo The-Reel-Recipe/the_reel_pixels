@@ -23,6 +23,7 @@
 
 const crypto = require('crypto');
 const cfg = require('./config.js');
+const { S } = require('./settings.js');
 const { db, tx, logEvent } = require('./db.js');
 
 /* ── Where a caller is (caps only) ────────────────────────────── */
@@ -276,10 +277,10 @@ function writeAllowance(e) {
 
 function allowanceOf(e, now) {
   return {
-    cap: cfg.CAP, free: Math.max(0, cfg.CAP - e.used), paint: e.paint,
+    cap: S.CAP, free: Math.max(0, S.CAP - e.used), paint: e.paint,
     refillAt: e.refillAt || 0,
     refillIn: e.refillAt ? Math.max(0, e.refillAt - now) : 0,
-    refillMs: cfg.REFILL, handle: e.handle, now
+    refillMs: S.REFILL, handle: e.handle, now
   };
 }
 
@@ -307,7 +308,7 @@ function mintTx(ip, now) {
     return { id: old.user_id, adopted: true };
   }
 
-  if (!takeIp(ip, 'guests', cfg.IP_GUEST_CAP, now)) return { capped: 'guests' };
+  if (!takeIp(ip, 'guests', S.IP_GUEST_CAP, now)) return { capped: 'guests' };
 
   const id = Number(insGuest.run(now, now).lastInsertRowid);
   setHandle.run(handleFor('u' + id), id);              // the name needs the id
@@ -345,7 +346,7 @@ function resolve(req, now, opts) {
    connection). Returns null when the claim may proceed. */
 function takeClaim(ip, e, now) {
   if (e.kind === 'brand') return null;
-  return take(ip, 'claims', cfg.IP_CLAIM_CAP, now) ? null : CAPPED.claims;
+  return take(ip, 'claims', S.IP_CLAIM_CAP, now) ? null : CAPPED.claims;
 }
 
 /* ── Passwords ────────────────────────────────────────────────── */
@@ -480,7 +481,7 @@ function signupTx(v, now) {
 function signup(ip, body, now) {
   const { fields, value } = validateSignup(body);
   if (fields) return { status: 400, error: 'invalid', fields };
-  if (!take(ip, 'signups', cfg.IP_SIGNUP_CAP, now)) return { status: 429, ...CAPPED.signups };
+  if (!take(ip, 'signups', S.IP_SIGNUP_CAP, now)) return { status: 429, ...CAPPED.signups };
 
   const made = tx(signupTx, value, now);
   if (made.taken) {

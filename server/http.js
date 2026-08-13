@@ -10,13 +10,17 @@
 const fs = require('fs');
 const path = require('path');
 const cfg = require('./config.js');
+const { S } = require('./settings.js');
 const identity = require('./identity.js');
 const wall = require('./wall.js');
 const submissions = require('./submissions.js');
 const payments = require('./payments.js');
 const uploads = require('./uploads.js');
 const telegram = require('./telegram.js');
+const admin = require('./admin.js');
+const settings = require('./settings.js');
 const db = require('./db.js');
+const { logEvent } = require('./db.js');
 
 const ROOT = cfg.ROOT;
 
@@ -61,21 +65,33 @@ function readBody(req, limit) {
   });
 }
 
+/* The public front-end, named rather than deduced.
+
+   This used to serve anything under the project root that was not
+   dot-prefixed and not inside DATA_DIR, which meant GET /server/config.js
+   handed over the source — no secrets in it (they come from the
+   environment) but a free map of the thing for anyone poking at it, and
+   /package.json, /migrations/*.sql and /test/* alongside. A denylist of
+   everything private is a list you can forget to add to; the set of files
+   a browser actually needs is four entries and a directory. */
+const PUBLIC_FILES = new Set(['/index.html', '/app.js', '/styles.css', '/favicon.ico']);
+const PUBLIC_DIRS = ['/assets/'];
+
 function serveStatic(req, res, urlPath) {
   let rel;
   try { rel = decodeURIComponent(urlPath); } catch (e) { return send(res, 400, 'text/plain', 'Bad path'); }
-  if (rel.endsWith('/')) rel += 'index.html';
-  const file = path.resolve(ROOT, '.' + rel.replace(/\\/g, '/'));
-  // no climbing out of the project, and nothing dot-prefixed (that covers
-  // .git and any prototype-era .wall.bin / .allowance.json still lying about)
-  if (file !== ROOT && !file.startsWith(ROOT + path.sep)) return send(res, 403, 'text/plain', 'Forbidden');
+  rel = rel.replace(/\\/g, '/');
+  if (rel === '/' || rel.endsWith('/')) rel += 'index.html';
+
+  const allowed = PUBLIC_FILES.has(rel) || PUBLIC_DIRS.some(d => rel.startsWith(d));
+  if (!allowed) return send(res, 404, 'text/plain', 'Not found');
+
+  const file = path.resolve(ROOT, '.' + rel);
+  /* Belt and braces behind the allowlist: an encoded ../ that survived
+     decodeURIComponent still cannot land outside the project, and nothing
+     dot-prefixed is served whatever route it arrived by. */
+  if (!file.startsWith(ROOT + path.sep)) return send(res, 403, 'text/plain', 'Forbidden');
   if (path.relative(ROOT, file).split(path.sep).some(p => p.startsWith('.'))) {
-    return send(res, 404, 'text/plain', 'Not found');
-  }
-  // DATA_DIR defaults to ./data, which is inside the root and not dot-prefixed
-  // — without this the database, its WAL and the payment screenshots to come
-  // would all be a plain GET away
-  if (file === cfg.DATA_DIR || file.startsWith(cfg.DATA_DIR + path.sep)) {
     return send(res, 404, 'text/plain', 'Not found');
   }
   fs.readFile(file, (err, buf) => {
@@ -97,6 +113,256 @@ setInterval(() => {
   for (const res of clients) { try { res.write(': ping\n\n'); } catch (e) { clients.delete(res); } }
 }, 25000).unref();
 
+/* ── The admin panel (§7) ─────────────────────────────────────── */
+
+/* Everything here answers JSON and nothing here re-implements a state
+   machine: approve is submissions.approve, verify is payments.verify, and
+   the guards those already carry are the guards this gets. What the panel
+   adds is the things Telegram cannot do — takedowns, region wipes, the
+   ledger, the config, the audit trail — and being reachable when the bot
+   is not. */
+const ADMIN_DIR = path.join(ROOT, 'admin');
+
+/* What maintenance mode closes. Deliberately a list rather than "any POST":
+   logging in and out are not changes to the wall, and locking somebody out
+   of their own account to do a deploy would be rude. */
+const WRITES = new Set(['/api/claim', '/api/book', '/api/paint/order']);
+
+async function adminBody(req, limit = 256 << 10) {
+  const raw = await readBody(req, limit);
+  if (!raw.length) return {};
+  try { return JSON.parse(raw.toString('utf8')); } catch (err) { return {}; }
+}
+
+function sendFileFrom(res, dir, name) {
+  const file = path.resolve(dir, '.' + path.posix.normalize('/' + name));
+  if (file !== dir && !file.startsWith(dir + path.sep)) return send(res, 403, 'text/plain', 'Forbidden');
+  fs.readFile(file, (err, buf) => {
+    if (err) return send(res, 404, 'text/plain', 'Not found');
+    send(res, 200, TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream', buf);
+  });
+}
+
+async function adminRoutes(req, res, urlPath, now) {
+  const url = new URL(req.url, 'http://x');
+  const q = url.searchParams;
+
+  /* The login screen is the only thing an anonymous caller may have. The
+     panel proper — its script and its stylesheet — needs a session, so an
+     unauthenticated scrape gets a form and nothing else (§11). */
+  if (urlPath === '/admin' || urlPath === '/admin/') return sendFileFrom(res, ADMIN_DIR, 'index.html');
+  if (urlPath.startsWith('/admin/')) {
+    if (!admin.sessionFrom(req, now)) return send(res, 403, 'text/plain', 'Sign in first.');
+    return sendFileFrom(res, ADMIN_DIR, urlPath.slice('/admin/'.length));
+  }
+
+  /* ── the door ── */
+  if (urlPath === '/api/admin/login' && req.method === 'POST') {
+    const ip = identity.callerKey(req);
+    const r = admin.login(ip, await adminBody(req, 4096), now);
+    if (!r.ok) return sendJson(res, r.status, { error: r.error, message: r.message });
+    res.setHeader('set-cookie', r.cookie);
+    return sendJson(res, 200, { ok: true, username: r.admin.username });
+  }
+  if (urlPath === '/api/admin/logout' && req.method === 'POST') {
+    res.setHeader('set-cookie', admin.logout());
+    return sendJson(res, 200, { ok: true });
+  }
+
+  const g = admin.guard(req, now);
+  if (g.fail) return sendJson(res, g.fail.status, g.fail);
+  const actor = g.actor;
+
+  /* Anything that changes something takes a reason where one is meaningful;
+     `reason` is threaded through rather than invented per route. */
+  const body = req.method === 'GET' ? {} : await adminBody(req);
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
+  const idIn = urlPath.match(/\/(\d+)(?:\/[a-z-]+)?(?:\.png)?$/);
+  const id = idIn ? Number(idIn[1]) : 0;
+
+  try {
+    /* ── who am I ── */
+    if (urlPath === '/api/admin/me') {
+      return sendJson(res, 200, { username: g.admin.username, since: g.admin.last_login });
+    }
+
+    /* ── dashboard ── */
+    if (urlPath === '/api/admin/overview') return sendJson(res, 200, admin.overview(now));
+
+    /* ── moderation ── */
+    if (urlPath === '/api/admin/queue') return sendJson(res, 200, { rows: admin.queue() });
+
+    if (urlPath.match(/^\/api\/admin\/preview\/\d+\.png$/)) {
+      const sub = submissions.get(id);
+      if (!sub || !sub.preview_path) return send(res, 404, 'text/plain', 'Not found');
+      return sendFileFrom(res, path.dirname(sub.preview_path), path.basename(sub.preview_path));
+    }
+
+    const decide = urlPath.match(/^\/api\/admin\/submissions\/(\d+)\/(approve|reject|takedown)$/);
+    if (decide && req.method === 'POST') {
+      const sid = Number(decide[1]);
+      const r = decide[2] === 'approve' ? submissions.approve(sid, actor, now)
+        : decide[2] === 'reject' ? submissions.reject(sid, actor, reason || 'Rejected by a moderator', now)
+          : submissions.takedown(sid, actor, reason || 'Taken down', now);
+      return sendJson(res, r.ok ? 200 : 409, r);
+    }
+    /* bulk, for a queue that has got away from everyone */
+    if (urlPath === '/api/admin/submissions/bulk' && req.method === 'POST') {
+      const ids = Array.isArray(body.ids) ? body.ids.slice(0, 200).map(Number) : [];
+      const done = ids.map(sid => (body.action === 'approve'
+        ? submissions.approve(sid, actor, now)
+        : submissions.reject(sid, actor, reason || 'Rejected by a moderator', now)));
+      return sendJson(res, 200, { done: done.filter(r => r.ok).length, of: ids.length });
+    }
+
+    /* ── the wall ── */
+    if (urlPath === '/api/admin/wall/pixel') {
+      return sendJson(res, 200, admin.pixelAt(Number(q.get('idx'))));
+    }
+    if (urlPath === '/api/admin/wall/export.png') {
+      const layer = q.get('layer') === 'next' ? 'next' : 'live';
+      const px = [...(layer === 'live' ? wall.wall.live : wall.wall.reserved)].map(([i, p]) => [i, p.c]);
+      res.writeHead(200, {
+        'content-type': 'image/png',
+        'content-disposition': `attachment; filename="wall-${layer}.png"`,
+        'cache-control': 'no-store'
+      });
+      return res.end(admin.renderWall(px));
+    }
+    if (urlPath === '/api/admin/wall/erase-region' && req.method === 'POST') {
+      return sendJson(res, 200, admin.eraseRegion(body.rect || {}, actor, reason, now));
+    }
+    if (urlPath === '/api/admin/wall/reset' && req.method === 'POST') {
+      const r = admin.forceReset(body.phrase, actor, now);
+      return sendJson(res, r.error ? 400 : 200, r);
+    }
+    if (urlPath === '/api/admin/wall/reseed' && req.method === 'POST') {
+      const r = admin.forceReseed(body.phrase, actor, now);
+      return sendJson(res, r.error ? 400 : 200, r);
+    }
+
+    /* ── users ── */
+    if (urlPath === '/api/admin/users') {
+      return sendJson(res, 200, { rows: admin.users(q.get('q'), Number(q.get('limit')) || 40) });
+    }
+    const userAct = urlPath.match(/^\/api\/admin\/users\/(\d+)\/(ban|unban|adjust)$/);
+    if (userAct && req.method === 'POST') {
+      const uid = Number(userAct[1]);
+      const r = userAct[2] === 'adjust'
+        ? admin.adjust(uid, body, actor, reason, now)
+        : admin.setBan(uid, userAct[2] === 'ban', actor, reason, now);
+      return sendJson(res, r.error ? 400 : 200, r);
+    }
+
+    /* ── brands ── */
+    if (urlPath === '/api/admin/brands') return sendJson(res, 200, { rows: admin.brands() });
+    const brandAct = urlPath.match(/^\/api\/admin\/brands\/(\d+)\/(approve|reject|revoke)$/);
+    if (brandAct && req.method === 'POST') {
+      const uid = Number(brandAct[1]);
+      const status = brandAct[2] === 'approve' ? 'approved'
+        : brandAct[2] === 'reject' ? 'rejected' : 'revoked';
+      const r = identity.decideBrand(uid, status, actor, reason || null, now);
+      if (r.ok) telegram.editBrandDecision(uid, r.status, actor, now);
+      return sendJson(res, r.ok ? 200 : 409, r);
+    }
+
+    /* ── payments ── */
+    if (urlPath === '/api/admin/payments') {
+      const filter = { status: q.get('status'), kind: q.get('kind'), q: q.get('q') };
+      if (q.get('format') === 'csv') {
+        res.writeHead(200, {
+          'content-type': 'text/csv; charset=utf-8',
+          'content-disposition': 'attachment; filename="payments.csv"',
+          'cache-control': 'no-store'
+        });
+        return res.end(admin.paymentsCsv(filter));
+      }
+      return sendJson(res, 200, {
+        rows: admin.paymentList(filter, Number(q.get('limit')) || 100),
+        reconcile: admin.reconcile()
+      });
+    }
+    if (urlPath.match(/^\/api\/admin\/payments\/\d+\/screenshot$/)) {
+      const p = payments.get(id);
+      if (!p || !p.screenshot_path || !fs.existsSync(p.screenshot_path)) {
+        return send(res, 404, 'text/plain', 'Not found');
+      }
+      /* nosniff and an explicit type: the file was sanitised on the way in,
+         and it is still not going to be interpreted as anything but a picture */
+      res.writeHead(200, {
+        'content-type': TYPES[path.extname(p.screenshot_path).toLowerCase()] || 'image/png',
+        'x-content-type-options': 'nosniff',
+        'cache-control': 'no-store'
+      });
+      return res.end(fs.readFileSync(p.screenshot_path));
+    }
+    const payAct = urlPath.match(/^\/api\/admin\/payments\/(\d+)\/(verify|reject|refunded|override)$/);
+    if (payAct && req.method === 'POST') {
+      const pid = Number(payAct[1]);
+      const r = payAct[2] === 'verify' ? payments.verify(pid, actor, now)
+        : payAct[2] === 'reject' ? payments.reject(pid, actor, now)
+          : payAct[2] === 'refunded' ? payments.markRefunded(pid, actor, now)
+            : admin.override(pid, body.to, actor, reason, now);
+      return sendJson(res, r.ok ? 200 : (r.error ? 400 : 409), r);
+    }
+
+    /* ── config ── */
+    if (urlPath === '/api/admin/config' && req.method === 'GET') {
+      return sendJson(res, 200, { rows: settings.describe() });
+    }
+    if (urlPath === '/api/admin/config' && req.method === 'PUT') {
+      const r = body.reset
+        ? settings.reset(body.key, actor, now)
+        : settings.set(body.key, body.value, actor, now);
+      return sendJson(res, r.error ? 400 : 200, r);
+    }
+
+    /* ── audit ── */
+    if (urlPath === '/api/admin/events') {
+      return sendJson(res, 200, {
+        rows: admin.events({ actor: q.get('actor'), action: q.get('action'), since: q.get('since') },
+          Number(q.get('limit')) || 200),
+        actions: admin.actionList()
+      });
+    }
+
+    /* ── system ── */
+    if (urlPath === '/api/admin/system') return sendJson(res, 200, admin.systemInfo(now));
+    if (urlPath === '/api/admin/system/backup' && req.method === 'POST') {
+      const r = require('../tools/backup-nightly.js').runBackup();
+      logEvent(actor, 'manual-backup', { file: r.file, bytes: r.bytes }, now);
+      return sendJson(res, 200, r);
+    }
+    if (urlPath === '/api/admin/system/outbox-retry' && req.method === 'POST') {
+      const n = db.db.prepare('UPDATE tg_outbox SET next_try = 0' +
+        (body.id ? ' WHERE id = ?' : '')).run(...(body.id ? [Number(body.id)] : [])).changes;
+      telegram.drain();
+      logEvent(actor, 'outbox-retry', { rows: n, id: body.id || null }, now);
+      return sendJson(res, 200, { ok: true, retried: n });
+    }
+    if (urlPath === '/api/admin/system/outbox-drop' && req.method === 'POST') {
+      const n = db.db.prepare('DELETE FROM tg_outbox WHERE id = ?').run(Number(body.id)).changes;
+      logEvent(actor, 'outbox-drop', { id: Number(body.id), reason }, now);
+      return sendJson(res, 200, { ok: true, dropped: n });
+    }
+    if (urlPath === '/api/admin/system/worker-restart' && req.method === 'POST') {
+      telegram.stopWorker(); telegram.startWorker();
+      logEvent(actor, 'worker-restart', {}, now);
+      return sendJson(res, 200, { ok: true });
+    }
+    if (urlPath === '/api/admin/system/revoke' && req.method === 'POST') {
+      const r = admin.revokeSessions(g.admin.id, actor, now);
+      res.setHeader('set-cookie', admin.clearCookie());
+      return sendJson(res, 200, r);
+    }
+
+    return sendJson(res, 404, { error: 'not found' });
+  } catch (err) {
+    console.warn(`admin ${urlPath}:`, err.message);
+    return sendJson(res, 500, { error: 'server', message: err.message });
+  }
+}
+
 /* ── Routes ───────────────────────────────────────────────────── */
 
 async function handler(req, res) {
@@ -105,6 +371,14 @@ async function handler(req, res) {
     res.writeHead(204, corsHeaders());
     return res.end();
   }
+  /* The panel, and the panel's door. Ahead of the static branch because
+     /admin is a route rather than a file, and ahead of identity because an
+     admin is not a visitor: a moderation session should not be handed a
+     guest cookie or spend the office connection's daily budget of them. */
+  if (urlPath === '/admin' || urlPath.startsWith('/admin/') || urlPath.startsWith('/api/admin/')) {
+    return adminRoutes(req, res, urlPath, Date.now());
+  }
+
   if (!urlPath.startsWith('/api/')) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'text/plain', 'Method not allowed');
     return serveStatic(req, res, urlPath);
@@ -211,6 +485,15 @@ async function handler(req, res) {
       return sendJson(res, 200, { ok: true });
     }
 
+    /* Maintenance mode (§7.2). Reads keep working — the wall stays up and
+       readable — and anything that would change it says so kindly. */
+    if (settings.S.MAINTENANCE && WRITES.has(urlPath)) {
+      return sendJson(res, 503, {
+        error: 'maintenance',
+        message: 'The wall is being worked on — reading is fine, painting is back shortly.'
+      });
+    }
+
     if (urlPath === '/api/claim' && req.method === 'POST') {
       // checked before the body is read: the cap exists to make a flood cheap
       const capped = identity.takeClaim(ses.ip, row, now);
@@ -247,7 +530,7 @@ async function handler(req, res) {
        teammate has seen the money arrive in their own InstaPay app. */
     if (urlPath === '/api/paint/order' && req.method === 'POST') {
       const { pack } = JSON.parse((await readBody(req, 4096)).toString('utf8'));
-      if (!cfg.PACKS[pack]) return sendJson(res, 400, { error: 'unknown pack' });
+      if (!S.PACKS[pack]) return sendJson(res, 400, { error: 'unknown pack' });
       const order = db.tx(() => payments.createOrder(row.id, 'paint_pack', { pack: Number(pack) }, now));
       return sendJson(res, 200, payments.instructionsFor(order));
     }

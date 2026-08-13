@@ -25,6 +25,7 @@
 const fs = require('fs');
 const path = require('path');
 const cfg = require('./config.js');
+const { S } = require('./settings.js');
 const identity = require('./identity.js');
 const seed = require('./seed.js');
 const submissions = require('./submissions.js');
@@ -163,7 +164,7 @@ function snapshotFor(e, now) {
     nextBrands: Object.fromEntries(wall.nextBrands),
     me: identity.meta(e),
     dev: cfg.DEV,                        // the page hides the demo controls when this is off
-    prices: { paint: cfg.PRICE_PAINT, company: cfg.PRICE_COMPANY, packs: cfg.PACKS },
+    prices: { paint: S.PRICE_PAINT, company: S.PRICE_COMPANY, packs: S.PACKS },
     allowance: identity.allowanceOf(e, now),
     pending: pendingFor(e)
   };
@@ -316,7 +317,7 @@ function publish(evt, count) {
 /* One transaction: the submission, its cells, the allowance it spent and
    the journal entry all commit together or none of them do (§4.2, §4.6). */
 function claimTx(e, want, now) {
-  const freeQuota = Math.max(0, Math.min(want.length, cfg.CAP - e.used));
+  const freeQuota = Math.max(0, Math.min(want.length, S.CAP - e.used));
   const paidQuota = Math.max(0, Math.min(e.paint, want.length - freeQuota));
   const take = want.slice(0, freeQuota + paidQuota);
   if (!take.length) return null;
@@ -339,7 +340,7 @@ function claimTx(e, want, now) {
     paint: e.paint - usedPaint,
     refillAt: e.refillAt
   };
-  if (after.used >= cfg.CAP && !after.refillAt) after.refillAt = now + cfg.REFILL;
+  if (after.used >= S.CAP && !after.refillAt) after.refillAt = now + S.REFILL;
   identity.writeAllowance(after);
 
   logEvent(`user:${e.id}`, 'claim',
@@ -356,7 +357,7 @@ const heldLive = idx => wall.live.has(idx) || wall.pending.live.has(idx);
 function claimPixels(e, entries, now) {
   const want = entries.filter(([idx]) => validIdx(idx) && !heldLive(idx));
   let occupied = entries.length - want.length;
-  const wanted = Math.min(want.length, Math.max(0, cfg.CAP - e.used) + e.paint);
+  const wanted = Math.min(want.length, Math.max(0, S.CAP - e.used) + e.paint);
 
   const r = want.length ? tx(claimTx, e, want, now) : null;
   if (!r) {
@@ -420,7 +421,7 @@ function bookBrand(e, meta, entries, now) {
 
   return {
     sid: r.sid, booked: r.placed.length, skipped, pending: true,
-    cost: r.placed.length * cfg.PRICE_COMPANY, goesLive: cycleEnd(now)
+    cost: r.placed.length * S.PRICE_COMPANY, goesLive: cycleEnd(now)
   };
 }
 
