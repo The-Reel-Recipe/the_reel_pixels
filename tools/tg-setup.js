@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════
    tg-setup — the once-per-deploy Telegram wiring (PLAN §5, setup)
 
+     node tools/tg-setup.js --init <envfile> --token <token>
+                                       the whole thing, in one command
      node tools/tg-setup.js            what the bot is and where it points
      node tools/tg-setup.js --chat     find the moderation group's chat id
      node tools/tg-setup.js --webhook  point Telegram at PUBLIC_URL
@@ -9,17 +11,32 @@
 
    The chat id is the fiddly one. Telegram will not tell you a group's
    id; you have to say something in the group and read it back off an
-   update. So: add the bot, post any message, run --chat.
+   update. So: create the bot, add it to the group, post any message,
+   and then --init reads all three values off that one update and
+   writes them into the env file itself. Hand-copying a negative
+   thirteen-digit number between two windows at 1am is exactly the
+   step that goes wrong.
 
-   Needs TG_BOT_TOKEN in the environment. --webhook additionally needs
-   PUBLIC_URL and TG_WEBHOOK_SECRET.
+   Needs TG_BOT_TOKEN in the environment, or --token. --webhook
+   additionally needs PUBLIC_URL and TG_WEBHOOK_SECRET.
    ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
 const cfg = require('../server/config.js');
+const envfile = require('./envfile.js');
+
+const args = process.argv.slice(2);
+const flag = name => {
+  const i = args.indexOf(`--${name}`);
+  return i >= 0 ? (args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : true) : null;
+};
+
+/* --token wins over the environment, so the very first run can happen
+   before anything has been written to the env file at all. */
+let TOKEN = (typeof flag('token') === 'string' ? flag('token') : '') || cfg.TG_BOT_TOKEN;
 
 const api = (method, params) => fetch(
-  `https://api.telegram.org/bot${cfg.TG_BOT_TOKEN}/${method}`,
+  `https://api.telegram.org/bot${TOKEN}/${method}`,
   params
     ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(params) }
     : undefined
@@ -99,6 +116,96 @@ async function clearWebhook() {
     : `\n  failed: ${r.description}\n`);
 }
 
+/* ── the whole of step 7, in one command ──────────────────────── */
+
+/* Reads the group and the moderators off whatever the bot has heard, and
+   writes them into the env file next to the token. Everything it learns
+   comes from one message somebody posted in the group, which is why the
+   instructions say to post one. */
+async function init(file) {
+  if (typeof file !== 'string') {
+    console.error('\n  usage: node tools/tg-setup.js --init <envfile> [--token <token>]');
+    console.error('  e.g.   npm run tg -- --init /etc/s37.env --token 7000000000:AA…\n');
+    process.exit(1);
+  }
+  if (!require('fs').existsSync(file)) {
+    console.error(`\n  no ${file} — run \`npm run env -- ${file}\` first.\n`);
+    process.exit(1);
+  }
+  if (!TOKEN) {
+    console.error('\n  No bot token. Pass --token, or put TG_BOT_TOKEN in the environment.');
+    console.error('  Get one from @BotFather on Telegram: /newbot\n');
+    process.exit(1);
+  }
+
+  const me = await api('getMe');
+  if (!me.ok) {
+    console.error(`\n  Telegram rejected that token: ${me.description}`);
+    console.error('  Check you copied the whole thing, including the digits before the colon.\n');
+    process.exit(1);
+  }
+  console.log(`\n  bot        @${me.result.username}`);
+
+  /* getUpdates and a webhook are mutually exclusive, so a re-run has to
+     take the webhook off first. It goes back on with --webhook. */
+  await api('deleteWebhook');
+  const r = await api('getUpdates', { timeout: 0, limit: 100 });
+  if (!r.ok) { console.error(`\n  getUpdates failed: ${r.description}\n`); process.exit(1); }
+
+  const groups = new Map(), people = new Map();
+  for (const u of r.result) {
+    const msg = u.message || u.channel_post || (u.callback_query || {}).message;
+    if (msg && msg.chat && msg.chat.id < 0) groups.set(msg.chat.id, msg.chat.title || '(untitled)');
+    const from = (u.message || u.callback_query || {}).from;
+    if (from && !from.is_bot) people.set(from.id, from.username || from.first_name || String(from.id));
+  }
+
+  if (!groups.size) {
+    console.log('\n  The bot has not heard from any group.\n');
+    console.log('  1. create a private group');
+    console.log(`  2. add @${me.result.username} to it`);
+    console.log('  3. post any message in it — "hello" will do');
+    console.log('  4. run this again\n');
+    console.log('  (Telegram only hands over a group id once somebody has spoken');
+    console.log('   in front of the bot. There is no way to look one up.)\n');
+    process.exit(1);
+  }
+  if (groups.size > 1) {
+    console.log('\n  More than one group has spoken to this bot:\n');
+    for (const [id, title] of groups) console.log(`    ${String(id).padEnd(16)} ${title}`);
+    console.log('\n  Set TG_CHAT_ID by hand, then run --webhook.\n');
+    process.exit(1);
+  }
+
+  const [chatId, title] = [...groups][0];
+  const mods = [...people.keys()];
+  console.log(`  group      ${chatId}  "${title}"`);
+  console.log(`  moderators ${[...people].map(([id, n]) => `${n} (${id})`).join(', ') || '— none seen —'}`);
+
+  if (!mods.length) {
+    console.log('\n  Nobody has posted in that group yet — TG_MOD_IDS would be empty,');
+    console.log('  which means anyone in the group can press the buttons. Post a');
+    console.log('  message as each moderator and run this again.\n');
+    process.exit(1);
+  }
+
+  const changed = envfile.set(file, {
+    TG_BOT_TOKEN: TOKEN,
+    TG_CHAT_ID: String(chatId),
+    TG_MOD_IDS: mods.join(',')
+  });
+
+  console.log(`\n  wrote ${file}:`);
+  for (const [k, v] of Object.entries(changed)) {
+    const shown = k === 'TG_BOT_TOKEN' ? `${v.to.split(':')[0]}:…` : v.to;
+    console.log(`    ${k.padEnd(16)} ${shown}`);
+  }
+  if (!Object.keys(changed).length) console.log('    (already up to date)');
+
+  console.log('\n  Next: set PUBLIC_URL in that file, restart the service, then');
+  console.log('  `npm run tg -- --webhook` to point Telegram at it.\n');
+}
+
 async function testMessage() {
   need('TG_CHAT_ID', cfg.TG_CHAT_ID);
   const r = await api('sendMessage', {
@@ -110,8 +217,12 @@ async function testMessage() {
 }
 
 (async () => {
-  need('TG_BOT_TOKEN', cfg.TG_BOT_TOKEN);
-  const arg = (process.argv[2] || '').replace(/^--/, '');
+  /* --init is the only mode that can run before the token is in the
+     environment, so it checks for one itself. */
+  if (args.includes('--init')) return init(flag('init'));
+
+  need('TG_BOT_TOKEN', TOKEN);
+  const arg = (args[0] || '').replace(/^--/, '');
   if (arg === 'chat') return findChat();
   if (arg === 'webhook') return setWebhook();
   if (arg === 'poll') return clearWebhook();

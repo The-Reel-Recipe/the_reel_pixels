@@ -102,17 +102,13 @@ function build() {
 
 function check(file) {
   if (!fs.existsSync(file)) { console.error(`\n  no ${file} yet — run without --check first\n`); process.exit(1); }
-  const text = fs.readFileSync(file, 'utf8');
-  const blanks = [];
-  for (const line of text.split(/\r?\n/)) {
-    const m = line.match(/^([A-Z][A-Z0-9_]*)=(.*)$/);
-    if (!m) continue;
-    const [, key, value] = m;
-    /* No split on '#': a value is everything after the '=', because that is
-       what systemd will read. A stray hash in a secret is a legal character
-       and treating it as a comment would quietly truncate it. */
-    if (!value.trim() || value.trim() === TODO) blanks.push(key);
-  }
+  /* envfile.js has the systemd parsing rules — notably that a value is
+     everything after the '=', because a hash is a legal character in a
+     secret and systemd does no trailing-comment stripping. */
+  const vars = require('./envfile.js').read(file);
+  const blanks = Object.entries(vars)
+    .filter(([, v]) => !v.trim() || v.trim() === TODO)
+    .map(([k]) => k);
 
   /* config.js is the authority on what a production boot actually needs */
   const cfgPath = path.join(ROOT, 'server', 'config.js');

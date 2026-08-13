@@ -126,16 +126,27 @@ anybody).
 
 ### 7. Telegram
 
-Create the group, add the bot, post any message, then:
+1. **@BotFather** → `/newbot` → keep the token
+2. Create a private group, add the bot to it
+3. **Every moderator posts a message in it** — that is how the bot learns
+   who they are, and anyone who has not posted will not be able to press
+   the buttons
+
+Then one command reads the group id and the moderator ids off those
+messages and writes all three values into the env file:
 
 ```bash
 cd /srv/s37
-sudo -u s37 npm run tg -- --chat      # read the group id off this
-# put it in TG_CHAT_ID, and the moderators' own ids in TG_MOD_IDS
+sudo -u s37 npm run tg -- --init /etc/s37.env --token <the token>
 systemctl restart s37
 sudo -u s37 npm run tg -- --webhook
 sudo -u s37 npm run tg -- --test      # a message should appear in the group
 ```
+
+`--init` refuses rather than guesses: if the bot has heard from two
+groups, or from no humans, it says so and writes nothing. Telegram will
+not tell you a group's id any other way — somebody has to speak in
+front of the bot first.
 
 ### 8. Admin accounts
 
