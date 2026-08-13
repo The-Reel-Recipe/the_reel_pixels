@@ -12,6 +12,7 @@
     "export-wall": "node tools/export-wall-png.js",
     "make-brand": "node tools/make-brand.js",
     "icons": "node tools/make-icons.js --sheet",
+    "env": "node tools/make-env.js",
     "fonts": "node tools/fetch-fonts.js",
     "admin": "node tools/add-admin.js",
     "tg": "node tools/tg-setup.js"

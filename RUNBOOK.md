@@ -45,20 +45,40 @@ cd /srv/s37 && sudo -u s37 npm ci --omit=dev
 
 ### 3. The environment
 
-Copy [.env.example](.env.example) to `/etc/s37.env` and fill it in.
-`chmod 600`, owned by root. Generate the secrets, do not invent them:
+```bash
+sudo -u s37 npm run env -- /etc/s37.env
+sudo chown root:s37 /etc/s37.env && sudo chmod 640 /etc/s37.env
+```
+
+That writes the file from [.env.example](.env.example) with real
+generated secrets, sets everything production always wants the same way
+(`TRUST_PROXY=1`, `COOKIE_SECURE=1`, `NODE_ENV=production`, the paths),
+and leaves a `# TODO` line above each value that can only come from
+somewhere else. It refuses to overwrite an existing file — regenerating
+would mint a new `SESSION_SECRET` and sign out every visitor on the
+wall.
+
+Fill in the TODOs, then:
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+npm run env -- --check /etc/s37.env
 ```
+
+which separates "the boot will refuse to start without this" from "the
+app runs but replication does not".
 
 `SESSION_SECRET` is the one that matters most: change it later and
 every guest loses their history, because the cookie *is* the identity.
 Put a copy somewhere you will still have it if the box is gone —
 [the restore drill](tools/restore-drill.md) needs it.
 
-The boot refuses to start in production with any of them missing, and
-names the ones it wants. That is the checklist.
+The boot refuses to start in production with any required value
+missing, and names the ones it wants. That is the real checklist; the
+`--check` above is just a friendlier way to read it.
+
+> Hints live on their own line, never after the value. systemd's
+> `EnvironmentFile` only treats a line *starting* with `#` as a comment,
+> so `KEY=value # note` would set `KEY` to `value # note`.
 
 ### 4. The InstaPay QR
 
