@@ -1,0 +1,73 @@
+# ═══════════════════════════════════════════════════════════════
+# s37 — the pixel wall
+#
+#   install   cp deploy/s37.service /etc/systemd/system/
+#             systemctl daemon-reload && systemctl enable --now s37
+#   logs      journalctl -u s37 -f
+#   restart   systemctl restart s37     (~1s of downtime; see §15)
+#
+# The app takes SIGTERM seriously (server/index.js): it stops
+# accepting, hangs up the event streams so browsers reconnect to the
+# new process rather than sitting on a dead socket, stops the workers
+# and checkpoints the WAL back into the database file. Nothing needs
+# draining beyond that — transactions are synchronous, so if one were
+# running this unit would not be stopping.
+# ═══════════════════════════════════════════════════════════════
+
+[Unit]
+Description=S37 pixel wall
+Documentation=file:/srv/s37/RUNBOOK.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=s37
+Group=s37
+WorkingDirectory=/srv/s37
+EnvironmentFile=/etc/s37.env
+ExecStart=/usr/bin/node server.js
+
+# §11: an uncaught throw logs a crash event and exits, and this is the
+# other half of that sentence. RestartSec keeps a boot-loop from
+# burning the CPU while somebody reads the journal.
+Restart=always
+RestartSec=3
+# …but a process that cannot start at all should stop trying and stay
+# visibly failed rather than flapping for a week.
+StartLimitBurst=5
+StartLimitIntervalSec=120
+
+# SIGTERM, then a hard kill if it has not gone. The shutdown path
+# exits well inside this.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+# ── what this process may touch ──
+# It writes exactly one directory. Everything else on the box is
+# read-only to it, which is worth having for something that accepts
+# uploaded images from strangers.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/s37/data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+# outbound to Telegram, inbound from Caddy — nothing else
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# better-sqlite3 is a native module and Node is not tiny; this is
+# comfortable headroom for a wall plus a few hundred SSE clients.
+MemoryMax=1G
+# the wall snapshot is one big buffer per cold load
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target

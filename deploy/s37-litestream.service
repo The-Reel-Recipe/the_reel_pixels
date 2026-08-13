@@ -1,0 +1,52 @@
+# ═══════════════════════════════════════════════════════════════
+# litestream — continuous replication of the wall to R2 (PLAN §10.1)
+#
+#   install   cp deploy/s37-litestream.service /etc/systemd/system/
+#             systemctl daemon-reload && systemctl enable --now s37-litestream
+#   logs      journalctl -u s37-litestream -f
+#   check     litestream databases -config /srv/s37/deploy/litestream.yml
+#
+# A sidecar, not a library: the app knows nothing about it and needs
+# no change to be replicated. It tails the SQLite WAL, so the recovery
+# point is seconds rather than "last night" — which is what makes
+# losing the box a bad morning instead of a lost month.
+#
+# Starts alongside the app rather than after it. There is no ordering
+# requirement in either direction: litestream waits for the database
+# file to appear, and the app does not know it exists.
+# ═══════════════════════════════════════════════════════════════
+
+[Unit]
+Description=S37 wall replication to R2
+Documentation=https://litestream.io/
+After=network-online.target
+Wants=network-online.target
+# not Requires: replication falling over must never take the wall with it
+PartOf=s37.service
+
+[Service]
+Type=simple
+User=s37
+Group=s37
+WorkingDirectory=/srv/s37
+# the same file the app reads — LITESTREAM_ACCESS_KEY_ID,
+# LITESTREAM_SECRET_ACCESS_KEY, R2_BUCKET, R2_ENDPOINT, DATA_DIR
+EnvironmentFile=/etc/s37.env
+ExecStart=/usr/bin/litestream replicate -config /srv/s37/deploy/litestream.yml
+
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# it reads the database and writes its own shadow WAL beside it
+ReadWritePaths=/srv/s37/data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

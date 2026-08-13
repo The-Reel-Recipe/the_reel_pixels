@@ -1,0 +1,70 @@
+# ═══════════════════════════════════════════════════════════════
+# Caddy — TLS, compression, and nothing else
+#
+# PLAN §1: one Node process on a small VPS, Caddy in front of it.
+# Caddy is here for three things the app should not be doing itself —
+# certificates, gzip, and being the only thing bound to :443 — and it
+# deliberately does no routing. Every path decision lives in
+# server/http.js so that `node server.js` locally and the real deploy
+# behave identically.
+#
+#   install   https://caddyserver.com/docs/install
+#   put this  /etc/caddy/Caddyfile   (edit the domain first)
+#   check     caddy validate --config /etc/caddy/Caddyfile
+#   reload    systemctl reload caddy
+#
+# Certificates are automatic: point the A/AAAA record at the box first,
+# then reload, and Caddy will have a certificate within a few seconds.
+# ═══════════════════════════════════════════════════════════════
+
+s37.example.com {
+	# ── the app ──
+	# Everything. The app serves its own static files (an allowlist of
+	# four plus assets/ — see serveStatic), which keeps one answer to
+	# "why is that 404" instead of two.
+	reverse_proxy 127.0.0.1:5174 {
+		# SSE: no buffering, and no read timeout on a stream that is
+		# meant to stay open. Without this Caddy holds events back and
+		# the wall updates in bursts.
+		flush_interval -1
+
+		# The app trusts X-Forwarded-For only when TRUST_PROXY=1, and
+		# Caddy replaces any inbound copy rather than appending to it —
+		# so a client cannot spoof its own address past this.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+	}
+
+	# Flat-colour pixel data compresses extremely well: the wall
+	# snapshot is 9 bytes a pixel of mostly-repeating runs, and gzip
+	# takes a full wall from ~9 MB to well under one. This is the
+	# single biggest thing Caddy does for this app.
+	encode zstd gzip
+
+	# The app sets CSP, HSTS and the rest itself (server/http.js), so
+	# nothing is added here — two places setting security headers is
+	# how you end up with a policy nobody can explain.
+
+	# ── logs ──
+	# The app logs to the journal via systemd; this is the access log.
+	log {
+		output file /var/log/caddy/s37.log {
+			roll_size 20mb
+			roll_keep 10
+		}
+		format json
+	}
+
+	# Health checks and the moderation webhook are noisy and boring.
+	@quiet path /healthz /api/tg/webhook
+	log_skip @quiet
+}
+
+# ── the old address ────────────────────────────────────────────
+# After the cutover, point the Vercel domain here rather than leaving
+# two versions of the wall on the internet. Uncomment and set both
+# names once DNS has moved.
+#
+# old.example.com {
+# 	redir https://s37.example.com{uri} permanent
+# }

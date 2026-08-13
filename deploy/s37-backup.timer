@@ -1,0 +1,19 @@
+# The nightly run. 03:20 rather than 03:00 because every cron on every
+# box fires on the hour and the disk has better things to do; the
+# randomised delay spreads it further.
+#
+# Persistent=true so a snapshot missed while the box was off is taken
+# on the next boot instead of silently skipped — the gap in the
+# backups is exactly the night you would want one.
+
+[Unit]
+Description=S37 nightly database snapshot
+Documentation=file:/srv/s37/RUNBOOK.md
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target

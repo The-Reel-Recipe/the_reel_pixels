@@ -1,0 +1,35 @@
+# ═══════════════════════════════════════════════════════════════
+# s37-backup — the nightly snapshot (PLAN §10.2)
+#
+#   install   cp deploy/s37-backup.{service,timer} /etc/systemd/system/
+#             systemctl daemon-reload && systemctl enable --now s37-backup.timer
+#   run now   systemctl start s37-backup
+#   check     systemctl list-timers s37-backup
+#
+# Litestream is the real recovery story; this is the belt to its
+# braces. A VACUUM INTO snapshot is one consistent file that opens in
+# any SQLite tool, needs no replay, and survives the class of accident
+# where the replication itself is what broke.
+#
+# Safe against the running server: VACUUM INTO takes a read lock and
+# WAL means readers never block the writer.
+# ═══════════════════════════════════════════════════════════════
+
+[Unit]
+Description=S37 nightly database snapshot
+Documentation=file:/srv/s37/RUNBOOK.md
+After=s37.service
+
+[Service]
+Type=oneshot
+User=s37
+Group=s37
+WorkingDirectory=/srv/s37
+EnvironmentFile=/etc/s37.env
+ExecStart=/usr/bin/node tools/backup-nightly.js --keep 30
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/s37/data
