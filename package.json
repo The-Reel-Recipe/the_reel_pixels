@@ -11,6 +11,8 @@
     "backup": "node tools/backup-nightly.js",
     "export-wall": "node tools/export-wall-png.js",
     "make-brand": "node tools/make-brand.js",
+    "fonts": "node tools/fetch-fonts.js",
+    "admin": "node tools/add-admin.js",
     "tg": "node tools/tg-setup.js"
   },
   "engines": {

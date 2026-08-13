@@ -318,10 +318,7 @@ async function loadWall() {
   cycle = meta.cycle;
   applyAllowance(meta.allowance);
   setMe(meta.me);
-  if (meta.prices) priceThePacks(meta.prices.paint);   // badges can't drift from the real rate
-  // /api/dev/* is unauthenticated by design (it's a prototype affordance), so a
-  // deployment with DEV=0 shouldn't show controls that can only fail
-  document.querySelector('.demo-pill').hidden = meta.dev === false;
+  if (meta.prices) priceThePacks(meta.prices.paint);   // badges can't drift from the real rate
   for (const [name, brand] of Object.entries(meta.brands || {})) {
     const safe = safeUrl(brand.url);
     if (safe) brands.set(name, { url: safe, cta: brand.cta || 'VISIT SITE' });
@@ -2166,26 +2163,6 @@ function loop(t) {
    it lives in seed.bin now (tools/make-brand.js), which is why ~150 lines of
    badge drawing went with it — all of it existed to fake sponsor logos. */
 const logoImg = new Image(); logoImg.src = 'assets/logo-icon.png';
-
-/* Demo controls — every one of these is a server call now, because the wall
-   isn't ours to change. */
-async function devCall(path, done) {
-  try { const d = await apiJson(path, {}); done(d); }
-  catch (e) { toast('The server turned that down — dev routes may be off (DEV=0).', { cls: 'err' }); }
-}
-$('demoTime').onclick = () => devCall('/api/dev/reset', d => {
-  toast(`&#128465; Reset run — ${fmt(d.live)} prepaid pixels went live on a fresh wall.`, { cls: 'warn', dur: 5200 });
-});
-$('demoRefill').onclick = () => devCall('/api/dev/refill', d => {
-  applyAllowance(d); updateAll();
-  toast(`&#9203; Free pixels topped back up to <b>${CAP}</b>.`);
-});
-$('demoReseed').onclick = () => devCall('/api/dev/reseed', d => {
-  toast(`Wall restored from the committed artwork — ${fmt(d.live)} pixels.`);
-});
-$('demoWipe').onclick = () => devCall('/api/dev/wipe', () => {
-  toast('Wall wiped — fully empty 1,000×1,000 grid.');
-});
 
 /* ═══════════ INIT ═══════════ */
 (async function init() {

@@ -32,12 +32,63 @@ const TYPES = {
   '.ico': 'image/x-icon', '.woff2': 'font/woff2'
 };
 
+/* ── Security headers (§11) ───────────────────────────────────── */
+
+/* The two typefaces are Google-hosted unless somebody has run
+   `npm run fonts`, which pulls them into assets/fonts/ and rewrites the
+   link in index.html. Self-hosting is preferred — it drops a third party
+   from the critical path and closes the only hole in this policy — so the
+   policy is computed from what is actually on disk rather than pinned to
+   whichever choice was made the day it was written. */
+const SELF_HOSTED_FONTS = fs.existsSync(path.join(ROOT, 'assets', 'fonts'));
+const FONT_SRC = SELF_HOSTED_FONTS
+  ? "font-src 'self'"
+  : "font-src 'self' https://fonts.gstatic.com";
+const STYLE_SRC = SELF_HOSTED_FONTS
+  /* 'unsafe-inline' stays either way: the canvas renderer sets inline
+     styles, and nonce-ing every one of them buys nothing while script-src
+     is already locked to 'self'. */
+  ? "style-src 'self' 'unsafe-inline'"
+  : "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com";
+
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  STYLE_SRC,
+  FONT_SRC,
+  /* data: for the history thumbnails and the crop preview, both of which
+     are canvases the page drew itself */
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-ancestors 'none'"
+].join('; ');
+
+const SECURITY = {
+  'content-security-policy': CSP,
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  /* frame-ancestors covers this for anything modern; the header is for what
+     is not, and costs 25 bytes */
+  'x-frame-options': 'DENY',
+  'permissions-policy': 'geolocation=(), microphone=(), camera=(), payment=(), interest-cohort=()',
+  'cross-origin-opener-policy': 'same-origin'
+};
+/* Only over TLS, and only in production: sending HSTS from a plain-http dev
+   server would pin localhost to https in the developer's browser. */
+if (cfg.PROD && cfg.COOKIE_SECURE) {
+  SECURITY['strict-transport-security'] = 'max-age=31536000; includeSubDomains';
+}
+
 /* ── Replies ──────────────────────────────────────────────────── */
 
 /* Only set when ALLOW_ORIGIN is configured — a statically hosted copy of the
-   page (GitHub Pages, a CDN) pointing at this API needs it, nothing else does. */
+   page (GitHub Pages, a CDN) pointing at this API needs it, nothing else
+   does, and §11 says a single-origin deploy leaves it unset. */
 function corsHeaders(extra) {
-  const h = Object.assign({ 'cache-control': 'no-store' }, extra);
+  const h = Object.assign({ 'cache-control': 'no-store' }, SECURITY, extra);
   if (cfg.ALLOW_ORIGIN) {
     h['access-control-allow-origin'] = cfg.ALLOW_ORIGIN;
     h['access-control-allow-headers'] = 'content-type';
@@ -52,16 +103,77 @@ function send(res, code, type, body) {
 }
 const sendJson = (res, code, obj) => send(res, code, TYPES['.json'], JSON.stringify(obj));
 
+/* ── Rate limiting (§9) ───────────────────────────────────────── */
+
+/* A token bucket per caller. In memory and per process, which is exactly
+   right for a design that is one process by construction (§4.1) — and it
+   means a flood costs a Map entry rather than a row.
+
+   The key is the IP, not the cookie: anyone rate-limited by their own
+   cookie would simply throw it away, and the whole point is to make a
+   flood expensive for whoever is sending it. */
+const BUCKETS = new Map();
+const LIMITS = {
+  /* signing up, signing in, and asking for a payment order are the three
+     places a script gets something for its trouble */
+  auth: { rate: cfg.RATE_AUTH, per: 60000, burst: cfg.RATE_AUTH },
+  write: { rate: cfg.RATE_WRITE, per: 60000, burst: Math.ceil(cfg.RATE_WRITE * 1.4) },
+  read: { rate: cfg.RATE_READ, per: 60000, burst: Math.ceil(cfg.RATE_READ * 1.25) }
+};
+
+function limitFor(urlPath) {
+  if (urlPath.startsWith('/api/auth/') || urlPath === '/api/admin/login' ||
+      urlPath === '/api/paint/order' || urlPath.startsWith('/api/payments/')) return 'auth';
+  if (urlPath === '/api/claim' || urlPath === '/api/book') return 'write';
+  return 'read';
+}
+
+function takeToken(key, kind, now) {
+  const limit = LIMITS[kind];
+  const id = `${kind}:${key}`;
+  let b = BUCKETS.get(id);
+  if (!b) { b = { tokens: limit.burst, at: now }; BUCKETS.set(id, b); }
+  b.tokens = Math.min(limit.burst, b.tokens + ((now - b.at) / limit.per) * limit.rate);
+  b.at = now;
+  if (b.tokens < 1) return false;
+  b.tokens -= 1;
+  return true;
+}
+/* Buckets refill on their own, so an idle one is indistinguishable from a
+   fresh one — dropping it is free. */
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, b] of BUCKETS) if (now - b.at > 10 * 60 * 1000) BUCKETS.delete(id);
+}, 5 * 60 * 1000).unref();
+
+const TOO_FAST = {
+  error: 'slow-down',
+  message: 'That is a lot of requests very quickly. Give it a moment and try again.'
+};
+
+/* §9 wants a 413 rather than a dropped connection, which means the socket
+   has to survive long enough to carry one — destroying the request the
+   moment it goes over the limit gives the caller an ECONNRESET and no idea
+   why. So: stop accumulating immediately (the memory is the thing being
+   protected), reject with a status the handler can turn into an answer,
+   and let that answer decide when the socket goes. */
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
-    let size = 0; const chunks = [];
+    let size = 0, over = false;
+    const chunks = [];
     req.on('data', c => {
+      if (over) return;
       size += c.length;
-      if (size > limit) { req.destroy(); reject(new Error('body too large')); return; }
+      if (size > limit) {
+        over = true;
+        chunks.length = 0;
+        reject(Object.assign(new Error('body too large'), { status: 413, tooLarge: true }));
+        return;
+      }
       chunks.push(c);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
+    req.on('end', () => { if (!over) resolve(Buffer.concat(chunks)); });
+    req.on('error', err => { if (!over) reject(err); });
   });
 }
 
@@ -222,11 +334,10 @@ async function adminRoutes(req, res, urlPath, now) {
     if (urlPath === '/api/admin/wall/export.png') {
       const layer = q.get('layer') === 'next' ? 'next' : 'live';
       const px = [...(layer === 'live' ? wall.wall.live : wall.wall.reserved)].map(([i, p]) => [i, p.c]);
-      res.writeHead(200, {
+      res.writeHead(200, corsHeaders({
         'content-type': 'image/png',
-        'content-disposition': `attachment; filename="wall-${layer}.png"`,
-        'cache-control': 'no-store'
-      });
+        'content-disposition': `attachment; filename="wall-${layer}.png"`
+      }));
       return res.end(admin.renderWall(px));
     }
     if (urlPath === '/api/admin/wall/erase-region' && req.method === 'POST') {
@@ -270,11 +381,10 @@ async function adminRoutes(req, res, urlPath, now) {
     if (urlPath === '/api/admin/payments') {
       const filter = { status: q.get('status'), kind: q.get('kind'), q: q.get('q') };
       if (q.get('format') === 'csv') {
-        res.writeHead(200, {
+        res.writeHead(200, corsHeaders({
           'content-type': 'text/csv; charset=utf-8',
-          'content-disposition': 'attachment; filename="payments.csv"',
-          'cache-control': 'no-store'
-        });
+          'content-disposition': 'attachment; filename="payments.csv"'
+        }));
         return res.end(admin.paymentsCsv(filter));
       }
       return sendJson(res, 200, {
@@ -289,11 +399,10 @@ async function adminRoutes(req, res, urlPath, now) {
       }
       /* nosniff and an explicit type: the file was sanitised on the way in,
          and it is still not going to be interpreted as anything but a picture */
-      res.writeHead(200, {
+      res.writeHead(200, corsHeaders({
         'content-type': TYPES[path.extname(p.screenshot_path).toLowerCase()] || 'image/png',
-        'x-content-type-options': 'nosniff',
-        'cache-control': 'no-store'
-      });
+        'content-disposition': 'inline'
+      }));
       return res.end(fs.readFileSync(p.screenshot_path));
     }
     const payAct = urlPath.match(/^\/api\/admin\/payments\/(\d+)\/(verify|reject|refunded|override)$/);
@@ -379,6 +488,33 @@ async function handler(req, res) {
     return adminRoutes(req, res, urlPath, Date.now());
   }
 
+  /* §9. What an uptime monitor polls, so it answers whether the process can
+     still do its job rather than only that it can answer — a server whose
+     database has gone away still serves 200s otherwise. Not under /api/, so
+     it has to come before the static branch; exempt from the rate limiter,
+     because a monitor throttled into a 429 pages somebody at 3am about
+     nothing. */
+  if (urlPath === '/healthz') {
+    const at = Date.now();
+    let ok = true, dbState = 'ok';
+    try { db.db.prepare('SELECT 1').get(); }
+    catch (err) { ok = false; dbState = err.message; }
+    const out = telegram.status();
+    return sendJson(res, ok ? 200 : 503, {
+      ok, db: dbState,
+      wall: wall.wall.live.size,
+      pending: submissions.pendingCount(),
+      outbox: out.n,
+      outboxOldestMs: out.oldest ? at - out.oldest : 0,
+      /* §11's alert condition, computed here so the monitor does not have
+         to know what fifteen minutes means */
+      outboxStuck: !!(out.n > 0 && out.oldest && (at - out.oldest) > 15 * 60 * 1000),
+      sse: clients.size,
+      maintenance: settings.S.MAINTENANCE,
+      uptimeMs: Math.round(process.uptime() * 1000)
+    });
+  }
+
   if (!urlPath.startsWith('/api/')) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'text/plain', 'Method not allowed');
     return serveStatic(req, res, urlPath);
@@ -386,6 +522,18 @@ async function handler(req, res) {
 
   const now = Date.now();
   wall.checkCycle(now);
+
+  /* Ahead of everything but the webhook and the panel, and ahead of reading
+     any body — a refusal should be cheaper than the request that earned it.
+     The event stream is exempt: it is one long-lived connection, and
+     counting it against a per-minute budget would drop reconnects. */
+  if (urlPath !== '/api/stream') {
+    const kind = limitFor(urlPath);
+    if (!takeToken(identity.callerKey(req), kind, now)) {
+      res.setHeader('retry-after', '30');
+      return sendJson(res, 429, TOO_FAST);
+    }
+  }
 
   /* Before identity: Telegram is not a visitor and must not be handed a
      guest cookie, spend an IP's budget of them, or be turned away because
@@ -422,7 +570,7 @@ async function handler(req, res) {
     // everything the page needs to draw itself, in one shot
     if (urlPath === '/api/wall' && req.method === 'GET') {
       const buf = wall.snapshotFor(row, now);
-      res.writeHead(200, { 'content-type': 'application/octet-stream', 'cache-control': 'no-store' });
+      res.writeHead(200, corsHeaders({ 'content-type': 'application/octet-stream' }));
       return res.end(buf);
     }
 
@@ -552,27 +700,30 @@ async function handler(req, res) {
       return sendJson(res, 200, r);
     }
 
-    /* ── prototype affordances — turn the lot off with DEV=0 ── */
-    if (urlPath.startsWith('/api/dev/')) {
-      if (!cfg.DEV) return sendJson(res, 404, { error: 'not found' });
-
-      if (urlPath === '/api/dev/refill' && req.method === 'POST') {
-        identity.refill(row);
-        return sendJson(res, 200, identity.allowanceOf(row, now));
-      }
-      if (urlPath === '/api/dev/reseed' && req.method === 'POST') {
-        return sendJson(res, 200, wall.reseed(now));
-      }
-      if (urlPath === '/api/dev/wipe' && req.method === 'POST') {
-        return sendJson(res, 200, wall.wipe());
-      }
-      if (urlPath === '/api/dev/reset' && req.method === 'POST') {
-        return sendJson(res, 200, wall.rollCycle(now));
-      }
-    }
+    /* /api/dev/* used to live here: refill, reseed, wipe and roll-the-cycle,
+       unauthenticated, behind a DEV flag. §11 says deleted rather than
+       switched off, and it is right — an unauthenticated route that wipes
+       the wall is one environment variable away from being a very bad
+       afternoon, and every one of those four now exists in the admin panel
+       behind a password, a TOTP code and a typed confirmation phrase. */
 
     return sendJson(res, 404, { error: 'not found' });
   } catch (err) {
+    if (err.tooLarge) {
+      /* The caller is very likely still sending. Destroying the socket here
+         is what the old code did and it lands as an ECONNRESET with no
+         explanation; waiting for 'finish' is no better, because that fires
+         when the response reaches the OS rather than the client. So: drain
+         the rest of the body into the bin (nothing is being buffered any
+         more — readBody stopped at the limit), answer, and ask for the
+         connection to close afterwards, which Node does cleanly. */
+      req.resume();
+      res.writeHead(413, corsHeaders({ 'content-type': TYPES['.json'], connection: 'close' }));
+      return res.end(JSON.stringify({
+        error: 'too-large',
+        message: 'That request was bigger than this endpoint accepts.'
+      }));
+    }
     console.warn(`api ${urlPath}:`, err.message);
     return sendJson(res, 400, { error: err.message });
   }

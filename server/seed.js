@@ -140,13 +140,4 @@ function replaceCycle(meta, a, b, cycle, now, source) {
   });
 }
 
-function wipeCycle(cycle, now) {
-  return tx(() => {
-    const cells = delCells.run(cycle).changes;
-    delSubs.run(cycle);
-    logEvent('system', 'wipe', { cycle, cells }, now);
-    return { cells };
-  });
-}
-
-module.exports = { importEnvelope, replaceCycle, wipeCycle, packPixels, bboxOf, PX };
+module.exports = { importEnvelope, replaceCycle, packPixels, bboxOf, PX };

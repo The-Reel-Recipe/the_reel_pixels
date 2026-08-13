@@ -70,7 +70,7 @@ function flag(v, dflt) {
    Phase 0 would demand a bot token for a server that has no bot yet,
    and every deploy between here and Phase 4 would refuse to start.
    Raise PHASE as each phase lands and the list enforces itself. */
-const PHASE = 2;
+const PHASE = 7;
 const SECRETS = [
   { k: 'SESSION_SECRET', phase: 2, why: 'HMAC key for guest + brand cookies' },
   { k: 'TG_BOT_TOKEN', phase: 4, why: 'moderation bot' },
@@ -125,7 +125,6 @@ module.exports = Object.freeze({
      IP is the real one — anywhere else this stays opt-in, or anyone can
      spoof the header and mint themselves unlimited pixels. */
   TRUST_PROXY: env.TRUST_PROXY === '1' || ON_VERCEL,
-  DEV: env.DEV !== '0',
   ALLOW_ORIGIN: env.ALLOW_ORIGIN || '',
 
   /* files */
@@ -157,6 +156,14 @@ module.exports = Object.freeze({
   IP_GUEST_CAP: count('IP_GUEST_CAP', env.IP_GUEST_CAP, 5),      // new identities per ip per day
   IP_CLAIM_CAP: count('IP_CLAIM_CAP', env.IP_CLAIM_CAP, 40),     // claim submissions per ip per day
   IP_SIGNUP_CAP: count('IP_SIGNUP_CAP', env.IP_SIGNUP_CAP, 3),   // brand signups per ip per day
+
+  /* §9's token buckets, in requests per minute per address. Overridable for
+     the same reason the caps above are: a suite that proves a daily cap
+     works has to make forty claims, and it should be tripping the cap it is
+     testing rather than the rate limiter in front of it. */
+  RATE_READ: count('RATE_READ', env.RATE_READ, 240),
+  RATE_WRITE: count('RATE_WRITE', env.RATE_WRITE, 30),
+  RATE_AUTH: count('RATE_AUTH', env.RATE_AUTH, 5),
   /* a guest cookie is the only copy of who somebody is, so it outlives
      the wall it painted; a brand session is a login and expires like one */
   GUEST_TTL: 365 * 24 * 60 * 60 * 1000,

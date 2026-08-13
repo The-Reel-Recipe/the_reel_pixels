@@ -163,7 +163,6 @@ function snapshotFor(e, now) {
     brands: Object.fromEntries(wall.brands),
     nextBrands: Object.fromEntries(wall.nextBrands),
     me: identity.meta(e),
-    dev: cfg.DEV,                        // the page hides the demo controls when this is off
     prices: { paint: S.PRICE_PAINT, company: S.PRICE_COMPANY, packs: S.PACKS },
     allowance: identity.allowanceOf(e, now),
     pending: pendingFor(e)
@@ -552,29 +551,22 @@ function checkCycle(now) {
 }
 setInterval(() => checkCycle(Date.now()), 30000).unref();
 
-/* ── Prototype affordances (behind DEV, deleted in Phase 7) ───── */
+/* ── Reseeding ────────────────────────────────────────────────── */
 
 /* Lays the committed artwork back over whatever is on the wall. Always
    seed.bin and never .wall.bin: the latter is a one-time migration off the
-   file-backed prototype, not a fixture to keep returning to. */
+   file-backed prototype, not a fixture to keep returning to.
+
+   Reachable only from the admin panel now, behind a typed phrase. The
+   wipe-the-wall and roll-the-cycle siblings that used to sit here went
+   with /api/dev/* in Phase 7 — a force reset does the second, and nothing
+   legitimate wanted the first. */
 function reseed(now = Date.now()) {
   const { meta, a, b } = decodeEnvelope(fs.readFileSync(cfg.SEED_FILE));
   seed.replaceCycle(meta, a, b, wall.cycle, now, 'seed.bin');
   rebuildCache();
   broadcast({ t: 'reset' });
   return { live: wall.live.size, booked: wall.reserved.size };
-}
-function wipe(now = Date.now()) {
-  seed.wipeCycle(wall.cycle, now);
-  rebuildCache();
-  broadcast({ t: 'reset' });
-  return { live: 0, booked: 0 };
-}
-function rollCycle(now) {
-  // pretend we're past the 1st. The archive path stays out of the reply —
-  // it's a server filesystem path, and the demo button only wants the count
-  const { live, booked, promoted } = resetCycle(now, cycleStart(cycleEnd(now)));
-  return { live, booked, promoted };
 }
 
 module.exports = {
@@ -584,7 +576,7 @@ module.exports = {
   load, rebuildCache, setSink, broadcast, notify, publish,
   checkCycle, resetCycle, claimPixels, bookBrand,
   publishApproval, publishErasure,
-  reseed, wipe, rollCycle, archiveWall
+  reseed, archiveWall
 };
 
 /* The half of the moderation state machine that lives over there needs the

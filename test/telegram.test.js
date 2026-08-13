@@ -35,6 +35,14 @@ process.env.TG_CHAT_ID = '-1001234567890';
 process.env.TG_WEBHOOK_SECRET = 'a-secret-worth-16-chars';
 process.env.TG_MOD_IDS = '4242,4343';
 process.env.IP_CLAIM_CAP = '1000';
+/* The §9 token buckets are per minute and this file spends a day's worth
+   of requests in a second; raised so the assertions are about the caps and
+   the races they are testing rather than the rate limiter in front of them.
+   admin.test.js deliberately leaves RATE_AUTH alone — the login throttle is
+   one of the things it checks. */
+process.env.RATE_READ = '100000';
+process.env.RATE_WRITE = '100000';
+process.env.RATE_AUTH = '100000';
 delete process.env.VERCEL;
 delete process.env.DEV;
 

@@ -38,6 +38,14 @@ process.env.IP_CLAIM_CAP = '1000';
 /* Approvals are driven by hand here — a durability test that races a 2s
    auto-approve timer proves nothing repeatable. See moderation.test.js. */
 process.env.TG_MODE = 'webhook';
+/* The §9 token buckets are per minute and this file spends a day's worth
+   of requests in a second; raised so the assertions are about the caps and
+   the races they are testing rather than the rate limiter in front of them.
+   admin.test.js deliberately leaves RATE_AUTH alone — the login throttle is
+   one of the things it checks. */
+process.env.RATE_READ = '100000';
+process.env.RATE_WRITE = '100000';
+process.env.RATE_AUTH = '100000';
 delete process.env.VERCEL;
 delete process.env.DEV;
 delete process.env.ALLOW_ORIGIN;
@@ -109,6 +117,17 @@ const claim = px => getJson('POST', '/api/claim',
 
 /* the user id inside the jar's cookie — `<id>.<exp>.<sig>` (§3) */
 const meId = () => Number(String(jar.get('uid') || '').split('.')[0]);
+
+/* Phase 7 deleted /api/dev/refill along with the rest of the unauthenticated
+   dev routes, so the several tests below that need a full batch reach for
+   the same call the admin panel's adjust button makes. */
+const identity = require('../server/identity.js');
+const refillMe = async () => {
+  /* the request is what mints the identity when the jar is still empty —
+     which the dev route it replaces used to do implicitly */
+  await getJson('GET', '/api/allowance');
+  identity.refill(identity.rowFor(meId(), Date.now()));
+};
 
 const cellsAt = idx => dbm.db.prepare(
   "SELECT COUNT(*) n FROM cells WHERE cycle = ? AND layer = 'live' AND idx = ?"
@@ -247,7 +266,7 @@ test('the cells primary key refuses a second sale of the same pixel', () => {
 });
 
 test('two concurrent claims for the same pixel — exactly one wins', async () => {
-  await getJson('POST', '/api/dev/refill');
+  await refillMe();
   const [idx] = freeRange(1);
 
   const countSubs = () => dbm.db.prepare('SELECT COUNT(*) n FROM submissions').get().n;
@@ -285,7 +304,7 @@ test('two concurrent claims for the same pixel — exactly one wins', async () =
 /* ── §4.6 an allowance can't be overspent by a burst ──────────── */
 
 test('50 parallel claims never exceed the cap plus paint', async () => {
-  await getJson('POST', '/api/dev/refill');
+  await refillMe();
   /* Paint used to arrive from a mock shop that credited on click. It is an
      InstaPay order verified by a person now (§6), which is payments.test.js's
      subject — here the balance just needs to exist, so it is credited the
@@ -321,7 +340,7 @@ test('50 parallel claims never exceed the cap plus paint', async () => {
 /* ── §10 the pixels outlive the process ───────────────────────── */
 
 test('claims survive a restart — a fresh process sees them', async () => {
-  await getJson('POST', '/api/dev/refill');
+  await refillMe();
   const idxs = freeRange(4);
   const r = await claim(idxs.map(i => [i, 0x7f00ff]));
   assert.equal(r.json.placed, 4);
@@ -372,10 +391,11 @@ test('a cycle reset promotes, archives and refills', async () => {
   const spent = await getJson('GET', '/api/allowance');
   assert.ok(spent.json.free < cfg.CAP);
 
-  const r = await getJson('POST', '/api/dev/reset');
-  assert.equal(r.code, 200);
-  assert.equal(r.json.live, booked, 'the prepaid layer is the new wall');
-  assert.equal(r.json.booked, 0);
+  /* what the panel's FORCE CYCLE RESET does, and what the 1st does on its
+     own — /api/dev/reset drove this before Phase 7 deleted it */
+  const r = wall.resetCycle(Date.now(), wall.cycleStart(wall.cycleEnd(Date.now())));
+  assert.equal(r.live, booked, 'the prepaid layer is the new wall');
+  assert.equal(r.booked, 0);
 
   assert.equal(wall.wall.live.size, booked);
   assert.equal(wall.wall.reserved.size, 0);

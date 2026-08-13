@@ -30,6 +30,14 @@ process.env.DATA_DIR = path.join(TMP, 'data');
    that races an auto-approver is a flaky one. Approvals here are driven by
    hand — moderation.test.js is where the auto path is exercised. */
 process.env.TG_MODE = 'webhook';
+/* The §9 token buckets are per minute and this file spends a day's worth
+   of requests in a second; raised so the assertions are about the caps and
+   the races they are testing rather than the rate limiter in front of them.
+   admin.test.js deliberately leaves RATE_AUTH alone — the login throttle is
+   one of the things it checks. */
+process.env.RATE_READ = '100000';
+process.env.RATE_WRITE = '100000';
+process.env.RATE_AUTH = '100000';
 delete process.env.VERCEL;
 delete process.env.DEV;
 delete process.env.ALLOW_ORIGIN;
@@ -178,7 +186,7 @@ test('GET /api/wall serves the seed as a decodable envelope', async () => {
   assert.ok(meta.cycleEnd > meta.cycle, 'cycle window');
   assert.equal(meta.rev, 0);
   assert.ok(Array.isArray(meta.owners) && meta.owners.length, 'owner table');
-  assert.equal(meta.dev, true);
+  assert.equal(meta.dev, undefined, 'the demo controls, and the flag that hid them, are gone');
   assert.deepEqual(meta.prices, { paint: 10, company: 10, packs: { 25: 225, 100: 800, 500: 3500 } });
   /* meta.me carried just the display name until Phase 2; it is the caller's
      whole standing now, because the page routes the pre-order button off it
@@ -288,8 +296,16 @@ test('GET /api/allowance matches what the claim reported', async () => {
   assert.match(r.json.handle, /^Pixel fan #\d{4}$/);
 });
 
-test('POST /api/dev/refill hands the free pixels back', async () => {
-  const r = await getJson('POST', '/api/dev/refill');
+test('a refilled allowance reads back through the API', async () => {
+  /* /api/dev/refill drove this until Phase 7 deleted the dev routes — an
+     unauthenticated endpoint that hands out free pixels was never going to
+     survive a hardening pass. The mechanic is the same one the panel's
+     adjust button uses. */
+  const identity = require('../server/identity.js');
+  const me = Number(String(jar.get('uid') || '').split('.')[0]);
+  identity.refill(identity.rowFor(me, Date.now()));
+
+  const r = await getJson('GET', '/api/allowance');
   assert.equal(r.code, 200);
   assert.equal(r.json.free, 20);
   assert.equal(r.json.refillAt, 0);
