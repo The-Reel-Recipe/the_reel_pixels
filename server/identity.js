@@ -605,6 +605,21 @@ function creditPaint(e, n) {
   return e;
 }
 
+/* Same credit, by id and without a transaction of its own: payments.js calls
+   it from inside the one that marks the money verified, so the balance and
+   the verification commit together or neither does (§6.3). */
+function creditPaintRaw(userId, n) {
+  bumpPaint.run(n, userId);
+  const cached = cache.get(userId);
+  if (cached) cached.paint = readAllowance.get(userId).paint;
+  return n;
+}
+
+/* Drop a cached row. The cache is a pure projection, so this costs one
+   SELECT next time and is the honest way to say "something changed
+   underneath you" from a module that does not hold the entry. */
+const forget = userId => cache.delete(userId);
+
 /* An idle row costs a Map entry and nothing else; SQLite keeps the truth. */
 setInterval(() => {
   const now = Date.now();
@@ -616,7 +631,8 @@ setInterval(() => {
 
 module.exports = {
   ipv6Prefix, callerKey, handleFor,
-  cache, rowFor, allowanceOf, writeAllowance, touch, refill, creditPaint, resetAllowances,
+  cache, rowFor, allowanceOf, writeAllowance, touch, refill,
+  creditPaint, creditPaintRaw, forget, resetAllowances,
   /* cookies + sessions */
   COOKIE, cookieValue, sessionCookie, clearCookie, verifyCookie, readCookie, resolve,
   /* caps */

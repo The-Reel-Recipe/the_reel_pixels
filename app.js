@@ -415,6 +415,8 @@ function openStream() {
       // a decision landed. Only ours are in the history we hold, and only
       // ours can be on the pending layer, so anything else is a no-op.
       onDecision(d.sid, d.status);
+    } else if (d.t === 'pay') {
+      onPayment(d.pid, d.status);
     } else if (d.t === 'reset') {
       resync('reset');
       toast('&#128465; The wall reset — prepaid pixels are up on a fresh cycle.', { cls: 'warn', dur: 5200 });
@@ -693,13 +695,122 @@ document.querySelectorAll('.pack').forEach(p => p.addEventListener('click', asyn
   const amt = +p.dataset.paint;
   p.disabled = true;
   try {
-    applyAllowance(await apiJson('/api/paint', { pack: amt }));
-    updateAll(); closeModal('modalPaint');
-    toast(`&#129699; <b>+${amt} paint</b> added! No waiting on the refill — paint straight past your free ${CAP}.`);
+    const order = await apiJson('/api/paint/order', { pack: amt });
+    closeModal('modalPaint');
+    openPay(order, `${amt} paint`);
   } catch (e) {
     toast('The paint shop is unreachable — try again.', { cls: 'err' });
   } finally { p.disabled = false; }
 }));
+
+/* ═══════════ INSTAPAY ═══════════
+   InstaPay has no merchant API, so there is no callback that says the money
+   arrived and nothing here can pretend otherwise. What the page can do is
+   make the transfer easy to get right — the amount, the destination and a
+   short code for the note — and then take the payer's word for it well
+   enough that a person can check it against their own app. */
+
+const pay = { order: null, what: '', shot: null, busy: false };
+
+function openPay(order, what) {
+  pay.order = order; pay.what = what || ''; pay.shot = null; pay.busy = false;
+  knownPayments.add(order.paymentId);
+  const egp = fmt(order.amountEgp);
+  $('pyAmount').textContent = `${egp} EGP`;
+  $('pyTo').textContent = order.handle || 'the InstaPay link below';
+  $('pyCode').textContent = order.code;
+  $('pyLink').href = order.url || '#';
+  $('pyLink').hidden = !order.url;
+
+  const qr = $('pyQrWrap');
+  // the official QR encodes an IPN payload — it is the user's own file or it
+  // is nothing, because a regenerated one would send money somewhere else
+  if (order.qr) { $('pyQr').src = order.qr; qr.hidden = false; } else { qr.hidden = true; }
+
+  $('pyHold').textContent = order.holdExpires
+    ? `Your spot is held until ${new Date(order.holdExpires).toLocaleString('en-US',
+      { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}.`
+    : `This order stays open for ${order.holdHours} hours.`;
+
+  $('pyRef').value = ''; $('pyFrom').value = '';
+  $('pyShotName').textContent = 'No file chosen';
+  for (const id of ['errPyRef', 'errPyFrom', 'errPyShot', 'errPy']) $(id).hidden = true;
+  $('pyForm').hidden = false; $('pySent').hidden = true;
+  $('pySubmit').disabled = false; $('pySubmit').textContent = 'I’VE SENT IT';
+  openModal('modalPay');
+}
+
+$('pyCopy').onclick = async () => {
+  const code = $('pyCode').textContent;
+  try {
+    await navigator.clipboard.writeText(code);
+    $('pyCopy').textContent = 'COPIED';
+    setTimeout(() => { $('pyCopy').textContent = 'COPY'; }, 1600);
+  } catch (e) {
+    // clipboard is blocked on insecure origins and in some embedded browsers
+    toast(`Copy it by hand: <b>${code}</b>`, { dur: 6000 });
+  }
+};
+
+$('pyShotPick').onclick = () => $('pyShot').click();
+$('pyShot').onchange = () => {
+  const f = $('pyShot').files[0];
+  pay.shot = f || null;
+  $('pyShotName').textContent = f ? f.name : 'No file chosen';
+  $('errPyShot').hidden = true;
+  // the server enforces this too; failing here saves a 5MB upload to be told so
+  if (f && f.size > 5 << 20) {
+    pay.shot = null;
+    showErr('errPyShot', 'That image is over 5 MB — a screenshot should be well under.');
+  }
+};
+
+$('pyProof').onsubmit = async e => {
+  e.preventDefault();
+  if (pay.busy || !pay.order) return;
+  for (const id of ['errPyRef', 'errPyFrom', 'errPy']) $(id).hidden = true;
+
+  pay.busy = true;
+  const btn = $('pySubmit');
+  btn.disabled = true; btn.textContent = 'SENDING…';
+  try {
+    /* Screenshot first, so the card the moderator gets has the picture on it
+       rather than arriving a second later without one. A failure here is not
+       fatal — the reference is the part that matters. */
+    if (pay.shot) {
+      const up = await fetch(`${API_BASE}/api/payments/${pay.order.paymentId}/screenshot`, {
+        method: 'POST', headers: { 'content-type': pay.shot.type || 'image/png' }, body: pay.shot
+      });
+      if (!up.ok) {
+        const d = await up.json().catch(() => ({}));
+        showErr('errPyShot', d.message || 'That image could not be read — carry on without it.');
+      }
+    }
+    const r = await apiPost(`/api/payments/${pay.order.paymentId}/proof`, {
+      instapay_ref: $('pyRef').value, payer_handle: $('pyFrom').value
+    });
+    if (!r.ok) {
+      const f = r.data.fields || {};
+      if (f.instapay_ref) showErr('errPyRef', f.instapay_ref);
+      if (f.payer_handle) showErr('errPyFrom', f.payer_handle);
+      if (!f.instapay_ref && !f.payer_handle) showErr('errPy', r.data.message || 'That did not go through — try again.');
+      return;
+    }
+    $('pyForm').hidden = true;
+    $('pySentSub').textContent = pay.what
+      ? `We are checking for your transfer. ${pay.what} lands the moment it is confirmed, and MY PIXELS tracks it.`
+      : 'We are checking for your transfer. You will see it land in MY PIXELS.';
+    $('pySent').hidden = false;
+    loadHistory(false);
+  } catch (err) {
+    showErr('errPy', 'Could not reach the server — try again in a moment.');
+  } finally {
+    pay.busy = false;
+    btn.disabled = false; btn.textContent = 'I’VE SENT IT';
+  }
+};
+
+$('pySentGo').onclick = () => { closeModal('modalPay'); openHistory(); };
 
 /* ── Help ── */
 $('btnHelp').onclick = () => openModal('modalHelp');
@@ -715,6 +826,8 @@ const HS_PAGE = 12;
    everyone, so this is what turns it into "was that mine?" without asking
    the server on every decision anyone gets. */
 const knownSubs = new Set();
+/* …and the same for payment ids, which arrive on the `pay` event */
+const knownPayments = new Set();
 const history = { rows: [], total: 0, loaded: 0, open: false, busy: false };
 
 const HS_CHIP = {
@@ -723,7 +836,23 @@ const HS_CHIP = {
   rejected: { cls: 'bad',  label: '❌ TURNED DOWN' },
   expired:  { cls: 'dim',  label: '⌛ EXPIRED' }
 };
-const HS_TYPE = { free: '\u{1F58C}️ FREE', paint: '\u{1F9F4} PAINT', brand: '\u{1F3E2} BRAND' };
+/* a pack never goes on a wall, so it needs its own words for the same
+   four states */
+const HS_CHIP_PACK = {
+  pending:  { cls: 'wait', label: '⏳ CHECKING' },
+  approved: { cls: 'live', label: '✅ PAINT ADDED' },
+  rejected: { cls: 'bad',  label: '❌ NOT RECEIVED' },
+  expired:  { cls: 'dim',  label: '⌛ EXPIRED' }
+};
+const chipFor = row =>
+  (row.type === 'pack' ? HS_CHIP_PACK : HS_CHIP)[row.status] || HS_CHIP.pending;
+/* `pack` is the odd one out: money with no pixels behind it yet, because
+   paint is only drawn when it is spent. It still belongs in this list —
+   the checkout tells the buyer to look for it here. */
+const HS_TYPE = {
+  free: '\u{1F58C}️ FREE', paint: '\u{1F9F4} PAINT',
+  brand: '\u{1F3E2} BRAND', pack: '\u{1F4B3} PAINT PACK'
+};
 /* a paid row says where the money got to as well as where the pixels did */
 const HS_PAY = {
   awaiting_transfer: 'awaiting your transfer',
@@ -757,7 +886,7 @@ function thumbCanvas(row) {
 function historyRow(row) {
   const el = document.createElement('div');
   el.className = 'hs-row';
-  const chip = HS_CHIP[row.status] || HS_CHIP.pending;
+  const chip = chipFor(row);
 
   const box = document.createElement('div');
   box.className = 'hs-thumb-box';
@@ -769,7 +898,7 @@ function historyRow(row) {
   const head = document.createElement('div');
   head.className = 'hs-head';
   head.innerHTML = `<b>${HS_TYPE[row.type] || row.type}</b>` +
-    `<span class="hs-px">${fmt(row.px)} px</span>` +
+    (row.type === 'pack' ? '' : `<span class="hs-px">${fmt(row.px)} px</span>`) +
     `<span class="hs-chip hs-${chip.cls}">${chip.label}</span>`;
   body.appendChild(head);
 
@@ -779,6 +908,7 @@ function historyRow(row) {
     { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   let text = when;
   if (row.brand) text += ` · ${row.brand}`;
+  if (row.type === 'pack') text += ` · ${fmt(row.px)} paint`;
   if (row.layer === 'next') text += ' · next cycle';
   if (row.payment) {
     text += ` · ${HS_PAY[row.payment.status] || row.payment.status}`;
@@ -813,7 +943,10 @@ async function loadHistory(more) {
     const d = await apiJson(`/api/me/history?limit=${HS_PAGE}&offset=${offset}`);
     history.rows = more ? history.rows.concat(d.rows) : d.rows;
     history.total = d.total;
-    for (const r of history.rows) knownSubs.add(r.sid);
+    for (const r of history.rows) {
+      if (r.sid) knownSubs.add(r.sid);          // a pack row has no submission
+      if (r.payment) knownPayments.add(r.payment.id);
+    }
     renderHistory();
   } catch (e) {
     $('hsEmpty').hidden = false;
@@ -839,6 +972,25 @@ function onDecision(sid, status) {
       { cls: 'warn', dur: 6000, action: { label: 'MY PIXELS', fn: openHistory } });
   } else if (status === 'approved') {
     toast('✅ Your pixels are on the wall.');
+  }
+}
+
+/* Money moved. Like `mod`, this goes to everyone and means nothing to
+   anybody but the payer — the paint balance is the tell, so the allowance
+   refetch is what actually updates the page. */
+function onPayment(pid, status) {
+  if (!knownPayments.has(pid)) return;
+  syncAllowance();
+  if (history.open) loadHistory(false);
+  if (status === 'verified') {
+    toast('&#129699; Payment confirmed — your paint is in.');
+  } else if (status === 'rejected' || status === 'expired') {
+    toast(status === 'rejected'
+      ? 'We could not find that transfer. Open <b>MY PIXELS</b> and try the reference again.'
+      : 'An order expired before the transfer arrived.',
+      { cls: 'warn', dur: 7000, action: { label: 'MY PIXELS', fn: openHistory } });
+  } else if (status === 'refunded') {
+    toast('&#128184; Your refund has been sent.');
   }
 }
 
@@ -1606,7 +1758,7 @@ function tryPlace() {
   if (pendingPlace.url) $('cfLink').textContent = pendingPlace.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
   $('cfGoLive').textContent = `${shortDate(cycleEndsAt())} · ${nextCycleName()}`;
   $('cfTotal').textContent = `${fmt(cells.length * PRICE_COMPANY)} EGP`;
-  const btn = $('btnConfirmPlace'); btn.disabled = false; btn.textContent = 'PAY & BOOK';
+  const btn = $('btnConfirmPlace'); btn.disabled = false; btn.textContent = 'BOOK & PAY';
   openModal('modalConfirm');
 }
 $('btnConfirmPlace').onclick = () => {
@@ -1621,13 +1773,17 @@ $('btnConfirmPlace').onclick = () => {
         cells.map(([dx, dy, col]) => [idx(gx + dx, gy + dy), rgbInt(col), 0]));
       pendingPlace = null;
       closeModal('modalConfirm');
-      toast(`&#127970; <b>${name}</b> is booked — ${fmt(d.booked)} px for ${fmt(d.cost)} EGP. ` +
-        `It goes live on ${shortDate(d.goesLive)}, when the wall resets.`, { dur: 5200 });
+      if (d.sid) knownSubs.add(d.sid);
+      for (const [dx, dy, col] of cells) addPending(idx(gx + dx, gy + dy), col);
+      updateAll();
       if (d.skipped) toast(`${fmt(d.skipped)} pixels were already booked and were skipped — you weren't charged for them.`, { cls: 'warn' });
       cancelPlacing();
-      // the pixels themselves arrive over the stream, as they do for everyone else
+      /* The spot is held, not bought. Straight into the transfer, because a
+         booking nobody pays for is 48 hours of dead ground. */
+      if (d.payment) openPay(d.payment, `${name}’s spot`);
+      else toast(`&#127970; <b>${name}</b> is booked — it goes live on ${shortDate(d.goesLive)}.`, { dur: 5200 });
     } catch (err) {
-      btn.disabled = false; btn.textContent = 'PAY & BOOK';
+      btn.disabled = false; btn.textContent = 'BOOK & PAY';
       /* the account stopped being allowed to book between opening the flow
          and confirming it — approval revoked, or a session that outlived it */
       if (err.data && err.data.error === 'brand-required') {

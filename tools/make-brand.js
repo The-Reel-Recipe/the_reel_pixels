@@ -61,11 +61,12 @@ function eachCell(text, fn) {
 
 /* ── Palette ──────────────────────────────────────────────────── */
 
-/* The theme pink is the t-shirt in the reference photo; the plum is what
-   the UI shell is built on. The wall itself is white paper, so artwork
+/* The theme pink is the t-shirt in the reference photo, sampled off it
+   rather than guessed (see the note at the top of styles.css); the plum is
+   what the UI shell is built on. The wall itself is white paper, so artwork
    that lands *on it* uses the deeper rose — the pale pink is a UI accent
    and would read as almost-blank on white. */
-const PINK = 0xF4C3CA;        // shirt pink — accent on dark
+const PINK = 0xF5C4C1;        // shirt pink — accent on dark
 const ROSE = 0xD81B60;        // the same hue with enough weight for white paper
 const PLUM = 0x2B1620;        // ink
 const PLUM_DEEP = 0x1B0F16;   // tile background

@@ -199,6 +199,76 @@
     </div>
   </div>
 
+  <!-- InstaPay — the one checkout, for packs and for bookings alike -->
+  <div class="overlay" id="modalPay" hidden>
+    <div class="modal modal-pay" role="dialog" aria-modal="true" aria-labelledby="pyTitle">
+      <button class="modal-x" data-close aria-label="Close">&times;</button>
+      <h2 id="pyTitle">&#9889; PAY WITH INSTAPAY</h2>
+
+      <div id="pyForm">
+        <div class="py-amount"><span>SEND</span><b id="pyAmount">0 EGP</b></div>
+
+        <ol class="py-steps">
+          <li>
+            <span>Send it to</span>
+            <span class="py-to" id="pyTo">&mdash;</span>
+          </li>
+          <li>
+            <span>Put this in the transfer note &mdash; it is how we match your payment:</span>
+            <span class="py-code-row">
+              <b class="py-code" id="pyCode">&mdash;</b>
+              <button type="button" class="btn-mini" id="pyCopy">COPY</button>
+            </span>
+          </li>
+          <li><span>Come back here and tell us the reference from your receipt.</span></li>
+        </ol>
+
+        <div class="py-go">
+          <a class="btn-claim py-open" id="pyLink" target="_blank" rel="noopener noreferrer">OPEN INSTAPAY &#8594;</a>
+          <figure class="py-qr" id="pyQrWrap" hidden>
+            <img id="pyQr" alt="InstaPay QR code" width="150" height="150">
+            <figcaption>or scan</figcaption>
+          </figure>
+        </div>
+
+        <form class="py-proof" id="pyProof" novalidate>
+          <p class="py-proof-head">Sent it? Tell us the reference and a person will confirm it, usually within the hour.</p>
+          <label class="fld">
+            <span class="lbl">TRANSACTION REFERENCE</span>
+            <input type="text" id="pyRef" maxlength="64" placeholder="from your InstaPay receipt" spellcheck="false">
+            <span class="fld-err" id="errPyRef" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">THE HANDLE YOU PAID FROM</span>
+            <input type="text" id="pyFrom" maxlength="64" placeholder="you@instapay" spellcheck="false">
+            <span class="cp-hint">If anything goes wrong, this is where the refund goes.</span>
+            <span class="fld-err" id="errPyFrom" hidden></span>
+          </label>
+          <label class="fld">
+            <span class="lbl">SCREENSHOT <i class="lbl-opt">OPTIONAL</i></span>
+            <div class="file-row">
+              <button type="button" id="pyShotPick" class="btn-file">CHOOSE FILE</button>
+              <span class="file-name" id="pyShotName">No file chosen</span>
+              <input type="file" id="pyShot" accept="image/png,image/jpeg,image/webp" hidden>
+            </div>
+            <span class="cp-hint">Speeds it up. We strip location data before storing it.</span>
+            <span class="fld-err" id="errPyShot" hidden></span>
+          </label>
+          <span class="fld-err" id="errPy" hidden></span>
+          <button class="btn-claim modal-cta" id="pySubmit" type="submit">I&rsquo;VE SENT IT</button>
+        </form>
+        <p class="fine" id="pyHold"></p>
+      </div>
+
+      <div id="pySent" class="co-success" hidden>
+        <div class="big-emoji">&#128340;</div>
+        <h3>WITH THE TEAM</h3>
+        <p id="pySentSub">We are checking for your transfer. You will see it land in MY PIXELS.</p>
+        <button class="btn-claim modal-cta" id="pySentGo">OPEN MY PIXELS</button>
+      </div>
+    </div>
+  </div>
+
   <!-- My pixels — every submission, and where it got to -->
   <div class="overlay" id="modalHistory" hidden>
     <div class="modal modal-history" role="dialog" aria-modal="true" aria-labelledby="hsTitle">
@@ -234,7 +304,9 @@
           <span class="pk-price">3,500 EGP</span><span class="pk-save">SAVE 30%</span>
         </button>
       </div>
-      <p class="fine">Paint never expires, so it keeps until you want it. Pixels painted with it go through the same review as free ones &mdash; if a batch is turned down, the paint comes straight back.</p>
+      <p class="fine">Paid by InstaPay and confirmed by a person &mdash; usually within the hour, and your
+        paint lands the moment it is. Paint never expires. Pixels painted with it go through the same
+        review as free ones; if a batch is turned down, the paint comes straight back.</p>
     </div>
   </div>
 
@@ -490,14 +562,16 @@
         <div class="co-row" id="cfLinkRow" hidden><span>CTA LINK</span><b id="cfLink" class="cf-link">—</b></div>
         <div class="co-row co-total"><span>TO PAY</span><b id="cfTotal">0 EGP</b></div>
       </div>
-      <div class="pay-methods" id="payMethods">
-        <label class="pm"><input type="radio" name="pm" value="card" checked><span>&#128179; CARD</span></label>
-        <label class="pm"><input type="radio" name="pm" value="vf"><span>&#128241; VODAFONE CASH</span></label>
-        <label class="pm"><input type="radio" name="pm" value="insta"><span>&#9889; INSTAPAY</span></label>
-        <label class="pm"><input type="radio" name="pm" value="fawry"><span>&#127978; FAWRY</span></label>
+      <div class="pay-single">
+        <span class="ps-icon" aria-hidden="true">&#9889;</span>
+        <div>
+          <b>INSTAPAY</b>
+          <span>Your spot is held for 48 hours while the transfer comes through.</span>
+        </div>
       </div>
-      <p class="fine">Prototype — mock payment. Prepaid now, live for the whole next cycle.</p>
-      <button class="btn-claim modal-cta" id="btnConfirmPlace">PAY &amp; BOOK</button>
+      <p class="fine">Your logo is reviewed like every other pixel. If it is turned down, the payment
+        is refunded to the InstaPay handle you paid from.</p>
+      <button class="btn-claim modal-cta" id="btnConfirmPlace">BOOK &amp; PAY</button>
     </div>
   </div>
 

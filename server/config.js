@@ -183,6 +183,9 @@ module.exports = Object.freeze({
      at in dev, and at 0 ms it would never be on screen. Tests set it to 0. */
   AUTO_APPROVE_MS: count('AUTO_APPROVE_MS', env.AUTO_APPROVE_MS, 2000),
   INSTAPAY_URL: href('INSTAPAY_URL', env.INSTAPAY_URL, ''),
+  /* Shown next to the link so a payer who would rather type the handle into
+     their own banking app than follow a link can. Same destination. */
+  INSTAPAY_HANDLE: (env.INSTAPAY_HANDLE || '').trim(),
   PUBLIC_URL: href('PUBLIC_URL', env.PUBLIC_URL, ''),
   ADMIN_IP_ALLOW: list(env.ADMIN_IP_ALLOW)
 });

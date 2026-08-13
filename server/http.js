@@ -13,7 +13,10 @@ const cfg = require('./config.js');
 const identity = require('./identity.js');
 const wall = require('./wall.js');
 const submissions = require('./submissions.js');
+const payments = require('./payments.js');
+const uploads = require('./uploads.js');
 const telegram = require('./telegram.js');
+const db = require('./db.js');
 
 const ROOT = cfg.ROOT;
 
@@ -226,16 +229,44 @@ async function handler(req, res) {
       if (gate) return sendJson(res, 403, gate);
       const { meta, a } = wall.decodeEnvelope(await readBody(req, 16 << 20));
       const r = wall.bookBrand(row, meta, a, now);
-      submissions.afterCreate(r.sid);
+      if (r.sid) {
+        /* The cells are held; the money is not in yet. The order carries the
+           same 48h hold, and letting it lapse is what puts the pixels back
+           (§6, brand bookings). */
+        const order = db.tx(() => payments.createOrder(row.id, 'brand_booking',
+          { px: r.booked, sid: r.sid }, now));
+        r.payment = payments.instructionsFor(order);
+        submissions.afterCreate(r.sid);
+      }
       return sendJson(res, 200, r);
     }
 
-    if (urlPath === '/api/paint' && req.method === 'POST') {
+    /* ── paying (§6) ── */
+
+    /* Buying paint is an order, not a purchase: nothing is credited until a
+       teammate has seen the money arrive in their own InstaPay app. */
+    if (urlPath === '/api/paint/order' && req.method === 'POST') {
       const { pack } = JSON.parse((await readBody(req, 4096)).toString('utf8'));
-      const price = cfg.PACKS[pack];
-      if (!price) return sendJson(res, 400, { error: 'unknown pack' });
-      identity.creditPaint(row, Number(pack));
-      return sendJson(res, 200, { bought: Number(pack), price, ...identity.allowanceOf(row, now) });
+      if (!cfg.PACKS[pack]) return sendJson(res, 400, { error: 'unknown pack' });
+      const order = db.tx(() => payments.createOrder(row.id, 'paint_pack', { pack: Number(pack) }, now));
+      return sendJson(res, 200, payments.instructionsFor(order));
+    }
+
+    const proof = urlPath.match(/^\/api\/payments\/(\d+)\/(proof|screenshot)$/);
+    if (proof && req.method === 'POST') {
+      const id = Number(proof[1]);
+      if (proof[2] === 'screenshot') {
+        const raw = await readBody(req, uploads.MAX_BYTES + 1024);
+        const stored = uploads.store(raw, `p${id}`);
+        if (stored.error) return sendJson(res, 400, stored);
+        const r = payments.attachScreenshot(id, row.id, stored.file, now);
+        if (r.error) return sendJson(res, r.status, r);
+        return sendJson(res, 200, { ok: true, bytes: stored.bytes });
+      }
+      const body = JSON.parse((await readBody(req, 4096)).toString('utf8'));
+      const r = payments.submitProof(id, row.id, body, now);
+      if (r.error) return sendJson(res, r.status, r);
+      return sendJson(res, 200, r);
     }
 
     /* ── prototype affordances — turn the lot off with DEV=0 ── */

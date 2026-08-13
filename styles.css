@@ -2,10 +2,15 @@
    S37 — SHAKHBAT 3AL 7EET · PIXEL WALL
 
    One colour decides the rest: the pink of the t-shirt in the
-   reference photo, #F4C3CA. It is a pale, warm rose, so it can only
-   be the accent — it needs something dark under it, and a dark plum
-   in the same hue family is what the shell is built from. The red of
-   the shirt's print does the danger duty.
+   reference photo. Sampled rather than eyeballed — six patches of
+   flat fabric away from the print and the folds read #F8C6C4 in full
+   light down to #C3919B in shadow, so the garment is a warm rose
+   (R > G ≈ B) and not the mauve a first guess made it. #F5C4C1 is
+   the lit fabric with the blown highlight pulled back.
+
+   It is pale, so it can only be the accent — it needs something dark
+   under it, and a plum in the same hue family is what the shell is
+   built from. The red of the shirt's print does the danger duty.
 
    --accent lands on dark chrome only. Artwork that goes on the wall
    itself uses the heavier rose in tools/make-brand.js, because the
@@ -20,9 +25,9 @@
   --border:      #3E2532;
   --border-2:    #5E3A4B;
   /* The shirt */
-  --accent:      #F4C3CA;
-  --accent-dim:  rgba(244, 195, 202, 0.22);
-  --accent-hi:   #FBDEE2;
+  --accent:      #F5C4C1;
+  --accent-dim:  rgba(245, 196, 193, 0.22);
+  --accent-hi:   #FBE1DF;
   --accent-ink:  #1A0D13;
   --text:        #F8F0F2;
   --text-dim:    #C3A6AF;
@@ -44,9 +49,9 @@
     --surface-2:  oklch(25% 0.038 355);
     --border:     oklch(32% 0.042 355);
     --border-2:   oklch(44% 0.05 355);
-    --accent:     oklch(85% 0.055 8);
-    --accent-dim: oklch(85% 0.055 8 / 0.22);
-    --accent-hi:  oklch(91% 0.033 8);
+    --accent:     oklch(85% 0.052 22);
+    --accent-dim: oklch(85% 0.052 22 / 0.22);
+    --accent-hi:  oklch(92% 0.030 22);
     --accent-ink: oklch(17% 0.032 355);
     --text:       oklch(96% 0.007 355);
     --text-dim:   oklch(76% 0.025 355);
@@ -101,8 +106,8 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   flex: 0 0 auto;
 }
 .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.brand-logo { height: 52px; width: auto; image-rendering: pixelated; filter: drop-shadow(0 0 12px rgba(244,195,202,0.25)); }
-.brand-text h1 { font-family: var(--fp); font-size: 17px; letter-spacing: 1px; color: var(--text); text-shadow: 3px 3px 0 rgba(244,195,202,0.22); white-space: nowrap; }
+.brand-logo { height: 52px; width: auto; image-rendering: pixelated; filter: drop-shadow(0 0 12px rgba(245,196,193,0.25)); }
+.brand-text h1 { font-family: var(--fp); font-size: 17px; letter-spacing: 1px; color: var(--text); text-shadow: 3px 3px 0 rgba(245,196,193,0.22); white-space: nowrap; }
 /* Where the sponsor strip used to be. That strip held five real
    trademarks nobody had licensed, so it is the name instead — Arabic
    first, because that is what the name actually is. */
@@ -117,7 +122,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   border-radius: var(--r);
   padding: 9px 14px;
   background: var(--accent-dim);
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.3), inset 0 0 18px rgba(244,195,202,0.08);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.3), inset 0 0 18px rgba(245,196,193,0.08);
 }
 .px-cal { width: 24px; color: var(--accent); animation: cal-tick 3.2s infinite; }
 @keyframes cal-tick { 0%,88%,100% { transform: none; } 92% { transform: translateY(-2px); } 96% { transform: none; } }
@@ -318,7 +323,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   filter: grayscale(0.4);
 }
 .tool:hover { border-color: var(--accent); transform: scale(1.08); }
-.tool.sel { border-color: var(--accent); background: var(--accent-dim); filter: none; box-shadow: 0 0 10px rgba(244,195,202,0.3); }
+.tool.sel { border-color: var(--accent); background: var(--accent-dim); filter: none; box-shadow: 0 0 10px rgba(245,196,193,0.3); }
 .palette { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .swatch {
   width: 26px; height: 26px;
@@ -394,7 +399,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   color: var(--accent-ink);
   border-radius: var(--r);
   padding: 15px 30px;
-  box-shadow: 0 5px 0 rgba(0,0,0,0.4), 0 0 24px rgba(244,195,202,0.25);
+  box-shadow: 0 5px 0 rgba(0,0,0,0.4), 0 0 24px rgba(245,196,193,0.25);
   transition: background .15s, transform .05s, box-shadow .05s;
   white-space: nowrap;
 }
@@ -511,7 +516,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   border: 2px solid var(--border-2);
   border-radius: var(--r-lg);
   padding: 30px 28px 26px;
-  box-shadow: 0 0 0 4px rgba(0,0,0,0.3), 0 30px 80px rgba(0,0,0,0.6), inset 0 0 60px rgba(244,195,202,0.03);
+  box-shadow: 0 0 0 4px rgba(0,0,0,0.3), 0 30px 80px rgba(0,0,0,0.6), inset 0 0 60px rgba(245,196,193,0.03);
   animation: modal-in .28s var(--expo);
   text-align: center;
 }
@@ -599,6 +604,76 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 }
 .pm input:checked + span { border-color: var(--accent); color: var(--text); background: var(--accent-dim); }
 .fine { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; }
+
+/* ═══════════ INSTAPAY ═══════════ */
+/* No merchant API means no callback, which means the transfer has to be
+   easy to get right by hand: the amount large, the code copyable, and the
+   destination said twice. */
+.modal-pay { width: min(520px, 100%); }
+.py-amount {
+  display: flex; align-items: baseline; justify-content: center; gap: 12px;
+  border: 2px solid var(--accent);
+  background: var(--accent-dim);
+  border-radius: var(--r);
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.py-amount span { font-family: var(--fp); font-size: 8px; color: var(--text-dim); }
+.py-amount b { font-family: var(--fp); font-size: 20px; color: var(--accent); }
+
+.py-steps { list-style: none; counter-reset: py; display: flex; flex-direction: column; gap: 14px; }
+.py-steps li {
+  counter-increment: py;
+  display: flex; flex-direction: column; gap: 8px;
+  padding-left: 34px; position: relative;
+  font-size: 13.5px; color: var(--text-dim); line-height: 1.5;
+}
+.py-steps li::before {
+  content: counter(py);
+  position: absolute; left: 0; top: -1px;
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  font-family: var(--fp); font-size: 9px;
+  color: var(--accent-ink); background: var(--accent);
+  border-radius: 4px;
+}
+.py-to {
+  font-family: var(--fp); font-size: 11px; color: var(--text);
+  word-break: break-all;
+}
+.py-code-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.py-code {
+  font-family: var(--fp); font-size: 16px; letter-spacing: 2px;
+  color: var(--accent);
+  border: 2px dashed var(--border-2);
+  border-radius: var(--r);
+  padding: 9px 13px;
+  user-select: all;                        /* one tap selects the whole code */
+}
+
+.py-go { display: flex; align-items: center; gap: 18px; margin: 20px 0 4px; }
+.py-open { flex: 1; text-align: center; text-decoration: none; display: block; }
+.py-qr { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+/* the QR is dark-on-white and unreadable on a plum background */
+.py-qr img { background: #fff; padding: 6px; border-radius: var(--r); display: block; }
+.py-qr figcaption { font-family: var(--fp); font-size: 7px; color: var(--text-dim); }
+
+.py-proof { display: flex; flex-direction: column; gap: 14px; margin-top: 22px;
+  border-top: 1px solid var(--border); padding-top: 20px; }
+.py-proof-head { font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+
+/* the confirm modal's one remaining payment method */
+.pay-single {
+  display: flex; align-items: center; gap: 14px;
+  border: 2px solid var(--border-2);
+  border-radius: var(--r);
+  padding: 13px 16px;
+  margin: 6px 0 14px;
+}
+.ps-icon { font-size: 20px; }
+.pay-single div { display: flex; flex-direction: column; gap: 3px; }
+.pay-single b { font-family: var(--fp); font-size: 10px; color: var(--accent); }
+.pay-single span { font-size: 12.5px; color: var(--text-dim); }
 
 /* ═══════════ MY PIXELS ═══════════ */
 /* The gap between "sent" and "on the wall" needs somewhere to live now that
@@ -964,8 +1039,8 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 .crop-box::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background:
-    linear-gradient(rgba(244,195,202,0.25) 1px, transparent 1px) 0 0 / 100% 33.33%,
-    linear-gradient(90deg, rgba(244,195,202,0.25) 1px, transparent 1px) 0 0 / 33.33% 100%;
+    linear-gradient(rgba(245,196,193,0.25) 1px, transparent 1px) 0 0 / 100% 33.33%,
+    linear-gradient(90deg, rgba(245,196,193,0.25) 1px, transparent 1px) 0 0 / 33.33% 100%;
 }
 .crop-box .ch {
   position: absolute; width: 11px; height: 11px;
@@ -1182,7 +1257,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   .topbar { padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: 8px; gap: 10px; }
   .brand { gap: 10px; }
   .brand-logo { height: 34px; }
-  .brand-text h1 { font-size: 11px; letter-spacing: 0.5px; text-shadow: 2px 2px 0 rgba(244,195,202,0.22); }
+  .brand-text h1 { font-size: 11px; letter-spacing: 0.5px; text-shadow: 2px 2px 0 rgba(245,196,193,0.22); }
   .tagline { gap: 8px; margin-top: 5px; }
   .tg-ar { font-size: 12px; }
 

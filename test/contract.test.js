@@ -205,9 +205,10 @@ test('GET /api/wall serves the seed as a decodable envelope', async () => {
 
   seedBody = bodyHash(r.body);
   /* Bump this deliberately, never to make the suite green: it is the tripwire
-     that says the committed artwork moved. Last set when the wall was
-     rebranded to S37 and the five unlicensed sponsor logos came out of it. */
-  assert.equal(SEED_HASH, 'f17635c8109f630b', 'seed.bin itself changed');
+     that says the committed artwork moved. Last set when the accent pink was
+     corrected to the value sampled off the reference photo, which the
+     confetti in the seed is drawn from. */
+  assert.equal(SEED_HASH, '120239fa2fecce00', 'seed.bin itself changed');
   assert.equal(seedBody, SEED_HASH, 'pixel payload drifted from the seed');
 
   /* the owner table is index-addressed by every entry above, so it has to

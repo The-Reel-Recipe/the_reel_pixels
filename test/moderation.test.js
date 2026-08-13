@@ -327,8 +327,10 @@ test('a reset expires free pending work and hands paint back', async () => {
   await req(me, 'GET', '/api/wall');                      // mint the identity
   const uid = uidOf(me);
 
-  /* paint first, so the second claim is a 'paint' submission */
-  await json(me, 'POST', '/api/paint', { pack: 25 });
+  /* paint first, so the second claim is a 'paint' submission. Credited
+     directly: how it gets bought is payments.test.js's subject. */
+  dbm.tx(() => identity.creditPaintRaw(uid, 25));
+  identity.forget(uid);
   const free = await claim(me, freeRange(2).map(i => [i, 0x121212]));
   dbm.db.prepare('UPDATE allowances SET used = ? WHERE user_id = ?').run(cfg.CAP, uid);
   identity.cache.delete(uid);

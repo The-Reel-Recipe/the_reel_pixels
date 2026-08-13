@@ -286,8 +286,15 @@ test('two concurrent claims for the same pixel — exactly one wins', async () =
 
 test('50 parallel claims never exceed the cap plus paint', async () => {
   await getJson('POST', '/api/dev/refill');
-  const bought = await getJson('POST', '/api/paint', JSON.stringify({ pack: 25 }));
-  assert.equal(bought.code, 200);
+  /* Paint used to arrive from a mock shop that credited on click. It is an
+     InstaPay order verified by a person now (§6), which is payments.test.js's
+     subject — here the balance just needs to exist, so it is credited the
+     same way a verification does it. */
+  const identity = require('../server/identity.js');
+  dbm.tx(() => identity.creditPaintRaw(meId(), 25));
+  identity.forget(meId());
+  const bought = await getJson('GET', '/api/allowance');
+  assert.equal(bought.json.paint, 25);
 
   const budget = bought.json.free + bought.json.paint;
   const idxs = freeRange(50);

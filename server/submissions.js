@@ -92,14 +92,38 @@ const selRecord = db.prepare(
      SUM(status = 'pending')  pending
    FROM submissions WHERE user_id = ? AND id <> ?`);
 
+/* Two kinds of row, one list. A submission is pixels, with or without money
+   behind it; a paint pack is money with no pixels at all — nothing is drawn
+   until the paint is spent later. The second kind still has to appear here,
+   because the checkout tells the buyer to look for it here. */
+const PAY_TO_STATUS = `CASE p.status
+    WHEN 'verified' THEN 'approved'
+    WHEN 'rejected' THEN 'rejected'
+    WHEN 'expired'  THEN 'expired'
+    ELSE 'pending' END`;
+
 const selHistory = db.prepare(
-  `SELECT s.id, s.type, s.layer, s.cycle, s.px_count, s.bbox, s.pixels, s.status,
+  `SELECT s.id sid, s.type, s.layer, s.cycle, s.px_count, s.bbox, s.pixels, s.status,
           s.created_at, s.decided_at, s.reject_reason, s.brand_name,
           p.id payment_id, p.status payment_status, p.amount payment_amount,
           p.code payment_code, p.kind payment_kind
      FROM submissions s LEFT JOIN payments p ON p.id = s.payment_id
-    WHERE s.user_id = ? ORDER BY s.id DESC LIMIT ? OFFSET ?`);
-const countHistory = db.prepare('SELECT COUNT(*) n FROM submissions WHERE user_id = ?');
+    WHERE s.user_id = ?
+   UNION ALL
+   SELECT NULL sid, 'pack' type, 'live' layer, 0 cycle, p.pack px_count, '[0,0,0,0]' bbox,
+          NULL pixels, ${PAY_TO_STATUS} status,
+          p.created_at, p.verified_at decided_at, NULL reject_reason, NULL brand_name,
+          p.id payment_id, p.status payment_status, p.amount payment_amount,
+          p.code payment_code, p.kind payment_kind
+     FROM payments p
+    WHERE p.user_id = ? AND p.kind = 'paint_pack'
+      AND NOT EXISTS (SELECT 1 FROM submissions x WHERE x.payment_id = p.id)
+   ORDER BY created_at DESC, payment_id DESC LIMIT ? OFFSET ?`);
+
+const countHistory = db.prepare(
+  `SELECT (SELECT COUNT(*) FROM submissions WHERE user_id = ?)
+        + (SELECT COUNT(*) FROM payments p WHERE p.user_id = ? AND p.kind = 'paint_pack'
+             AND NOT EXISTS (SELECT 1 FROM submissions x WHERE x.payment_id = p.id)) n`);
 
 /* ── Payment coupling (§6, wired in Phase 5) ──────────────────── */
 
@@ -317,10 +341,10 @@ function thumbOf(blob, bbox) {
 function historyFor(userId, opts) {
   const limit = Math.min(50, Math.max(1, Number(opts && opts.limit) || 20));
   const offset = Math.max(0, Number(opts && opts.offset) || 0);
-  const rows = selHistory.all(userId, limit, offset).map(r => {
+  const rows = selHistory.all(userId, userId, limit, offset).map(r => {
     const bbox = JSON.parse(r.bbox || '[0,0,0,0]');
     const out = {
-      sid: r.id, type: r.type, layer: r.layer, cycle: r.cycle,
+      sid: r.sid, type: r.type, layer: r.layer, cycle: r.cycle,
       px: r.px_count, bbox, thumb: thumbOf(r.pixels, bbox),
       status: r.status, at: r.created_at, decidedAt: r.decided_at || 0,
       reason: r.reject_reason || null, brand: r.brand_name || null
@@ -333,7 +357,7 @@ function historyFor(userId, opts) {
     }
     return out;
   });
-  return { rows, total: countHistory.get(userId).n, limit, offset };
+  return { rows, total: countHistory.get(userId, userId).n, limit, offset };
 }
 
 const recordOf = (userId, exceptSid) => {

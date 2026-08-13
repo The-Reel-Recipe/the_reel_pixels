@@ -30,6 +30,7 @@ const cfg = require('./config.js');
 const { db, tx, logEvent } = require('./db.js');
 const submissions = require('./submissions.js');
 const identity = require('./identity.js');
+const payments = require('./payments.js');
 const wall = require('./wall.js');
 const render = require('./render.js');
 
@@ -342,6 +343,114 @@ function editBrandDecision(userId, status, actor, now = Date.now()) {
   }, now);
 }
 
+/* ── Payment cards (§6) ───────────────────────────────────────── */
+
+/* The moderator's job here is to open their own InstaPay app and look for
+   the amount and the code. Everything they need to do that is in the
+   caption; the screenshot, when there is one, is the photo. */
+const selPay = db.prepare(
+  `SELECT p.*, u.handle, s.id sid, s.px_count, s.brand_name
+     FROM payments p JOIN users u ON u.id = p.user_id
+     LEFT JOIN submissions s ON s.payment_id = p.id
+    WHERE p.id = ?`);
+
+const PAY_HEAD = { paint_pack: '💳 PAINT PACK', brand_booking: '🏢 BRAND BOOKING' };
+const PAY_STATE = {
+  awaiting_transfer: 'waiting for the transfer',
+  submitted: 'SAYS THEY HAVE PAID',
+  verified: '✅ VERIFIED',
+  rejected: '🚫 NOT RECEIVED',
+  refund_due: '💸 REFUND OWED',
+  refunded: '💸 REFUNDED',
+  expired: '⌛ EXPIRED'
+};
+
+function payCaption(p, now) {
+  const bits = [
+    `<b>${PAY_HEAD[p.kind] || p.kind} ${esc(p.code)}</b>`,
+    esc(p.brand_name || p.handle),
+    money(p.amount)
+  ];
+  if (p.kind === 'paint_pack') bits.push(`${p.pack} paint`);
+  if (p.sid) bits.push(`#s${p.sid} · ${p.px_count} px`);
+  bits.push(PAY_STATE[p.status] || p.status);
+  const tail = [];
+  if (p.instapay_ref) tail.push(`ref <code>${esc(p.instapay_ref)}</code>`);
+  if (p.payer_handle) tail.push(`from <code>${esc(p.payer_handle)}</code>`);
+  return bits.join(' · ') + (tail.length ? `\n${tail.join(' · ')}` : '') +
+    `\n<i>look for ${money(p.amount)} with “${esc(p.code)}” in the note</i>`;
+}
+
+const payKeys = pid => ({
+  inline_keyboard: [[btn('💵 Money received', `mv:${pid}`), btn('🚫 Not received', `mn:${pid}`)]]
+});
+const refundKeys = pid => ({ inline_keyboard: [[btn('💸 Refund sent', `rf:${pid}`)]] });
+
+function cardForPayment(paymentId, now = Date.now()) {
+  if (!on()) return null;
+  const p = selPay.get(paymentId);
+  if (!p) return null;
+
+  const params = {
+    chat_id: cfg.TG_CHAT_ID,
+    caption: payCaption(p, now),
+    parse_mode: 'HTML',
+    reply_markup: payKeys(paymentId)
+  };
+  /* A screenshot makes the card a photo; without one there is nothing to
+     look at, so it goes as text and sendMessage wants `text`, not `caption`. */
+  if (p.screenshot_path && fs.existsSync(p.screenshot_path)) {
+    params.photoPath = p.screenshot_path;
+    return tx(() => enqueue('sendPhoto', { about: { kind: 'payment', id: paymentId }, params }, now));
+  }
+  const { caption, ...rest } = params;
+  return tx(() => enqueue('sendMessage', {
+    about: { kind: 'payment', id: paymentId },
+    params: { ...rest, text: caption }
+  }, now));
+}
+
+/* A payment card can be either a photo or a message, and Telegram has a
+   different edit method for each. Which one it was is recoverable from
+   whether a screenshot was ever attached. */
+function editPayment(paymentId, status, actor, now = Date.now()) {
+  if (!on()) return null;
+  const p = selPay.get(paymentId);
+  if (!p) return null;
+  const when = new Date(now).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const body = payCaption(p, now) +
+    `\n\n${PAY_STATE[p.status] || p.status} · ${esc(actor)} · ${when}`;
+  const photo = !!(p.screenshot_path && fs.existsSync(p.screenshot_path));
+  /* refund_due is the one state that keeps a button: somebody still has to
+     send the money and then say so. */
+  const markup = p.status === 'refund_due' ? refundKeys(paymentId) : { inline_keyboard: [] };
+  return enqueue(photo ? 'editMessageCaption' : 'editMessageText', {
+    about: { kind: 'payment', id: paymentId },
+    params: photo
+      ? { chat_id: cfg.TG_CHAT_ID, caption: body, parse_mode: 'HTML', reply_markup: markup }
+      : { chat_id: cfg.TG_CHAT_ID, text: body, parse_mode: 'HTML', reply_markup: markup }
+  }, now);
+}
+
+/* §6: a refund nobody is nagged about is a refund that does not happen. This
+   is a *new* message rather than an edit on purpose — an edit to a card that
+   has scrolled out of view is not a reminder. */
+function remindRefund(paymentId, now = Date.now()) {
+  if (!on()) return null;
+  const p = selPay.get(paymentId);
+  if (!p || p.status !== 'refund_due') return null;
+  return tx(() => enqueue('sendMessage', {
+    params: {
+      chat_id: cfg.TG_CHAT_ID,
+      text: `💸 <b>Still owed:</b> ${money(p.amount)} back to <code>${esc(p.payer_handle || '—')}</code>` +
+        `\norder ${esc(p.code)} · ${esc(p.brand_name || p.handle)}` +
+        `\n\nSend it from InstaPay, then tap below.`,
+      parse_mode: 'HTML',
+      reply_markup: refundKeys(paymentId)
+    }
+  }, now));
+}
+
 /* ── Callbacks ────────────────────────────────────────────────── */
 
 const isMod = id => cfg.TG_MOD_IDS.length === 0 || cfg.TG_MOD_IDS.includes(Number(id));
@@ -399,6 +508,18 @@ async function onCallback(q) {
       return r;
     }
     await answer(q.id, verb === 'ap' ? 'Approved — it is on the wall.' : `Rejected: ${reason}`);
+    return r;
+  }
+
+  if (verb === 'mv' || verb === 'mn' || verb === 'rf') {
+    const pid = Number(a);
+    const r = verb === 'mv' ? payments.verify(pid, actor, now)
+      : verb === 'mn' ? payments.reject(pid, actor, now)
+        : payments.markRefunded(pid, actor, now);
+    if (r.missing) { await answer(q.id, 'That order is gone.', true); return r; }
+    if (!r.ok) { await answer(q.id, `Already ${String(r.already).replace('_', ' ')}.`, true); return r; }
+    await answer(q.id, verb === 'mv' ? 'Verified — paint credited.'
+      : verb === 'mn' ? 'Marked as not received.' : 'Refund recorded. Thank you.');
     return r;
   }
 
@@ -536,6 +657,17 @@ function digestCheck(now = Date.now()) {
 submissions.onCreated(sid => cardForSubmission(sid));
 submissions.onDecided((sub, status, actor, reason) => editDecision(sub, status, actor, reason));
 
+/* payments.js is the same arrangement: it announces, this decides that means
+   a card, and it calls back into submissions for the one thing it cannot do
+   itself — letting go of cells an unpaid booking was holding. */
+payments.attach({
+  card: pid => cardForPayment(pid),
+  edit: (pid, status, actor) => editPayment(pid, status, actor),
+  remind: pid => remindRefund(pid),
+  notify: (userId, pid, status) => wall.notify({ t: 'pay', pid, status }),
+  voidSubmission: (sid, actor, reason, now) => submissions.reject(sid, actor, reason, now)
+});
+
 function start() {
   if (!on()) {
     if (cfg.TG_MODE === 'off') console.log('telegram   →  off (submissions auto-approve after ' +
@@ -556,6 +688,7 @@ module.exports = {
   startPolling, stopPolling, pollOnce,
   call, captionFor, decideKeys, reasonKeys, REASONS,
   cardForSubmission, editDecision, cardForBrand, editBrandDecision,
+  cardForPayment, editPayment, remindRefund, payCaption,
   onUpdate, onCallback, onCommand, secretOk, digestCheck,
   status: () => outboxDepth.get()
 };
