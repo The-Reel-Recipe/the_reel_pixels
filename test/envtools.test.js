@@ -243,6 +243,31 @@ test('--init will not write a group with nobody in it to moderate', () => {
   assert.equal(envfile.read(f).TG_MOD_IDS, '');
 });
 
+test('a network that will not answer is not blamed on the token', () => {
+  /* Telegram answers an *invalid* token in under a second, so a hang is
+     always something in between — a proxy, a firewall, a sandbox that does
+     not allow the authenticated Bot API. Saying "rejected that token" here
+     sends somebody hunting for a typo in a perfectly good credential,
+     which is exactly what happened the first time this was run for real. */
+  const dir = tmp();
+  const f = path.join(dir, '.env');
+  runNode('make-env.js', [f]);
+
+  const shim = path.join(dir, 'hang.js');
+  fs.writeFileSync(shim,
+    'globalThis.fetch = () => Promise.reject(Object.assign(new Error("timed out"), ' +
+    '{ name: "TimeoutError" }));');
+  const r = spawnSync(process.execPath,
+    ['--require', shim, path.join(ROOT, 'tools', 'tg-setup.js'), '--init', f, '--token', '1:AA'],
+    { cwd: ROOT, encoding: 'utf8', env: { ...process.env, TG_BOT_TOKEN: '', NODE_ENV: 'development' } });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /no answer from api\.telegram\.org/);
+  assert.match(r.stderr, /This is the network, not the token/);
+  assert.equal(/rejected that token/.test(r.stderr), false, 'it blamed the credential');
+  assert.equal(envfile.read(f).TG_CHAT_ID, '', 'and wrote nothing');
+});
+
 test('a rejected token is a sentence, not a stack trace', () => {
   const dir = tmp();
   const f = path.join(dir, '.env');

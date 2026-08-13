@@ -35,12 +35,45 @@ const flag = name => {
    before anything has been written to the env file at all. */
 let TOKEN = (typeof flag('token') === 'string' ? flag('token') : '') || cfg.TG_BOT_TOKEN;
 
-const api = (method, params) => fetch(
-  `https://api.telegram.org/bot${TOKEN}/${method}`,
-  params
-    ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(params) }
-    : undefined
-).then(r => r.json());
+/* A failure to reach Telegram and a refusal from Telegram are different
+   problems with different fixes, and conflating them sends somebody
+   hunting for a typo in a credential that is perfectly good. So transport
+   failures are tagged and reported as themselves.
+
+   The timeout matters as much as the tag: fetch has none by default, so a
+   proxy that accepts the connection and then says nothing leaves this
+   hanging until somebody gets bored — which reads as "the tool is broken"
+   rather than "the network is". */
+async function api(method, params) {
+  const url = `https://api.telegram.org/bot${TOKEN}/${method}`;
+  let res;
+  try {
+    res = await fetch(url, Object.assign(
+      { signal: AbortSignal.timeout(20000) },
+      params
+        ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(params) }
+        : {}));
+  } catch (err) {
+    const e = new Error(err.name === 'TimeoutError'
+      ? 'no answer from api.telegram.org within 20s'
+      : `could not reach api.telegram.org — ${err.message}`);
+    e.transport = true;
+    throw e;
+  }
+  return res.json();
+}
+
+/* Everything below wants the same sentence when the network is the
+   problem, and it is never the token. */
+function reportTransport(err) {
+  console.error(`\n  ${err.message}\n`);
+  console.error('  This is the network, not the token — Telegram answers an *invalid*');
+  console.error('  token instantly, so a hang means something between here and them is');
+  console.error('  holding the reply. Check for a proxy, a firewall, or a sandbox that');
+  console.error('  does not allow the authenticated Bot API.\n');
+  console.error('  Run the same command from the box the wall will live on.\n');
+  process.exit(1);
+}
 
 function need(name, value) {
   if (value) return value;
@@ -138,7 +171,10 @@ async function init(file) {
     process.exit(1);
   }
 
-  const me = await api('getMe');
+  const me = await api('getMe').catch(err => {
+    if (err.transport) reportTransport(err);
+    throw err;
+  });
   if (!me.ok) {
     console.error(`\n  Telegram rejected that token: ${me.description}`);
     console.error('  Check you copied the whole thing, including the digits before the colon.\n');
@@ -228,4 +264,8 @@ async function testMessage() {
   if (arg === 'poll') return clearWebhook();
   if (arg === 'test') return testMessage();
   return whoami();
-})().catch(err => { console.error('\n ', err.message, '\n'); process.exit(1); });
+})().catch(err => {
+  if (err.transport) reportTransport(err);
+  console.error('\n ', err.message, '\n');
+  process.exit(1);
+});

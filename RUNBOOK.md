@@ -137,11 +137,15 @@ messages and writes all three values into the env file:
 
 ```bash
 cd /srv/s37
-sudo -u s37 npm run tg -- --init /etc/s37.env --token <the token>
+sudo -u s37 node tools/tg-setup.js --init /etc/s37.env --token <the token>
 systemctl restart s37
-sudo -u s37 npm run tg -- --webhook
-sudo -u s37 npm run tg -- --test      # a message should appear in the group
+sudo -u s37 node tools/tg-setup.js --webhook
+sudo -u s37 node tools/tg-setup.js --test      # a message should appear in the group
 ```
+
+> `node tools/tg-setup.js` rather than `npm run tg --`: npm swallows any
+> argument that looks like one of its own config flags, `--init` and
+> `--token` included, and passes the rest along stripped of both.
 
 `--init` refuses rather than guesses: if the bot has heard from two
 groups, or from no humans, it says so and writes nothing. Telegram will
