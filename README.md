@@ -31,7 +31,14 @@ npm run admin -- <name>    # make an admin account (the only way)
 npm run tg        # inspect / wire up the Telegram bot
 npm run fonts     # self-host the two typefaces, tighten the CSP
 npm run make-brand         # regenerate the logo, wordmark and seed artwork
+npm run icons              # rebuild the icon sprite, and a sheet to check it
 ```
+
+Two runtime dependencies, both argued for in PLAN §1: `better-sqlite3`
+and `pngjs`. The icons come from `pixelarticons` (MIT), which is a
+**dev** dependency — the chosen ones are compiled into `index.html` as
+inline `<symbol>`s, so `npm ci --omit=dev` on the server installs
+neither it nor anything else.
 
 Deploying is [RUNBOOK.md](RUNBOOK.md). Why it is built this way is
 [PLAN.md](PLAN.md).
@@ -56,8 +63,7 @@ server/
 admin/            the panel (vanilla, behind the session)
 ```
 
-Two dependencies, both argued for in PLAN §1: `better-sqlite3` and
-`pngjs`. The client is vanilla JS and a canvas.
+The client is vanilla JS and a canvas.
 
 ## The three things worth knowing
 

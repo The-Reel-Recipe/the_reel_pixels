@@ -1,542 +1,101 @@
 /* ═══════════════════════════════════════════════════════════════
-   make-icons — the interface's icons, drawn on the same grid the
-   wall is
+   make-icons — the interface's icons
 
      node tools/make-icons.js            rebuild the sprite in index.html
-     node tools/make-icons.js --sheet    …and a contact sheet to look at
+     node tools/make-icons.js --sheet    …and a page to look at them on
+     node tools/make-icons.js --find x   search the library for a name
 
-   The UI ran on emoji, which is three problems in one: they render
-   as somebody else's artwork (a different somebody on every OS),
-   they cannot take a colour, and half of them are the wrong metaphor
-   at 12px. So: a hand-drawn set instead.
+   The UI ran on emoji, which is three problems in one: they render as
+   somebody else's artwork (a different somebody on every OS), they
+   cannot take a colour, and half of them are the wrong metaphor at
+   12px.
 
-   Pixel-grid rather than the rounded-stroke house style everyone
-   uses, because this product is a pixel wall — its logo is pixels,
-   its typeface is pixels, and a Feather-style 1.5px rounded stroke
-   next to `Press Start 2P` looks like it wandered in from a
-   different application. Two icons already in the page (the cycle
-   calendar and the paint bucket) were drawn this way; the rest now
-   match them.
+   The replacement is `pixelarticons` — 564 icons drawn on a 24×24
+   grid, MIT, by Gerrit Halfmann. Pixel-art rather than the
+   rounded-stroke house style everyone else ships, which matters here
+   more than it usually would: this product is a pixel wall, its logo
+   is pixels and its typeface is pixels, so a 1.5px rounded stroke
+   would look like it wandered in from a different application.
 
-   Each icon is 16×16, authored as `#` and `.`, and compiled to a
-   single <path> of merged horizontal runs. They inherit currentColor
-   and scale to any size, which is the whole reason they are not
-   still emoji.
+   A **dev** dependency on purpose. The chosen icons are compiled into
+   index.html as inline <symbol>s by this script, so nothing from the
+   package is on the runtime path and PLAN §1's two-dependency rule
+   still holds — `npm ci --omit=dev` on the server installs
+   better-sqlite3 and pngjs and nothing else.
+
+   To change an icon: edit MAP, re-run, look at the sheet.
    ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
-const { PNG } = require('pngjs');
-const { eachCell, textWidth } = require('./make-brand.js');
 
 const ROOT = path.join(__dirname, '..');
-const N = 16;
+const LIB = path.join(ROOT, 'node_modules', 'pixelarticons', 'svg');
 
-/* ── The set ──────────────────────────────────────────────────── */
+/* ── What the page asks for → what the library calls it ───────── */
 
-const ICONS = {
-  /* a block with windows and a door — brand accounts and pre-orders */
-  brand: [
-    '................',
-    '..############..',
-    '..#..........#..',
-    '..#.##.##.##.#..',
-    '..#..........#..',
-    '..#.##.##.##.#..',
-    '..#..........#..',
-    '..#.##.##.##.#..',
-    '..#..........#..',
-    '..#.##.##.##.#..',
-    '..#..........#..',
-    '..#...####...#..',
-    '..#...#..#...#..',
-    '..#...#..#...#..',
-    '..############..',
-    '................'
-  ],
-  /* MY PIXELS, and anything about elapsed time */
-  clock: [
-    '................',
-    '.....######.....',
-    '...##......##...',
-    '..#..........#..',
-    '.#......#.....#.',
-    '.#......#.....#.',
-    '#.......#......#',
-    '#.......#####..#',
-    '#..............#',
-    '#..............#',
-    '.#............#.',
-    '.#............#.',
-    '..#..........#..',
-    '...##......##...',
-    '.....######.....',
-    '................'
-  ],
-  /* waiting on a moderator */
-  hourglass: [
-    '................',
-    '..###########...',
-    '..###########...',
-    '...#.......#....',
-    '....#.....#.....',
-    '.....#...#......',
-    '......#.#.......',
-    '.......#........',
-    '......#.#.......',
-    '.....#...#......',
-    '....#..#..#.....',
-    '...#..###..#....',
-    '..#.#######.#...',
-    '..###########...',
-    '..###########...',
-    '................'
-  ],
-  /* approved, verified, live */
-  check: [
-    '................',
-    '................',
-    '.............###',
-    '............###.',
-    '...........###..',
-    '..........###...',
-    '.........###....',
-    '.#......###.....',
-    '.##....###......',
-    '.###..###.......',
-    '..######........',
-    '...####.........',
-    '....##..........',
-    '................',
-    '................',
-    '................'
-  ],
-  /* turned down, not received */
-  cross: [
-    '................',
-    '................',
-    '..##........##..',
-    '..###......###..',
-    '...###....###...',
-    '....###..###....',
-    '.....######.....',
-    '......####......',
-    '......####......',
-    '.....######.....',
-    '....###..###....',
-    '...###....###...',
-    '..###......###..',
-    '..##........##..',
-    '................',
-    '................'
-  ],
-  /* InstaPay */
-  bolt: [
-    '................',
-    '..........####..',
-    '.........####...',
-    '........####....',
-    '.......####.....',
-    '......####......',
-    '.....##########.',
-    '......#########.',
-    '.........###....',
-    '........###.....',
-    '.......###......',
-    '......###.......',
-    '.....###........',
-    '....###.........',
-    '................',
-    '................'
-  ],
-  /* brush tool */
-  brush: [
-    '................',
-    '...........####.',
-    '..........#####.',
-    '.........#####..',
-    '........#####...',
-    '.......#####....',
-    '......#####.....',
-    '.....#####......',
-    '....######......',
-    '...######.......',
-    '..######........',
-    '.######.........',
-    '.#####..........',
-    '.####...........',
-    '..##............',
-    '................'
-  ],
-  /* pan / move tool */
-  hand: [
-    '................',
-    '......##........',
-    '.....#..#.......',
-    '.....#..#.##....',
-    '.....#..#.##....',
-    '..##.#..#.#.##..',
-    '.#..##..#.#.#.#.',
-    '.#............#.',
-    '.#............#.',
-    '..#..........#..',
-    '..#..........#..',
-    '...#........#...',
-    '....#......#....',
-    '.....########...',
-    '................',
-    '................'
-  ],
-  /* find a free spot */
-  search: [
-    '................',
-    '....######......',
-    '...#......#.....',
-    '..#........#....',
-    '.#..........#...',
-    '.#..........#...',
-    '.#..........#...',
-    '.#..........#...',
-    '..#........#....',
-    '...#......#.....',
-    '....######.##...',
-    '..........####..',
-    '...........####.',
-    '............####',
-    '.............###',
-    '................'
-  ],
-  /* something needs reading before it is agreed to */
-  warn: [
-    '................',
-    '.......##.......',
-    '.......##.......',
-    '......####......',
-    '......#..#......',
-    '.....##..##.....',
-    '.....#.##.#.....',
-    '....##.##.##....',
-    '....#..##..#....',
-    '...##..##..##...',
-    '...#...##...#...',
-    '..##........##..',
-    '..#....##....#..',
-    '.##############.',
-    '.##############.',
-    '................'
-  ],
-  /* a sponsor's pixels open their site. Two overlapping frames rather than
-     a chain link — a chain at 16px is two blobs touching. */
-  link: [
-    '................',
-    '.......#########',
-    '.......#.......#',
-    '.......#.......#',
-    '.###########...#',
-    '.#.........#...#',
-    '.#.........#...#',
-    '.#.........#####',
-    '.#.........#....',
-    '.#.........#....',
-    '.#.........#....',
-    '.###########....',
-    '................',
-    '................',
-    '................',
-    '................'
-  ],
-  /* booked ground — somebody else's, or ratio-locked */
-  lock: [
-    '................',
-    '.....######.....',
-    '....##....##....',
-    '...##......##...',
-    '...##......##...',
-    '...##......##...',
-    '..##########....',
-    '..############..',
-    '..############..',
-    '..####..######..',
-    '..###....#####..',
-    '..###....#####..',
-    '..####..######..',
-    '..############..',
-    '..############..',
-    '................'
-  ],
-  /* …and released */
-  unlock: [
-    '................',
-    '.....######.....',
-    '....##....##....',
-    '...##......##...',
-    '...##...........',
-    '...##...........',
-    '..##########....',
-    '..############..',
-    '..############..',
-    '..####..######..',
-    '..###....#####..',
-    '..###....#####..',
-    '..####..######..',
-    '..############..',
-    '..############..',
-    '................'
-  ],
-  /* yours */
-  star: [
-    '................',
-    '.......##.......',
-    '.......##.......',
-    '......####......',
-    '......####......',
-    '#############...',
-    '.###########....',
-    '..#########.....',
-    '...#######......',
-    '..#########.....',
-    '..###...###.....',
-    '.###.....###....',
-    '.##.......##....',
-    '................',
-    '................',
-    '................'
-  ],
-  /* another visitor's pixels */
-  person: [
-    '................',
-    '......####......',
-    '.....######.....',
-    '.....######.....',
-    '.....######.....',
-    '......####......',
-    '................',
-    '...##########...',
-    '..############..',
-    '.##############.',
-    '.##############.',
-    '.##############.',
-    '.##############.',
-    '.##############.',
-    '................',
-    '................'
-  ],
-  /* money going back */
-  refund: [
-    '................',
-    '................',
-    '..############..',
-    '..#..........#..',
-    '..#...####...#..',
-    '..#..##..##..#..',
-    '..#..##..##..#..',
-    '..#...####...#..',
-    '..#..........#..',
-    '..############..',
-    '................',
-    '.....#..........',
-    '....##..........',
-    '...###########..',
-    '....##..........',
-    '.....#..........'
-  ],
-  /* a paint pack — money with no pixels behind it yet */
-  card: [
-    '................',
-    '................',
-    '.##############.',
-    '.##############.',
-    '.##############.',
-    '.#............#.',
-    '.#............#.',
-    '.#............#.',
-    '.#..####......#.',
-    '.#..####......#.',
-    '.#............#.',
-    '.##############.',
-    '................',
-    '................',
-    '................',
-    '................'
-  ],
-  /* next step */
-  'arrow-right': [
-    '................',
-    '................',
-    '.......##.......',
-    '........##......',
-    '.........##.....',
-    '..........##....',
-    '###############.',
-    '###############.',
-    '..........##....',
-    '.........##.....',
-    '........##......',
-    '.......##.......',
-    '................',
-    '................',
-    '................',
-    '................'
-  ],
-  /* crop tightly around a logo */
-  crop: [
-    '................',
-    '...##.....##....',
-    '...##.....##....',
-    '....##...##.....',
-    '.....##.##......',
-    '......###.......',
-    '.......#........',
-    '......###.......',
-    '.....##.##......',
-    '....##...##.....',
-    '...###...###....',
-    '..##.##.##.##...',
-    '..##.##.##.##...',
-    '...###...###....',
-    '................',
-    '................'
-  ],
-  /* the server is not answering — an unplugged plug */
-  offline: [
-    '................',
-    '....##....##....',
-    '....##....##....',
-    '....##....##....',
-    '..##########....',
-    '..#........#....',
-    '..#........#....',
-    '..#........#....',
-    '...#......#.....',
-    '....######......',
-    '......##........',
-    '......##........',
-    '......##........',
-    '................',
-    '................',
-    '................'
-  ],
-  /* fit the whole wall on screen — corner brackets, which say "frame the
-     lot" where a filled square said "here is a square" */
-  fit: [
-    '................',
-    '..#####....#####',
-    '..#####....#####',
-    '..##..........##',
-    '..##..........##',
-    '................',
-    '................',
-    '................',
-    '................',
-    '..##..........##',
-    '..##..........##',
-    '..#####....#####',
-    '..#####....#####',
-    '................',
-    '................',
-    '................'
-  ],
-  /* the wall wiped and started again — a cycle, not a bin. The bin this
-     replaced said "deleted", and a monthly reset is not a deletion. */
-  reset: [
-    '................',
-    '.....#####..###.',
-    '...##.....#.###.',
-    '..#........#####',
-    '.#..........###.',
-    '.#...........#..',
-    '#...............',
-    '#...............',
-    '#...............',
-    '#...............',
-    '.#..............',
-    '.#............#.',
-    '..#..........#..',
-    '...##......##...',
-    '.....######.....',
-    '................'
-  ],
-  /* it worked — a burst, which survives 16px where a party popper did not */
-  celebrate: [
-    '................',
-    '.......##.......',
-    '.......##.......',
-    '..#....##....#..',
-    '..##...##...##..',
-    '...##..##..##...',
-    '....##.##.##....',
-    '.####..###..####',
-    '.####..###..####',
-    '....##.##.##....',
-    '...##..##..##...',
-    '..##...##...##..',
-    '..#....##....#..',
-    '.......##.......',
-    '.......##.......',
-    '................'
-  ],
-  /* the monthly cycle */
-  calendar: [
-    '................',
-    '...##......##...',
-    '...##......##...',
-    '.##############.',
-    '.##############.',
-    '.#............#.',
-    '.#.##.##.##.##.#',
-    '.#............#.',
-    '.#.##.##.##.##.#',
-    '.#............#.',
-    '.#.##.##.##....#',
-    '.#............#.',
-    '.##############.',
-    '................',
-    '................',
-    '................'
-  ],
-  /* prepaid pixels — a bucket and a drip, matching the one already drawn
-     into the action bar */
-  paint: [
-    '................',
-    '................',
-    '..###########...',
-    '..###########...',
-    '..#.........#...',
-    '..#.........#...',
-    '...#.......#....',
-    '...#.......#....',
-    '....#.....#..##.',
-    '....#.....#.####',
-    '.....#...#..####',
-    '.....#####..###.',
-    '.............#..',
-    '................',
-    '................',
-    '................'
-  ]
+/* Left column is the name the code uses, and it stays stable: `refund`
+   means "money going back" whatever picture ends up representing it. */
+const MAP = {
+  /* identity and ownership */
+  brand: 'building',            // brand accounts, pre-orders, sponsor pixels
+  person: 'user',               // somebody else's pixels
+  star: 'star',                 // yours
+
+  /* time */
+  clock: 'clock',               // MY PIXELS, and anything historical
+  loader: 'loader',             // waiting on a moderator
+  timer: 'alarm-clock',         // the free-pixel refill counting down
+  calendar: 'calendar',         // the monthly cycle
+
+  /* decisions */
+  check: 'check',               // approved, verified, live
+  cross: 'close',               // turned down, not received
+  warn: 'square-alert',         // read this before agreeing to it
+
+  /* money */
+  bolt: 'zap',                  // InstaPay
+  card: 'credit-card',          // a paint pack — money with no pixels yet
+  refund: 'money',              // money going back
+  /* A spray can rather than a swatch or a bucket. The swatch read as a bar
+     chart at 12px, and the product is called "scribble on the wall" — if
+     any icon in the set gets to be on the nose, it is this one. */
+  paint: 'spray-can',           // prepaid pixels
+
+  /* tools */
+  hand: 'hand',                 // pan
+  brush: 'brush',               // paint
+  search: 'search',             // find a free spot
+  crop: 'scissors',             // crop tightly around a logo
+  fit: 'scale',                 // fit the whole wall on screen
+
+  /* state */
+  lock: 'lock',                 // booked ground, or a locked ratio
+  unlock: 'unlock',
+  link: 'external-link',        // a sponsor's pixels open their site
+  offline: 'power-off',         // the server is not answering
+  reset: 'reload',              // the wall wiped and started again
+  celebrate: 'party-popper',    // it worked
+  'arrow-right': 'arrow-right'  // next step
 };
 
-/* ── Bitmap → path ────────────────────────────────────────────── */
+/* ── Reading the library ──────────────────────────────────────── */
 
-/* Horizontal runs merged into rects, emitted as one subpath each. A
-   16×16 icon lands in 200–500 bytes this way, which is small enough that
-   inlining the whole set costs less than one HTTP request would. */
-function toPath(rows) {
-  const grid = rows.concat(Array(Math.max(0, N - rows.length)).fill('.'.repeat(N)));
-  const parts = [];
-  for (let y = 0; y < N; y++) {
-    const row = (grid[y] || '').padEnd(N, '.');
-    let x = 0;
-    while (x < N) {
-      if (row[x] !== '#') { x++; continue; }
-      let w = 0;
-      while (x + w < N && row[x + w] === '#') w++;
-      parts.push(`M${x} ${y}h${w}v1h-${w}z`);
-      x += w;
-    }
+function read(name) {
+  const file = path.join(LIB, `${name}.svg`);
+  if (!fs.existsSync(file)) {
+    const near = fs.readdirSync(LIB)
+      .filter(f => f.endsWith('.svg') && f.includes(name.split('-')[0]))
+      .slice(0, 8).map(f => f.replace('.svg', ''));
+    throw new Error(`pixelarticons has no "${name}"` +
+      (near.length ? ` — did you mean: ${near.join(', ')}?` : ''));
   }
-  return parts.join('');
+  const svg = fs.readFileSync(file, 'utf8');
+  const body = svg.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>[\s\S]*$/, '').trim();
+  const box = (svg.match(/viewBox="([^"]+)"/) || [])[1] || '0 0 24 24';
+  if (!body) throw new Error(`${name}.svg is empty`);
+  return { body: body.replace(/\s+/g, ' '), box };
 }
 
 /* ── The sprite ───────────────────────────────────────────────── */
@@ -545,12 +104,15 @@ const START = '<!-- icons:start -->';
 const END = '<!-- icons:end -->';
 
 function sprite() {
-  const symbols = Object.entries(ICONS).map(([name, rows]) =>
-    `      <symbol id="i-${name}" viewBox="0 0 ${N} ${N}"><path d="${toPath(rows)}"/></symbol>`);
+  const symbols = Object.entries(MAP).map(([ours, theirs]) => {
+    const { body, box } = read(theirs);
+    return `      <symbol id="i-${ours}" viewBox="${box}">${body}</symbol>`;
+  });
   return [
     START,
-    '  <!-- Generated by tools/make-icons.js — edit the bitmaps there, not here.',
-    '       Inlined rather than loaded as a sprite file so <use> needs no second',
+    '  <!-- Generated by tools/make-icons.js from pixelarticons (MIT, Gerrit',
+    '       Halfmann) — change the mapping there, not the markup here. Inlined',
+    '       rather than fetched as a sprite file so <use> needs no second',
     '       request and no cross-document colour inheritance. -->',
     '  <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">',
     '    <defs>',
@@ -571,63 +133,75 @@ function inject() {
   } else {
     /* \r?\n, because git checks this file out with CRLF on Windows and an
        anchor that only knows about \n silently matches nothing — which
-       looks exactly like a successful run right up until the page has 26
-       <use> elements and no symbols to point at. */
+       looks exactly like a successful run right up until the page has
+       twenty-odd <use> elements and no symbols to point at. */
     out = html.replace(/(<body>\r?\n)/, `$1\n${block}\n`);
     if (out === html) throw new Error('could not find <body> to inject after');
   }
   fs.writeFileSync(file, out);
-  return Object.keys(ICONS).length;
+  return Object.keys(MAP).length;
 }
 
-/* ── A contact sheet, so they can be looked at ────────────────── */
+/* ── A sheet, so they can be looked at ────────────────────────── */
 
-/* Drawn at the size they are actually used plus a large one, because an
-   icon that reads at 8× and turns to mud at 16px is not an icon. */
+/* HTML rather than a rendered PNG, because these are vector paths and the
+   only honest way to check an icon is to see it drawn by the thing that
+   will be drawing it — at the size it is actually used, on the colour it
+   is actually on. */
 function sheet() {
-  const SCALE = 4, PAD = 6, LABEL = 9, COL = 6;
-  const names = Object.keys(ICONS);
-  const cellW = N * SCALE + PAD * 2;
-  const cellH = N * SCALE + PAD * 2 + LABEL + 4 + N + PAD;
-  const rows = Math.ceil(names.length / COL);
-  const png = new PNG({ width: cellW * COL, height: cellH * rows });
+  const cells = Object.keys(MAP).map(name =>
+    `    <figure>
+      <span class="row">
+        <svg class="ic sm"><use href="#i-${name}"/></svg>
+        <svg class="ic md"><use href="#i-${name}"/></svg>
+        <svg class="ic lg"><use href="#i-${name}"/></svg>
+      </span>
+      <figcaption>${name}<small>${MAP[name]}</small></figcaption>
+    </figure>`).join('\n');
 
-  const set = (x, y, [r, g, b]) => {
-    if (x < 0 || y < 0 || x >= png.width || y >= png.height) return;
-    const o = (y * png.width + x) * 4;
-    png.data[o] = r; png.data[o + 1] = g; png.data[o + 2] = b; png.data[o + 3] = 255;
-  };
-  const BG = [0x21, 0x11, 0x18], INK = [0xF5, 0xC4, 0xC1], DIM = [0x5E, 0x3A, 0x4B];
-  for (let y = 0; y < png.height; y++) for (let x = 0; x < png.width; x++) set(x, y, BG);
+  const html = `<!DOCTYPE html>
+<meta charset="utf-8"><title>S37 icons</title>
+<style>
+  body { background:#211118; color:#F5C4C1; font:14px system-ui; margin:0; padding:28px; }
+  h1 { font-size:15px; letter-spacing:2px; margin:0 0 22px; }
+  .grid { display:grid; gap:18px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); }
+  figure { margin:0; border:1px solid #3E2532; border-radius:6px; padding:14px; background:#1A0D13; }
+  .row { display:flex; align-items:center; gap:12px; min-height:44px; }
+  .ic { fill:currentColor; }
+  .sm { width:12px; height:12px; }   /* a chip label */
+  .md { width:20px; height:20px; }   /* a button */
+  .lg { width:40px; height:40px; }   /* the success screens */
+  figcaption { margin-top:10px; font-size:12px; color:#C3A6AF; }
+  figcaption small { display:block; color:#5E3A4B; font-size:11px; }
+</style>
+<h1>S37 ICONS — 12px · 20px · 40px</h1>
+${sprite().split('\n').slice(1, -1).join('\n')}
+<div class="grid">
+${cells}
+</div>`;
 
-  names.forEach((name, i) => {
-    const ox = (i % COL) * cellW + PAD;
-    const oy = Math.floor(i / COL) * cellH + PAD;
-    const rowsOf = ICONS[name];
-    for (let y = 0; y < N; y++) {
-      for (let x = 0; x < N; x++) {
-        if ((rowsOf[y] || '')[x] !== '#') continue;
-        for (let dy = 0; dy < SCALE; dy++) {
-          for (let dx = 0; dx < SCALE; dx++) set(ox + x * SCALE + dx, oy + y * SCALE + dy, INK);
-        }
-        set(ox + x, oy + N * SCALE + LABEL + 6 + y, INK);      // …and again at 1:1
-      }
-    }
-    const label = name.replace(/-/g, ' ').toUpperCase();
-    const lx = ox, ly = oy + N * SCALE + 2;
-    eachCell(label.length > 10 ? label.slice(0, 10) : label, (x, y) => set(lx + x, ly + y, DIM));
-  });
-
-  const out = path.join(ROOT, 'data', 'icon-sheet.png');
+  const out = path.join(ROOT, 'data', 'icons.html');
   fs.mkdirSync(path.dirname(out), { recursive: true });
-  fs.writeFileSync(out, PNG.sync.write(png));
+  fs.writeFileSync(out, html);
   return out;
 }
 
+/* ── ─────────────────────────────────────────────────────────── */
+
 if (require.main === module) {
-  const n = inject();
-  console.log(`inlined ${n} icons into index.html`);
-  if (process.argv.includes('--sheet')) console.log(`contact sheet → ${sheet()}`);
+  const args = process.argv.slice(2);
+  const find = args.indexOf('--find');
+  if (find >= 0) {
+    const q = (args[find + 1] || '').toLowerCase();
+    const hits = fs.readdirSync(LIB)
+      .filter(f => f.endsWith('.svg') && !f.endsWith('-sharp.svg'))
+      .map(f => f.replace('.svg', ''))
+      .filter(n => n.includes(q));
+    console.log(hits.length ? hits.join('\n') : `nothing matching "${q}"`);
+  } else {
+    console.log(`inlined ${inject()} icons into index.html`);
+    if (args.includes('--sheet')) console.log(`sheet → ${sheet()}`);
+  }
 }
 
-module.exports = { ICONS, toPath, sprite, N };
+module.exports = { MAP, read, sprite };

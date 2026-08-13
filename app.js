@@ -486,7 +486,7 @@ function checkRefill(silent) {
   freeUsed = 0; refillAt = 0;
   updateAll();
   syncAllowance();
-  if (!silent) toast(`${ic('hourglass')} Your <b>${CAP} free pixels</b> are back — keep painting.`);
+  if (!silent) toast(`${ic('timer')} Your <b>${CAP} free pixels</b> are back — keep painting.`);
   return true;
 }
 const allowance = () => freeLeft() + paint;
@@ -550,7 +550,7 @@ function updateSelUI() {
   // innerHTML because the stalled state carries an icon; the two values in
   // it are a formatted clock and two integers, so there is nothing to escape
   counter.innerHTML = stalled
-    ? `${ic('hourglass')} ${mmss(refillLeft())}`
+    ? `${ic('timer')} ${mmss(refillLeft())}`
     : `${n}/${allowance()}`;
   counter.classList.toggle('full', full && !stalled);
   counter.classList.toggle('waiting', stalled);
@@ -874,18 +874,18 @@ const knownPayments = new Set();
 const history = { rows: [], total: 0, loaded: 0, open: false, busy: false };
 
 const HS_CHIP = {
-  pending:  { cls: 'wait', label: `${ic('hourglass')} WAITING` },
+  pending:  { cls: 'wait', label: `${ic('loader')} WAITING` },
   approved: { cls: 'live', label: `${ic('check')} ON THE WALL` },
   rejected: { cls: 'bad',  label: `${ic('cross')} TURNED DOWN` },
-  expired:  { cls: 'dim',  label: `${ic('hourglass')} EXPIRED` }
+  expired:  { cls: 'dim',  label: `${ic('timer')} EXPIRED` }
 };
 /* a pack never goes on a wall, so it needs its own words for the same
    four states */
 const HS_CHIP_PACK = {
-  pending:  { cls: 'wait', label: `${ic('hourglass')} CHECKING` },
+  pending:  { cls: 'wait', label: `${ic('loader')} CHECKING` },
   approved: { cls: 'live', label: `${ic('check')} PAINT ADDED` },
   rejected: { cls: 'bad',  label: `${ic('cross')} NOT RECEIVED` },
-  expired:  { cls: 'dim',  label: `${ic('hourglass')} EXPIRED` }
+  expired:  { cls: 'dim',  label: `${ic('timer')} EXPIRED` }
 };
 const chipFor = row =>
   (row.type === 'pack' ? HS_CHIP_PACK : HS_CHIP)[row.status] || HS_CHIP.pending;
@@ -1059,7 +1059,7 @@ $('modalHistory').addEventListener('click', e => {
 
 const BRAND_STATUS = {
   pending: {
-    chip: `${ic('hourglass')} UNDER REVIEW`,
+    chip: `${ic('loader')} UNDER REVIEW`,
     note: 'Your application is with the team. We read every one by hand — usually the same day. ' +
           'You will get an email the moment it is approved, and the pre-order flow opens here.'
   },
