@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════
    tg-setup — the once-per-deploy Telegram wiring (PLAN §5, setup)
 
+     node tools/tg-setup.js --doctor --token <token>
+                                       can this network reach the bot at all
      node tools/tg-setup.js --init <envfile> --token <token>
                                        the whole thing, in one command
      node tools/tg-setup.js            what the bot is and where it points
@@ -43,19 +45,24 @@ let TOKEN = (typeof flag('token') === 'string' ? flag('token') : '') || cfg.TG_B
    The timeout matters as much as the tag: fetch has none by default, so a
    proxy that accepts the connection and then says nothing leaves this
    hanging until somebody gets bored — which reads as "the tool is broken"
-   rather than "the network is". */
+   rather than "the network is".
+
+   Overridable so the doctor test can simulate a hang in under a second
+   instead of twenty — real production traffic never sets this. */
+const PROBE_MS = Number(process.env.TG_SETUP_TIMEOUT_MS) || 20000;
+
 async function api(method, params) {
   const url = `https://api.telegram.org/bot${TOKEN}/${method}`;
   let res;
   try {
     res = await fetch(url, Object.assign(
-      { signal: AbortSignal.timeout(20000) },
+      { signal: AbortSignal.timeout(PROBE_MS) },
       params
         ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(params) }
         : {}));
   } catch (err) {
     const e = new Error(err.name === 'TimeoutError'
-      ? 'no answer from api.telegram.org within 20s'
+      ? `no answer from api.telegram.org within ${PROBE_MS / 1000}s`
       : `could not reach api.telegram.org — ${err.message}`);
     e.transport = true;
     throw e;
@@ -147,6 +154,76 @@ async function clearWebhook() {
   const r = await api('deleteWebhook');
   console.log(r.ok ? '\n  webhook removed — set TG_MODE=poll to use long polling.\n'
     : `\n  failed: ${r.description}\n`);
+}
+
+/* ── is Telegram actually reachable from here ─────────────────── */
+
+/* Written after an hour was lost to this exact failure. From a network
+   that partially blocks Telegram you get a very specific signature:
+
+     bot123:abc/getMe          401, instantly
+     bot<real id>:wrong/getMe  no answer at all
+
+   which happens because the edge rejects a structurally implausible bot
+   id without touching a backend, while anything with a plausible one is
+   routed to the datacentre hosting that bot — and it is that route which
+   is blocked. The symptom is indistinguishable from a bad token unless
+   you think to compare the two, so this compares them for you. */
+async function doctor() {
+  const probe = async (label, token) => {
+    const started = Date.now();
+    const saved = TOKEN;
+    TOKEN = token;
+    try {
+      const r = await api('getMe');
+      return { label, ms: Date.now() - started, code: r.ok ? 200 : (r.error_code || '?'), body: r };
+    } catch (err) {
+      return { label, ms: Date.now() - started, code: null, error: err.message };
+    } finally { TOKEN = saved; }
+  };
+
+  const id = String(TOKEN || '').split(':')[0];
+  console.log('\n  probing api.telegram.org…\n');
+
+  const junk = await probe('implausible bot id', '123:abc');
+  console.log(`    implausible bot id      ${junk.code ?? 'no answer'}  (${junk.ms}ms)`);
+
+  if (!junk.code) {
+    console.log('\n  Telegram is not reachable at all from here — not even to be');
+    console.log('  refused. A proxy, a firewall, or no route out.\n');
+    process.exit(1);
+  }
+
+  if (!id) {
+    console.log('\n  Telegram answers. Pass --token to check the route to your bot.\n');
+    return;
+  }
+
+  const wrong = await probe('your id, wrong secret', `${id}:${'A'.repeat(35)}`);
+  console.log(`    your bot id, bad secret ${wrong.code ?? 'no answer'}  (${wrong.ms}ms)`);
+  const real = await probe('your token', TOKEN);
+  console.log(`    your token              ${real.code ?? 'no answer'}  (${real.ms}ms)`);
+
+  console.log('');
+  if (real.code === 200) {
+    console.log(`  Fine. The bot is @${real.body.result.username} and this network can reach it.\n`);
+    return;
+  }
+  if (!wrong.code && !real.code) {
+    console.log('  The route to your bot is blocked.\n');
+    console.log('  An implausible token is refused instantly, so the edge is reachable —');
+    console.log('  but every request carrying your bot id goes to the datacentre that');
+    console.log('  hosts it, and that is what cannot be reached. This is the network,');
+    console.log('  and no change to the token or this tool will fix it.\n');
+    console.log('  Run this from the box the wall will live on. If that box is also');
+    console.log('  affected, host somewhere else — moderation needs a clean route to');
+    console.log('  api.telegram.org, and the wall degrades to the admin panel without');
+    console.log('  one (cards queue in tg_outbox and go out when the route returns).\n');
+    process.exit(1);
+  }
+  console.log(`  Telegram answered ${real.code}, so the route is fine and the token is not.`);
+  console.log(`  ${(real.body && real.body.description) || ''}\n`);
+  process.exit(1);
 }
 
 /* ── the whole of step 7, in one command ──────────────────────── */
@@ -255,6 +332,7 @@ async function testMessage() {
 (async () => {
   /* --init is the only mode that can run before the token is in the
      environment, so it checks for one itself. */
+  if (args.includes('--doctor')) return doctor();
   if (args.includes('--init')) return init(flag('init'));
 
   need('TG_BOT_TOKEN', TOKEN);

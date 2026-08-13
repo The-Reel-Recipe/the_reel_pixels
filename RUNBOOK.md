@@ -23,7 +23,14 @@ QR you already have.
 ### 1. The box
 
 Ubuntu LTS, smallest tier that is not free (Hetzner CX22 or
-equivalent). Then:
+equivalent).
+
+**Host it in Europe, not Egypt.** The moderation bot needs a clean route
+to `api.telegram.org`, and Egyptian networks do not reliably have one —
+see the note in step 7. Latency to Cairo from Falkenstein is ~60ms,
+which nobody painting a pixel will notice.
+
+Then:
 
 ```bash
 adduser --disabled-password --gecos "" s37
@@ -125,6 +132,22 @@ whole internet at once) or anyone can spoof theirs (no cap applies to
 anybody).
 
 ### 7. Telegram
+
+> **Check the route before anything else**, on the box itself:
+>
+> ```bash
+> node tools/tg-setup.js --doctor --token <the token>
+> ```
+>
+> Some networks — Egyptian ISPs among them — reach Telegram's front door
+> but not the datacentre behind it. The signature is confusing: an
+> implausible token is refused in under a second while a valid one hangs
+> forever, because the edge rejects a malformed bot id without touching a
+> backend and everything else is routed to the DC hosting that bot.
+>
+> It looks exactly like a bad token and it is not. `--doctor` compares
+> the two and tells you which one you have. If the route is blocked, the
+> wall must be hosted somewhere it is not — a European VPS is fine.
 
 1. **@BotFather** → `/newbot` → keep the token
 2. Create a private group, add the bot to it

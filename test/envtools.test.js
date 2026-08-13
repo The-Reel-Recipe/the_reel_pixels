@@ -279,6 +279,65 @@ test('a rejected token is a sentence, not a stack trace', () => {
   assert.equal(/at Object\.<anonymous>/.test(r.stderr), false, 'a stack trace leaked');
 });
 
+/* ── --doctor: the specific "route is blocked, not the token" case ── */
+
+/* Found for real: an implausible token comes back instantly and a real
+   one just hangs, which reads exactly like a bad token and is a blocked
+   route to the bot's datacentre instead. */
+function routedShim(dir) {
+  const shim = path.join(dir, 'routed.js');
+  fs.writeFileSync(shim, `
+    globalThis.fetch = async (url, opts) => {
+      const token = String(url).match(/\\/bot([^/]+)\\//)[1];
+      const id = token.split(':')[0];
+      if (id === '123') return { status: 401, json: async () => ({ ok: false, error_code: 401 }) };
+      if (opts && opts.signal) {
+        return new Promise((_, reject) => {
+          /* AbortSignal.timeout()'s own internal timer is deliberately
+             unref'd by Node, precisely so a pending fetch timeout never
+             keeps a process alive by itself — a real hanging socket does
+             that job instead. This mock has no real socket, so without
+             something ref'd of its own the abort event never gets a turn
+             to fire: Node sees nothing left to wait for the moment the
+             synchronous code above finishes and exits immediately, which
+             read as an instant "success" the first time this was written. */
+          const keepAlive = setInterval(() => {}, 50);
+          opts.signal.addEventListener('abort', () => {
+            clearInterval(keepAlive);
+            reject(Object.assign(new Error('aborted'), { name: 'TimeoutError' }));
+          });
+        });
+      }
+      return new Promise(() => {});
+    };
+  `);
+  return shim;
+}
+
+test('--doctor tells a blocked route apart from a bad token', () => {
+  const dir = tmp();
+  const r = spawnSync(process.execPath,
+    ['--require', routedShim(dir), path.join(ROOT, 'tools', 'tg-setup.js'),
+      '--doctor', '--token', '8603270259:AA-real-looking-secret'],
+    {
+      cwd: ROOT, encoding: 'utf8', timeout: 15000,
+      env: {
+        ...process.env, TG_BOT_TOKEN: '', NODE_ENV: 'development',
+        /* two probes hang for real in this test — keep it fast rather than
+           waiting out the production 20s twice */
+        TG_SETUP_TIMEOUT_MS: '300'
+      }
+    });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.stdout, /implausible bot id\s+401/);
+  assert.match(r.stdout, /your bot id, bad secret\s+no answer/);
+  assert.match(r.stdout, /your token\s+no answer/);
+  assert.match(r.stdout, /route to your bot is blocked/);
+  assert.equal(/rejected that token|bad token/i.test(r.stdout), false,
+    'a blocked route must not be reported as a token problem');
+});
+
 test('--init tells you what it needs before it does anything', () => {
   const dir = tmp();
   const missing = runInit(dir, path.join(dir, 'nope.env'), [], ['--token', 'x']);
