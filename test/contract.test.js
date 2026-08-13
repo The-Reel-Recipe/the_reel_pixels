@@ -187,7 +187,14 @@ test('GET /api/wall serves the seed as a decodable envelope', async () => {
   assert.equal(meta.rev, 0);
   assert.ok(Array.isArray(meta.owners) && meta.owners.length, 'owner table');
   assert.equal(meta.dev, undefined, 'the demo controls, and the flag that hid them, are gone');
-  assert.deepEqual(meta.prices, { paint: 10, company: 10, packs: { 25: 225, 100: 800, 500: 3500 } });
+  /* Confirmed 2026-08-13: 2 EGP a pixel for paint, 5 for brand space, packs
+     at 10/20/30% off the paint rate. The page derives every figure it shows
+     from this, so a change here is a change everywhere. */
+  assert.deepEqual(meta.prices, { paint: 2, company: 5, packs: { 25: 45, 100: 160, 500: 700 } });
+  for (const [amount, price] of Object.entries(meta.prices.packs)) {
+    const save = Math.round((1 - price / (amount * meta.prices.paint)) * 100);
+    assert.ok(save >= 10 && save <= 30, `pack ${amount} saves ${save}%`);
+  }
   /* meta.me carried just the display name until Phase 2; it is the caller's
      whole standing now, because the page routes the pre-order button off it
      (guest / brand, and how the application went). app.js never read the old

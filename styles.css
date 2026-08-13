@@ -60,6 +60,29 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ═══════════ ICONS ═══════════ */
+/* The interface ran on emoji, which render as somebody else's artwork —
+   a different somebody per OS — cannot take a colour, and are the wrong
+   metaphor at 12px about half the time. These are drawn on the same 16px
+   grid the wall and the wordmark are (tools/make-icons.js), inlined as
+   <symbol>s at the top of the page.
+
+   Sized in em so an icon always matches the text beside it, and filled
+   with currentColor so it inherits whatever state the chip or button is
+   in without a second rule. */
+/* 1.15em rather than 1em: `Press Start 2P` has a small x-height for its
+   point size, so an icon matched to the em box reads as undersized next
+   to it. */
+.ic {
+  width: 1.15em; height: 1.15em;
+  fill: currentColor;
+  vertical-align: -0.2em;
+  flex: none;
+}
+/* the two places an icon is the message rather than a label's companion */
+.ic-lg { width: 46px; height: 46px; vertical-align: 0; }
+.ic-md { width: 1.5em; height: 1.5em; }
+
 /* Author `display` rules outrank the UA stylesheet's [hidden]{display:none},
    so anything toggled via the hidden attribute needs this to actually hide. */
 [hidden] { display: none !important; }
@@ -124,7 +147,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   background: var(--accent-dim);
   box-shadow: 0 0 0 1px rgba(0,0,0,0.3), inset 0 0 18px rgba(245,196,193,0.08);
 }
-.px-cal { width: 24px; color: var(--accent); animation: cal-tick 3.2s infinite; }
+.px-cal { width: 24px; height: 24px; color: var(--accent); animation: cal-tick 3.2s infinite; }
 @keyframes cal-tick { 0%,88%,100% { transform: none; } 92% { transform: translateY(-2px); } 96% { transform: none; } }
 .cycle-text { display: flex; flex-direction: column; gap: 5px; }
 .cycle-text b    { font-family: var(--fp); font-size: 8px; letter-spacing: 0.5px; }
@@ -665,7 +688,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   padding: 13px 16px;
   margin: 6px 0 14px;
 }
-.ps-icon { font-size: 20px; }
+.ps-icon { font-size: 20px; color: var(--accent); display: flex; }
 .pay-single div { display: flex; flex-direction: column; gap: 3px; }
 .pay-single b { font-family: var(--fp); font-size: 10px; color: var(--accent); }
 .pay-single span { font-size: 12.5px; color: var(--text-dim); }
@@ -729,7 +752,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 .hs-more { display: block; margin: 14px auto 0; }
 
 .co-success { padding: 18px 0 8px; }
-.big-emoji { font-size: 44px; margin-bottom: 12px; animation: pop .4s var(--expo); }
+.big-emoji { color: var(--accent); margin-bottom: 12px; animation: pop .4s var(--expo); line-height: 1; }
 @keyframes pop { from { transform: scale(0.4); opacity: 0; } }
 .co-success h3 { font-family: var(--fp); font-size: 13px; color: var(--accent); margin-bottom: 10px; }
 .co-success p { color: var(--text-dim); font-size: 13px; }
@@ -842,7 +865,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 }
 .brand-strip[hidden] { display: none; }
 .brand-strip b { font-family: var(--fp); font-size: 10px; }
-.bs-tick { font-size: 14px; line-height: 1; }
+.bs-tick { font-size: 14px; line-height: 1; color: var(--accent); display: flex; }
 .bs-note { font-family: var(--fp); font-size: 7px; color: var(--accent); letter-spacing: 1px; }
 .brand-strip .btn-mini { margin-left: auto; }
 

@@ -414,7 +414,8 @@ test('a price change is live in the next snapshot, with no restart', async () =>
     const meta = JSON.parse(r.body.toString('utf8', 4, 4 + r.body.readUInt32LE(0)));
     return meta.prices.company;
   };
-  assert.equal(await price(), 10);
+  const base = settings.DEFAULTS.price_company;
+  assert.equal(await price(), base);
 
   const set = await json('PUT', '/api/admin/config', { key: 'price_company', value: 25 }, AS_PANEL);
   assert.equal(set.code, 200);
@@ -423,7 +424,7 @@ test('a price change is live in the next snapshot, with no restart', async () =>
 
   const back = await json('PUT', '/api/admin/config', { key: 'price_company', reset: true }, AS_PANEL);
   assert.equal(back.code, 200);
-  assert.equal(await price(), 10);
+  assert.equal(await price(), base);
 });
 
 test('a setting that makes no sense is refused', async () => {

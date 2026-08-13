@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════
    S37 — SHAKHBAT 3AL 7EET · PIXEL WALL
    1000×1000 canvas · 20 free pixels per person, refilling every 30 min
-   prepaid PAINT 10 EGP/pixel · brand pre-orders 10 EGP/pixel
+   prepaid PAINT and brand pre-orders priced by the server
 
    The wall runs in monthly cycles: at 00:00 on the 1st everything
    painted on it is wiped, free and painted alike. Only brand
@@ -19,7 +19,11 @@
 
 /* ── Constants ── */
 const W = 1000, H = 1000;
-const PRICE_COMPANY = 10;
+/* The server owns this — it is a runtime setting the panel can move, so
+   the snapshot overwrites it before anything is quoted. The value here is
+   only what the page would use if it somehow rendered before its first
+   /api/wall, which it does not. */
+let PRICE_COMPANY = 5;
 const CAP = 20;                       // free pixels per person, per batch
 const DAY = 86400000;
 const LS_KEY = 's37.help';            // the one thing still ours to remember
@@ -196,6 +200,12 @@ const brandOf = p => (p && p.t === 'c') ? brands.get(p.o) : null;
 
 /* ── DOM ── */
 const $ = id => document.getElementById(id);
+
+/* One of the drawn icons (tools/make-icons.js), as markup. The symbols are
+   inlined at the top of index.html, so this is a reference rather than a
+   fetch and it inherits whatever colour it lands in.
+   Only ever interpolated into innerHTML — a textContent would print it. */
+const ic = name => `<svg class="ic" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const wrap = $('canvasWrap'), cvs = $('wall'), ctx = cvs.getContext('2d');
 const mm = $('minimap'), mmctx = mm.getContext('2d');
 const coordsEl = $('coords'), tooltipEl = $('tooltip');
@@ -318,7 +328,10 @@ async function loadWall() {
   cycle = meta.cycle;
   applyAllowance(meta.allowance);
   setMe(meta.me);
-  if (meta.prices) priceThePacks(meta.prices.paint);   // badges can't drift from the real rate
+  if (meta.prices) {
+    PRICE_COMPANY = meta.prices.company;               // the ghost's running total reads this
+    applyPrices(meta.prices);
+  }
   for (const [name, brand] of Object.entries(meta.brands || {})) {
     const safe = safeUrl(brand.url);
     if (safe) brands.set(name, { url: safe, cta: brand.cta || 'VISIT SITE' });
@@ -416,7 +429,7 @@ function openStream() {
       onPayment(d.pid, d.status);
     } else if (d.t === 'reset') {
       resync('reset');
-      toast('&#128465; The wall reset — prepaid pixels are up on a fresh cycle.', { cls: 'warn', dur: 5200 });
+      toast(`${ic('reset')} The wall reset — prepaid pixels are up on a fresh cycle.`, { cls: 'warn', dur: 5200 });
     } else if (d.t === 'sync') {
       resync('bulk change');
     }
@@ -473,7 +486,7 @@ function checkRefill(silent) {
   freeUsed = 0; refillAt = 0;
   updateAll();
   syncAllowance();
-  if (!silent) toast(`&#9203; Your <b>${CAP} free pixels</b> are back — keep painting.`);
+  if (!silent) toast(`${ic('hourglass')} Your <b>${CAP} free pixels</b> are back — keep painting.`);
   return true;
 }
 const allowance = () => freeLeft() + paint;
@@ -534,7 +547,11 @@ function updateSelUI() {
   // out of free pixels with no paint to fall back on — the counter turns into
   // the refill clock, since 0/0 tells you nothing you want to know
   const stalled = full && allowance() === 0 && waitingOnRefill();
-  counter.textContent = stalled ? `⏳ ${mmss(refillLeft())}` : `${n}/${allowance()}`;
+  // innerHTML because the stalled state carries an icon; the two values in
+  // it are a formatted clock and two integers, so there is nothing to escape
+  counter.innerHTML = stalled
+    ? `${ic('hourglass')} ${mmss(refillLeft())}`
+    : `${n}/${allowance()}`;
   counter.classList.toggle('full', full && !stalled);
   counter.classList.toggle('waiting', stalled);
   counter.classList.toggle('infinite', !full && paint > 0);
@@ -680,25 +697,54 @@ $('btnClear').onclick = () => { clearSel(); };
 
 /* ── Paint shop ── */
 $('btnPaintShop').onclick = () => openModal('modalPaint');
-/* Prices and the per-pixel rate both come from the server, so the discount
-   badges can't drift away from what a pack actually costs. */
-function priceThePacks(perPixel) {
-  document.querySelectorAll('.pack').forEach(p => {
-    const save = Math.round((1 - p.dataset.price / (p.dataset.paint * perPixel)) * 100);
-    p.querySelector('.pk-save').textContent = save > 0 ? `SAVE ${save}%` : `${perPixel} EGP/PX`;
+/* Every price on the page, written from the wall snapshot.
+
+   None of it is in the markup: the admin panel can change a rate without a
+   deploy (PLAN §7.2), so a page carrying a hard-coded figure would be
+   quoting a price the server will not honour — and the first anyone would
+   know is a checkout that disagrees with the button that opened it. The
+   packs are built here for the same reason, and the SAVE badges are derived
+   rather than written, so a pack and its discount cannot drift apart. */
+function applyPrices(prices) {
+  if (!prices) return;
+  for (const el of document.querySelectorAll('.px-rate')) el.textContent = fmt(prices.paint);
+  for (const el of document.querySelectorAll('.co-rate')) el.textContent = fmt(prices.company);
+
+  const host = $('packs');
+  if (!host) return;
+  host.textContent = '';
+  const packs = Object.entries(prices.packs || {})
+    .map(([amount, price]) => [Number(amount), Number(price)])
+    .sort((a, b) => a[0] - b[0]);
+
+  // the middle one is the one most people take, so it is the one flagged
+  const popular = packs.length > 2 ? Math.floor(packs.length / 2) : -1;
+
+  packs.forEach(([amount, price], i) => {
+    const save = Math.round((1 - price / (amount * prices.paint)) * 100);
+    const b = document.createElement('button');
+    b.className = 'pack' + (i === popular ? ' pack-pop' : '');
+    b.dataset.paint = amount;
+    b.innerHTML =
+      (i === popular ? '<i class="pk-tag">POPULAR</i>' : '') +
+      `<b class="pk-amt">${fmt(amount)}</b><span class="pk-unit">PAINT</span>` +
+      `<span class="pk-price">${fmt(price)} EGP</span>` +
+      `<span class="pk-save">${save > 0 ? `SAVE ${save}%` : `${fmt(prices.paint)} EGP/PX`}</span>`;
+    b.onclick = () => buyPack(b, amount);
+    host.appendChild(b);
   });
 }
-document.querySelectorAll('.pack').forEach(p => p.addEventListener('click', async () => {
-  const amt = +p.dataset.paint;
-  p.disabled = true;
+
+async function buyPack(btn, amount) {
+  btn.disabled = true;
   try {
-    const order = await apiJson('/api/paint/order', { pack: amt });
+    const order = await apiJson('/api/paint/order', { pack: amount });
     closeModal('modalPaint');
-    openPay(order, `${amt} paint`);
+    openPay(order, `${fmt(amount)} paint`);
   } catch (e) {
     toast('The paint shop is unreachable — try again.', { cls: 'err' });
-  } finally { p.disabled = false; }
-}));
+  } finally { btn.disabled = false; }
+}
 
 /* ═══════════ INSTAPAY ═══════════
    InstaPay has no merchant API, so there is no callback that says the money
@@ -828,18 +874,18 @@ const knownPayments = new Set();
 const history = { rows: [], total: 0, loaded: 0, open: false, busy: false };
 
 const HS_CHIP = {
-  pending:  { cls: 'wait', label: '⏳ WAITING' },
-  approved: { cls: 'live', label: '✅ ON THE WALL' },
-  rejected: { cls: 'bad',  label: '❌ TURNED DOWN' },
-  expired:  { cls: 'dim',  label: '⌛ EXPIRED' }
+  pending:  { cls: 'wait', label: `${ic('hourglass')} WAITING` },
+  approved: { cls: 'live', label: `${ic('check')} ON THE WALL` },
+  rejected: { cls: 'bad',  label: `${ic('cross')} TURNED DOWN` },
+  expired:  { cls: 'dim',  label: `${ic('hourglass')} EXPIRED` }
 };
 /* a pack never goes on a wall, so it needs its own words for the same
    four states */
 const HS_CHIP_PACK = {
-  pending:  { cls: 'wait', label: '⏳ CHECKING' },
-  approved: { cls: 'live', label: '✅ PAINT ADDED' },
-  rejected: { cls: 'bad',  label: '❌ NOT RECEIVED' },
-  expired:  { cls: 'dim',  label: '⌛ EXPIRED' }
+  pending:  { cls: 'wait', label: `${ic('hourglass')} CHECKING` },
+  approved: { cls: 'live', label: `${ic('check')} PAINT ADDED` },
+  rejected: { cls: 'bad',  label: `${ic('cross')} NOT RECEIVED` },
+  expired:  { cls: 'dim',  label: `${ic('hourglass')} EXPIRED` }
 };
 const chipFor = row =>
   (row.type === 'pack' ? HS_CHIP_PACK : HS_CHIP)[row.status] || HS_CHIP.pending;
@@ -847,7 +893,7 @@ const chipFor = row =>
    paint is only drawn when it is spent. It still belongs in this list —
    the checkout tells the buyer to look for it here. */
 const HS_TYPE = {
-  free: '\u{1F58C}️ FREE', paint: '\u{1F9F4} PAINT',
+  free: '\u{1F58C} FREE', paint: '\u{1F9F4} PAINT',
   brand: '\u{1F3E2} BRAND', pack: '\u{1F4B3} PAINT PACK'
 };
 /* a paid row says where the money got to as well as where the pixels did */
@@ -856,8 +902,10 @@ const HS_PAY = {
   submitted: 'checking your transfer',
   verified: 'payment confirmed',
   rejected: 'payment not received',
-  refund_due: '\u{1F4B8} refund on the way',
-  refunded: '\u{1F4B8} refunded',
+  /* plain text — this line goes into a textContent, and the row's chip
+     beside it is already carrying the icon */
+  refund_due: 'refund on the way',
+  refunded: 'refunded',
   expired: 'order expired'
 };
 
@@ -968,7 +1016,7 @@ function onDecision(sid, status) {
       : 'A batch expired before it was reviewed — see <b>MY PIXELS</b>.',
       { cls: 'warn', dur: 6000, action: { label: 'MY PIXELS', fn: openHistory } });
   } else if (status === 'approved') {
-    toast('✅ Your pixels are on the wall.');
+    toast(`${ic('check')} Your pixels are on the wall.`);
   }
 }
 
@@ -980,14 +1028,14 @@ function onPayment(pid, status) {
   syncAllowance();
   if (history.open) loadHistory(false);
   if (status === 'verified') {
-    toast('&#129699; Payment confirmed — your paint is in.');
+    toast(`${ic('paint')} Payment confirmed — your paint is in.`);
   } else if (status === 'rejected' || status === 'expired') {
     toast(status === 'rejected'
       ? 'We could not find that transfer. Open <b>MY PIXELS</b> and try the reference again.'
       : 'An order expired before the transfer arrived.',
       { cls: 'warn', dur: 7000, action: { label: 'MY PIXELS', fn: openHistory } });
   } else if (status === 'refunded') {
-    toast('&#128184; Your refund has been sent.');
+    toast(`${ic('refund')} Your refund has been sent.`);
   }
 }
 
@@ -1011,16 +1059,16 @@ $('modalHistory').addEventListener('click', e => {
 
 const BRAND_STATUS = {
   pending: {
-    chip: '⏳ UNDER REVIEW',
+    chip: `${ic('hourglass')} UNDER REVIEW`,
     note: 'Your application is with the team. We read every one by hand — usually the same day. ' +
           'You will get an email the moment it is approved, and the pre-order flow opens here.'
   },
   approved: {
-    chip: '✅ APPROVED',
+    chip: `${ic('check')} APPROVED`,
     note: 'You are cleared to book logo space on next month\'s wall.'
   },
   rejected: {
-    chip: '❌ NOT APPROVED',
+    chip: `${ic('cross')} NOT APPROVED`,
     note: 'We could not verify this business from the details given. Reply to the email we sent ' +
           'if you think that is wrong — a real answer will reopen it.'
   }
@@ -1052,7 +1100,7 @@ async function refreshMe() {
 function renderAuth() {
   const state = BRAND_STATUS[me.brandStatus] || null;
   $('authWho').textContent = me.handle || '—';
-  $('authChip').textContent = state ? state.chip : '—';
+  $('authChip').innerHTML = state ? state.chip : '—';   // the chip carries an icon
   $('authChip').className = 'status-chip ' + (me.brandStatus || '');
   $('authNote').textContent = state ? state.note : '';
   $('btnGoBook').hidden = !canBook();
@@ -1149,7 +1197,7 @@ $('paneSignup').addEventListener('submit', async e => {
     if (r.data.allowance) applyAllowance(r.data.allowance);
     await loadWall();                    // the account is a different caller now
     openAuth('status');
-    toast('&#127970; <b>Application sent.</b> We will email you as soon as it is reviewed.', { dur: 5200 });
+    toast(`${ic('brand')} <b>Application sent.</b> We will email you as soon as it is reviewed.`, { dur: 5200 });
   } catch (err) {
     showErr('errSignup', 'Could not reach the server — try again in a moment.');
   } finally {
@@ -1310,7 +1358,7 @@ function loadSource(img, label) {
   applyBg();
   resetCrop();
   if (!src.hadAlpha) {
-    toast('&#9888; Opaque image detected — <b>background remover</b> switched on. Check the preview.', { cls: 'warn', dur: 5200 });
+    toast(`${ic('warn')} Opaque image detected — <b>background remover</b> switched on. Check the preview.`, { cls: 'warn', dur: 5200 });
   }
 }
 function applyBg() {
@@ -1565,8 +1613,8 @@ $('cpRatioLock').onclick = () => {
   btn.setAttribute('aria-pressed', String(on));
   if (on) syncOutputToCrop(); else rebuildCpPreview();
   toast(on
-    ? '&#128274; Output locked to the logo’s ratio.'
-    : '&#128275; Ratio unlocked — set width and height freely (the logo is letterboxed).',
+    ? `${ic('lock')} Output locked to the logo’s ratio.`
+    : `${ic('unlock')} Ratio unlocked — set width and height freely (the logo is letterboxed).`,
     { dur: 2400 });
 };
 document.querySelectorAll('.size-presets button').forEach(b => b.addEventListener('click', () => {
@@ -1623,7 +1671,7 @@ $('cpFile').addEventListener('change', e => {
   if (!/^image\//.test(f.type)) { showErr('errFile', 'That file is not an image.'); return; }
   $('cpFileName').textContent = f.name;
   $('cpFileName').classList.add('has');
-  if (!/png|svg/i.test(f.type)) toast('&#9888; <b>PNG preferred</b> — this format has no transparency.', { cls: 'warn', dur: 4200 });
+  if (!/png|svg/i.test(f.type)) toast(`${ic('warn')} <b>PNG preferred</b> — this format has no transparency.`, { cls: 'warn', dur: 4200 });
   const url = URL.createObjectURL(f);
   const img = new Image();
   img.onload = () => { loadSource(img, f.name); URL.revokeObjectURL(url); };
@@ -1721,7 +1769,7 @@ function findFreeSpot() {
   const el = $('phOverlap');
   if (el) { el.textContent = ghostValid ? 'clear' : `${fmt(best.n)} booked px here`; el.className = ghostValid ? 'ok' : 'bad'; }
   toast(ghostValid
-    ? `&#128269; Found a spot at <b>${best.gx}, ${best.gy}</b> — click to book it.`
+    ? `${ic('search')} Found a spot at <b>${best.gx}, ${best.gy}</b> — click to book it.`
     : `${nextCycleName()} is filling up — the emptiest spot still has ${fmt(best.n)} booked pixels.`,
     { cls: ghostValid ? '' : 'warn' });
 }
@@ -1778,7 +1826,7 @@ $('btnConfirmPlace').onclick = () => {
       /* The spot is held, not bought. Straight into the transfer, because a
          booking nobody pays for is 48 hours of dead ground. */
       if (d.payment) openPay(d.payment, `${name}’s spot`);
-      else toast(`&#127970; <b>${name}</b> is booked — it goes live on ${shortDate(d.goesLive)}.`, { dur: 5200 });
+      else toast(`${ic('brand')} <b>${name}</b> is booked — it goes live on ${shortDate(d.goesLive)}.`, { dur: 5200 });
     } catch (err) {
       btn.disabled = false; btn.textContent = 'BOOK & PAY';
       /* the account stopped being allowed to book between opening the flow
@@ -1947,7 +1995,7 @@ function tapCell(cell, e) {
     const b = brandOf(p);
     if (b) {                              // sponsor CTA — open their link
       window.open(b.url, '_blank', 'noopener,noreferrer');
-      toast(`&#128279; Opening <b>${p.o}</b> — ${b.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}`);
+      toast(`${ic('link')} Opening <b>${p.o}</b> — ${b.url.replace(/^https?:\/\//, '').replace(/\/$/, '')}`);
       return;
     }
     showTooltip(cell, e, true);
@@ -1970,10 +2018,10 @@ function showTooltip(cell, e, pinned) {
   const booked = !pixels.has(i);
   tooltipCell = i;
   const mine = p.o === myHandle && p.t === 'u';
-  const icon = booked ? '&#128274;' : (p.t === 'c' ? '&#127970;' : (mine ? '&#11088;' : '&#129489;'));
+  const icon = ic(booked ? 'lock' : p.t === 'c' ? 'brand' : mine ? 'star' : 'person');
   const who = mine ? '<span class="tt-you">YOU</span>' : p.o;
   const b = booked ? null : brandOf(p);
-  const cta = b ? `<span class="tt-cta">${b.cta} &#8594;</span>` : '';
+  const cta = b ? `<span class="tt-cta">${b.cta} ${ic('arrow-right')}</span>` : '';
   const when = booked
     ? `goes live ${shortDate(cycleEndsAt())}`
     : `clears ${shortDate(cycleEndsAt())}`;

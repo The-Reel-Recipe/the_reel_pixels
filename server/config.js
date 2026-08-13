@@ -139,13 +139,25 @@ module.exports = Object.freeze({
   WALL_FILE: path.join(STATE_DIR, '.wall.bin'),
   SEED_FILE: path.join(ROOT, 'seed.bin'),          // committed starting artwork
 
-  /* wall shape and pricing — these move into the runtime `config`
-     table in Phase 6; the values here become its defaults */
+  /* Wall shape and pricing. These are the defaults behind the runtime
+     `config` table (settings.js) — the panel can move any of them without a
+     deploy, and does not need one to change a price.
+
+     Confirmed by Mohab, 2026-08-13: 2 EGP a pixel for paint, 5 for a brand
+     logo. PLAN §6 had flagged the 10/10 in the prototype as unconfirmed
+     against an older 2 EGP note; this settles it. Brand space costs more
+     than paint on purpose — it is a month of prime wall, reserved ahead and
+     promoted whole, rather than pixels that wipe with everything else.
+
+     The packs keep the ladder they had: 10%, 20% and 30% off the per-pixel
+     rate. The client derives the SAVE badges from price ÷ (paint × rate),
+     so those percentages are computed from these numbers rather than
+     written anywhere — change a pack and the badge follows. */
   W: 1000, H: 1000,
   CAP: 20,                                          // free pixels per caller
   REFILL: 30 * 60 * 1000,                           // …back this long after the last one goes
-  PRICE_PAINT: 10, PRICE_COMPANY: 10,
-  PACKS: { 25: 225, 100: 800, 500: 3500 },          // paint amount -> EGP
+  PRICE_PAINT: 2, PRICE_COMPANY: 5,
+  PACKS: { 25: 45, 100: 160, 500: 700 },            // paint amount -> EGP
   IDLE_DROP: 24 * 60 * 60 * 1000,
   DELTA_MAX: 2000,                                  // bigger changes tell clients to refetch
 

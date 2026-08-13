@@ -136,6 +136,36 @@ test('the demo controls are out of the page', () => {
   }
 });
 
+test('the interface has no emoji left in it', () => {
+  /* Emoji render as somebody else's artwork, differently per platform, and
+     cannot take a colour — every one of them is a drawn icon now
+     (tools/make-icons.js). This is the guard against one creeping back in
+     with the next toast. */
+  const emoji = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]|&#1[0-9]{4,5};/u;
+  for (const f of ['index.html', 'app.js']) {
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    src.split('\n').forEach((line, i) => {
+      /* the box-drawing rules in the comment headers are not emoji */
+      const bare = line.replace(/[═─│┌┐└┘·—…’‘“”×≈≤≥±→]/g, '');
+      assert.equal(emoji.test(bare), false, `${f}:${i + 1} — ${line.trim().slice(0, 70)}`);
+    });
+  }
+});
+
+test('every icon a page asks for is one the sprite defines', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const js = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const defined = new Set([...html.matchAll(/<symbol id="i-([a-z-]+)"/g)].map(m => m[1]));
+  assert.ok(defined.size >= 20, `only ${defined.size} icons in the sprite`);
+
+  const used = new Set([
+    ...[...html.matchAll(/href="#i-([a-z-]+)"/g)].map(m => m[1]),
+    ...[...js.matchAll(/\bic\('([a-z-]+)'\)/g)].map(m => m[1])
+  ]);
+  assert.ok(used.size > 0, 'no icons are referenced at all');
+  for (const name of used) assert.ok(defined.has(name), `#i-${name} is used but not drawn`);
+});
+
 test('no borrowed trademarks survive anywhere', () => {
   const files = ['index.html', 'app.js', 'styles.css', 'package.json'];
   const banned = /coca.?cola|pepsi|\bnike\b|mcdonald|samsung|reel.?recipe|thereelrecipe/i;
