@@ -77,7 +77,8 @@ const MAP = {
   offline: 'power-off',         // the server is not answering
   reset: 'reload',              // the wall wiped and started again
   celebrate: 'party-popper',    // it worked
-  'arrow-right': 'arrow-right'  // next step
+  'arrow-right': 'arrow-right', // next step
+  chevron: 'chevron-down'       // the colour picker opens downwards
 };
 
 /* ── Reading the library ──────────────────────────────────────── */

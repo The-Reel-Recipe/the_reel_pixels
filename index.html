@@ -53,6 +53,7 @@
       <symbol id="i-reset" viewBox="0 0 24 24"><path d="M16 4h2v6h-2zm-2-2h2v2h-2zm0 2h2v8h-2zM4 8H2v5h2z"/> <path d="M4 6h16v2H4zm4 14H6v-6h2zm2 2H8v-2h2zm0-2H8v-8h2zm10-4h2v-5h-2z"/> <path d="M20 18H4v-2h16z"/></symbol>
       <symbol id="i-celebrate" viewBox="0 0 24 24"><path d="M4 20H6V22H2V18H4V20ZM20 21H18V19H20V21ZM10 20H6V18H10V20ZM6 18H4V14H6V18ZM14 18H10V16H14V18ZM10 16H8V14H10V16ZM16 16H14V12H16V16ZM22 16H20V14H22V16ZM8 14H6V10H8V14ZM20 14H18V12H20V14ZM14 12H12V10H14V12ZM12 10H8V8H12V10ZM20 9H16V7H20V9ZM5 8H3V6H5V8ZM22 7H20V5H22V7ZM12 6H10V4H12V6ZM10 4H8V2H10V4ZM17 4H15V2H17V4Z"/></symbol>
       <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 11v2h16v-2zm12 2v2h2v-2zm-2 2v2h2v-2zm-2 2v2h2v-2zm4-6V9h2v2z"/> <path d="M14 15V7h2v8zm-2 2V5h2v12z"/></symbol>
+      <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M13 16h-2v-2h2v2Zm-2-2H9v-2h2v2Zm4 0h-2v-2h2v2Zm-6-2H7v-2h2v2Zm8 0h-2v-2h2v2ZM7 10H5V8h2v2Zm12 0h-2V8h2v2Z"/></symbol>
     </defs>
   </svg>
   <!-- icons:end -->
@@ -171,7 +172,7 @@
       <span class="cur-color-wrap">
         <input type="color" id="customColor" value="#D81B60" title="Pick any color">
         <span class="cur-color" id="curColor"></span>
-        <svg viewBox="0 0 8 8" class="caret" aria-hidden="true"><path fill="currentColor" d="M0 2h8L4 7z"/></svg>
+        <svg class="ic caret" aria-hidden="true"><use href="#i-chevron"/></svg>
       </span>
     </div>
   </footer>
@@ -218,7 +219,7 @@
         <button class="btn-claim modal-cta" id="btnPay">CLAIM</button>
       </div>
       <div id="coSuccess" class="co-success" hidden>
-        <div class="big-emoji"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-celebrate"/></svg></div>
+        <div class="big-emoji"><svg class="ic" aria-hidden="true"><use href="#i-celebrate"/></svg></div>
         <h3 id="coSuccessMsg">PIXELS CLAIMED!</h3>
         <p id="coSuccessSub">They're yours until the wall resets.</p>
       </div>
@@ -287,7 +288,7 @@
       </div>
 
       <div id="pySent" class="co-success" hidden>
-        <div class="big-emoji"><svg class="ic ic-lg" aria-hidden="true"><use href="#i-clock"/></svg></div>
+        <div class="big-emoji"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg></div>
         <h3>WITH THE TEAM</h3>
         <p id="pySentSub">We are checking for your transfer. You will see it land in MY PIXELS.</p>
         <button class="btn-claim modal-cta" id="pySentGo">OPEN MY PIXELS</button>
@@ -467,7 +468,12 @@
                 <button type="button" class="st-btn" data-step="1" aria-label="Increase width">+</button>
               </span>
               <button type="button" id="cpRatioLock" class="ratio-lock is-on" aria-pressed="true" title="Match the logo's ratio (from the crop)">
-                <svg viewBox="0 0 12 14" aria-hidden="true"><path fill="currentColor" class="shackle" d="M3 0h6v1h1v4H8V2H4v3H2V1h1V0z"/><path fill="currentColor" d="M1 5h10v9H1V5zm4 2v2H4v2h4V9H7V7H5z"/></svg>
+                <!-- two icons, one shown: the shackle used to be a sub-path
+                     this file animated open, which no library icon can offer
+                     and which the swap to a real lock/unlock pair makes
+                     unnecessary. CSS picks which one by .is-on. -->
+                <svg class="ic on" aria-hidden="true"><use href="#i-lock"/></svg>
+                <svg class="ic off" aria-hidden="true"><use href="#i-unlock"/></svg>
               </button>
               <span class="stepper" data-target="cpH">
                 <button type="button" class="st-btn" data-step="-1" aria-label="Decrease height">&minus;</button>

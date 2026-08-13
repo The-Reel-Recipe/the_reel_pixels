@@ -70,18 +70,50 @@
    Sized in em so an icon always matches the text beside it, and filled
    with currentColor so it inherits whatever state the chip or button is
    in without a second rule. */
-/* 1.15em rather than 1em: `Press Start 2P` has a small x-height for its
-   point size, so an icon matched to the em box reads as undersized next
-   to it. */
+/* Sized in pixels, never in em.
+
+   These were em-sized at first, which is the usual right answer and is
+   wrong here: half this interface is set in `Press Start 2P` at 7–8px, so
+   an icon matched to the em box came out 9px — and a 24×24 pixel-art glyph
+   at 9px is four grey smudges. An icon's job is to be recognised, and how
+   small the label beside it happens to be has nothing to do with that.
+
+   So: one sensible default, and a deliberate size per place below. Nothing
+   inherits its size from type.
+
+   crispEdges because these are pixel art. The source grid is 24 units, so
+   any size that is not a multiple of 24 lands the edges on fractional
+   pixels; without this they arrive soft, next to a wall and a wordmark
+   that are pin-sharp. */
 .ic {
-  width: 1.15em; height: 1.15em;
+  width: 16px; height: 16px;
   fill: currentColor;
-  vertical-align: -0.2em;
+  shape-rendering: crispEdges;
+  vertical-align: -0.22em;
   flex: none;
 }
-/* the two places an icon is the message rather than a label's companion */
-.ic-lg { width: 46px; height: 46px; vertical-align: 0; }
-.ic-md { width: 1.5em; height: 1.5em; }
+
+/* ── one size per home ── */
+
+/* action-bar and stats-bar controls: small pixel type, 15px reads clean */
+.btn-company .ic, .btn-history .ic, .paint-stat .ic, .bs-tick .ic { width: 15px; height: 15px; }
+/* modal headings — the icon carries the title */
+h2 .ic { width: 22px; height: 22px; vertical-align: -0.16em; }
+/* the tool dock and the zoom controls are icon-only buttons */
+.tool .ic { width: 20px; height: 20px; }
+.zoom-controls .ic { width: 18px; height: 18px; }
+.ps-icon .ic { width: 20px; height: 20px; }
+/* chips are the tightest thing in the interface */
+.hs-chip .ic { width: 11px; height: 11px; vertical-align: -0.18em; }
+.status-chip .ic { width: 13px; height: 13px; }
+.sel-counter .ic { width: 12px; height: 12px; }
+.tooltip .ic { width: 13px; height: 13px; }
+/* prose and toasts: body type, so 15px sits with it */
+.toast .ic, .help-notes .ic, .cp-note .ic, .cp-hint .ic { width: 15px; height: 15px; }
+/* a button's trailing arrow should not outweigh its label */
+.modal-cta .ic, .py-open .ic { width: 14px; height: 14px; }
+/* …and the two places the icon *is* the message */
+.big-emoji .ic { width: 44px; height: 44px; vertical-align: 0; }
 
 /* Author `display` rules outrank the UA stylesheet's [hidden]{display:none},
    so anything toggled via the hidden attribute needs this to actually hide. */
@@ -446,7 +478,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 .cur-color-wrap:hover { border-color: var(--accent); }
 #customColor { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 .cur-color { width: 24px; height: 24px; border: 2px solid rgba(255,255,255,0.25); border-radius: 3px; background: var(--accent); pointer-events: none; }
-.caret { width: 9px; color: var(--text-dim); pointer-events: none; }
+.caret { width: 13px; height: 13px; color: var(--text-dim); pointer-events: none; }
 
 /* ═══════════ OFFLINE NOTE ═══════════ */
 .offline-note {
@@ -976,11 +1008,11 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   color: var(--text-dim);
   transition: color .12s, border-color .12s, background .12s;
 }
-.ratio-lock svg { width: 14px; height: 16px; }
-.ratio-lock .shackle { transition: transform .2s var(--expo), opacity .2s; transform-origin: 50% 100%; }
+.ratio-lock .ic { width: 17px; height: 17px; display: none; }
+.ratio-lock.is-on .on, .ratio-lock:not(.is-on) .off { display: block; }
 .ratio-lock:hover { border-color: var(--border-2); color: var(--text); }
 .ratio-lock.is-on { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-.ratio-lock:not(.is-on) .shackle { transform: translate(3px, -2px) rotate(16deg); opacity: 0.5; }
+.ratio-lock:not(.is-on) { opacity: 0.75; }
 
 .size-price {
   display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;

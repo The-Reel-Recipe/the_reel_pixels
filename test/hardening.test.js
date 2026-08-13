@@ -152,6 +152,38 @@ test('the interface has no emoji left in it', () => {
   }
 });
 
+test('every icon comes from the sprite, not from a hand-drawn path', () => {
+  /* Two survived the first sweep — a caret and an animated padlock — and
+     looked exactly like what they were: a different hand, next to a
+     library set. */
+  for (const f of ['index.html', 'app.js']) {
+    const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const inline = [...src.matchAll(/<svg(?![^>]*><use)[^>]*>[\s\S]{0,400}?<\/svg>/g)]
+      .filter(m => !m[0].includes('<use'));
+    assert.equal(inline.length, 0,
+      `${f} draws its own SVG: ${(inline[0] || [''])[0].slice(0, 90)}`);
+  }
+});
+
+test('icons are sized in pixels, never inherited from type', () => {
+  /* Half this interface is set in a pixel font at 7–8px. An icon sized in
+     em came out 9px in the action bar, which for 24×24 pixel art is four
+     grey smudges — and how small the label happens to be has nothing to do
+     with how big the icon needs to be. */
+  const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
+  const base = css.match(/^\.ic \{[\s\S]*?\}/m);
+  assert.ok(base, 'no .ic rule at all');
+  assert.match(base[0], /width:\s*\d+px/, '.ic must have a pixel width');
+  assert.equal(/width:\s*[\d.]+r?em/.test(base[0]), false, '.ic is em-sized again');
+
+  for (const rule of css.match(/[^\n{}]*\.ic\b[^{}]*\{[^}]*\}/g) || []) {
+    const w = rule.match(/width:\s*([\d.]+)(px|r?em)/);
+    if (!w) continue;
+    assert.equal(w[2], 'px', `icon width in ${w[2]}: ${rule.split('{')[0].trim()}`);
+    assert.ok(Number(w[1]) >= 11, `${w[1]}px is too small to read: ${rule.split('{')[0].trim()}`);
+  }
+});
+
 test('every icon a page asks for is one the sprite defines', () => {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const js = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
