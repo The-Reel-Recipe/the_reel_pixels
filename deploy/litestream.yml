@@ -10,7 +10,7 @@
 #   validate  litestream databases -config deploy/litestream.yml
 #   watch     litestream replicate -config deploy/litestream.yml
 #   restore   litestream restore -config deploy/litestream.yml \
-#               -o /srv/reelpixels/data/pixels.db /srv/reelpixels/data/pixels.db
+#               -o /srv/s37/data/pixels.db /srv/s37/data/pixels.db
 #
 # Every value below comes from the environment — nothing secret is
 # committed. Litestream expands ${VAR} itself, so these stay literal.
@@ -20,15 +20,15 @@
 #
 #   LITESTREAM_ACCESS_KEY_ID       R2 access key id
 #   LITESTREAM_SECRET_ACCESS_KEY   R2 secret access key
-#   R2_BUCKET                      e.g. reelpixels-backups
+#   R2_BUCKET                      e.g. s37-backups
 #   R2_ENDPOINT                    https://<accountid>.r2.cloudflarestorage.com
-#   DATA_DIR                       must match the app's (default /srv/reelpixels/data)
+#   DATA_DIR                       must match the app's (default /srv/s37/data)
 #
 # systemd (Phase 8) reads them from the same EnvironmentFile as the app:
 #
 #   [Service]
-#   EnvironmentFile=/etc/reelpixels.env
-#   ExecStart=/usr/bin/litestream replicate -config /srv/reelpixels/deploy/litestream.yml
+#   EnvironmentFile=/etc/s37.env
+#   ExecStart=/usr/bin/litestream replicate -config /srv/s37/deploy/litestream.yml
 #   Restart=always
 # ═══════════════════════════════════════════════════════════════
 

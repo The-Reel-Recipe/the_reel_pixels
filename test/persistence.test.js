@@ -23,7 +23,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const ROOT = path.join(__dirname, '..');
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'reelpixel-persist-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 's37-persist-'));
 const STATE_DIR = path.join(TMP, 'state');          // empty: no .wall.bin to inherit
 const DATA_DIR = path.join(ROOT, 'data', `test-${process.pid}`);
 fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -44,7 +44,14 @@ const dbm = require('../server/db.js');
 const wall = require('../server/wall.js');
 const cfg = require('../server/config.js');
 
-const SEED_LIVE = 17600, SEED_BOOKED = 1556;
+/* Read out of the file rather than remembered — see contract.test.js. */
+function seedCounts(file) {
+  const buf = fs.readFileSync(file);
+  let o = 4 + buf.readUInt32LE(0);              // past [u32 metaLen][meta]
+  const live = buf.readUInt32LE(o); o += 4 + live * 9;
+  return { live, booked: buf.readUInt32LE(o) };
+}
+const { live: SEED_LIVE, booked: SEED_BOOKED } = seedCounts(cfg.SEED_FILE);
 
 /* ── envelope + request helpers ───────────────────────────────── */
 
@@ -305,9 +312,25 @@ test('claims survive a restart — a fresh process sees them', async () => {
 
 /* ── §4.7 the monthly reset ───────────────────────────────────── */
 
+/* A fresh wall has nothing booked on it — the seed used to ship a fake
+   Samsung reservation and this test quietly leaned on it. Book our own, so
+   what is being tested is the promote mechanic and not the fixture. Goes
+   through wall.bookBrand rather than POST /api/book because the brand gate
+   is identity.test.js's subject, not this file's. */
+function bookNextLayer(n) {
+  const now = Date.now();
+  const uid = Number(dbm.db.prepare(
+    "INSERT INTO users (kind, handle, created_at, last_seen) VALUES ('brand', ?, ?, ?)"
+  ).run('NILE SODA CO.', now, now).lastInsertRowid);
+  const px = freeRange(n).map(i => [i, 0x2255ff]);
+  const r = wall.bookBrand({ id: uid, handle: 'NILE SODA CO.' },
+    { name: 'NILE SODA CO.', url: 'https://nile-soda.example' }, px, now);
+  assert.equal(r.booked, n, 'the fixture booking did not land');
+  return n;
+}
+
 test('a cycle reset promotes, archives and refills', async () => {
-  const booked = wall.wall.reserved.size;
-  assert.ok(booked > 0, 'need something on the next layer to promote');
+  const booked = bookNextLayer(120);
   const someBooked = [...wall.wall.reserved.keys()][0];
   const outgoing = wall.wall.cycle;
 

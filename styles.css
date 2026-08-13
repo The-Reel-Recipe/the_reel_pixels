@@ -1,24 +1,34 @@
 /* ═══════════════════════════════════════════════════════════════
-   THE REEL RECIPE — PIXEL WALL
-   Design tokens lifted from thereelrecipe.com (MY_TRR-Static)
+   S37 — SHAKHBAT 3AL 7EET · PIXEL WALL
+
+   One colour decides the rest: the pink of the t-shirt in the
+   reference photo, #F4C3CA. It is a pale, warm rose, so it can only
+   be the accent — it needs something dark under it, and a dark plum
+   in the same hue family is what the shell is built from. The red of
+   the shirt's print does the danger duty.
+
+   --accent lands on dark chrome only. Artwork that goes on the wall
+   itself uses the heavier rose in tools/make-brand.js, because the
+   wall is white paper and #F4C3CA on white is barely there.
    ═══════════════════════════════════════════════════════════════ */
 
 :root {
-  /* Deep indigo-navy — the logo's book body */
-  --bg:          #191935;
-  --surface:     #14142c;
-  --surface-2:   #1d1d3d;
-  --border:      #2c2c52;
-  --border-2:    #46466e;
-  /* Teal — the logo's bookmark accent */
-  --accent:      #3DDFA6;
-  --accent-dim:  rgba(61, 223, 166, 0.24);
-  --accent-hi:   #63EBBB;
-  --accent-ink:  #0d0d20;
-  --text:        #f4f4f8;
-  --text-dim:    #a9a9c4;
-  --danger:      #E63946;
-  --warn:        #FFD23F;
+  /* Plum ink — the pink with the lights off */
+  --bg:          #211118;
+  --surface:     #1A0D13;
+  --surface-2:   #2B1721;
+  --border:      #3E2532;
+  --border-2:    #5E3A4B;
+  /* The shirt */
+  --accent:      #F4C3CA;
+  --accent-dim:  rgba(244, 195, 202, 0.22);
+  --accent-hi:   #FBDEE2;
+  --accent-ink:  #1A0D13;
+  --text:        #F8F0F2;
+  --text-dim:    #C3A6AF;
+  /* the shirt's print */
+  --danger:      #E23B2E;
+  --warn:        #FFC24B;
 
   --fp: 'Press Start 2P', monospace;
   --fb: 'Figtree', sans-serif;
@@ -29,17 +39,17 @@
 }
 @supports (color: oklch(50% 0.1 180)) {
   :root {
-    --bg:         oklch(20% 0.062 278);
-    --surface:    oklch(17% 0.058 278);
-    --surface-2:  oklch(21% 0.055 278);
-    --border:     oklch(28% 0.05 278);
-    --border-2:   oklch(39% 0.05 278);
-    --accent:     oklch(74% 0.17 168);
-    --accent-dim: oklch(74% 0.17 168 / 0.24);
-    --accent-hi:  oklch(79% 0.16 168);
-    --accent-ink: oklch(9% 0.065 278);
-    --text:       oklch(96% 0.004 278);
-    --text-dim:   oklch(72% 0.03 278);
+    --bg:         oklch(21% 0.035 355);
+    --surface:    oklch(17% 0.032 355);
+    --surface-2:  oklch(25% 0.038 355);
+    --border:     oklch(32% 0.042 355);
+    --border-2:   oklch(44% 0.05 355);
+    --accent:     oklch(85% 0.055 8);
+    --accent-dim: oklch(85% 0.055 8 / 0.22);
+    --accent-hi:  oklch(91% 0.033 8);
+    --accent-ink: oklch(17% 0.032 355);
+    --text:       oklch(96% 0.007 355);
+    --text-dim:   oklch(76% 0.025 355);
   }
 }
 
@@ -58,7 +68,7 @@ html, body { height: 100%; }
 }
 body {
   background:
-    radial-gradient(rgba(244,244,248,0.028) 1px, transparent 1px) 0 0 / 22px 22px,
+    radial-gradient(rgba(248,240,242,0.03) 1px, transparent 1px) 0 0 / 22px 22px,
     var(--bg);
   color: var(--text);
   font-family: var(--fb);
@@ -91,12 +101,15 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   flex: 0 0 auto;
 }
 .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
-.brand-logo { height: 52px; width: auto; image-rendering: pixelated; filter: drop-shadow(0 0 12px rgba(61,223,166,0.25)); }
-.brand-text h1 { font-family: var(--fp); font-size: 17px; letter-spacing: 1px; color: var(--text); text-shadow: 3px 3px 0 rgba(61,223,166,0.22); white-space: nowrap; }
-.sponsors { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
-.sp-label { font-family: var(--fp); font-size: 7px; color: var(--text-dim); letter-spacing: 1px; }
-.sp-logos { display: flex; align-items: center; gap: 14px; }
-.sp { height: 17px; width: auto; opacity: 0.95; }
+.brand-logo { height: 52px; width: auto; image-rendering: pixelated; filter: drop-shadow(0 0 12px rgba(244,195,202,0.25)); }
+.brand-text h1 { font-family: var(--fp); font-size: 17px; letter-spacing: 1px; color: var(--text); text-shadow: 3px 3px 0 rgba(244,195,202,0.22); white-space: nowrap; }
+/* Where the sponsor strip used to be. That strip held five real
+   trademarks nobody had licensed, so it is the name instead — Arabic
+   first, because that is what the name actually is. */
+.tagline { display: flex; align-items: baseline; gap: 9px; margin-top: 8px; min-width: 0; }
+.tg-ar  { font-family: var(--fb); font-size: 14px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.tg-sep { color: var(--border-2); }
+.tg-en  { font-family: var(--fp); font-size: 7px; color: var(--text-dim); letter-spacing: 1px; white-space: nowrap; }
 
 .cycle-badge {
   display: flex; align-items: center; gap: 12px;
@@ -104,7 +117,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   border-radius: var(--r);
   padding: 9px 14px;
   background: var(--accent-dim);
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.3), inset 0 0 18px rgba(61,223,166,0.08);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.3), inset 0 0 18px rgba(244,195,202,0.08);
 }
 .px-cal { width: 24px; color: var(--accent); animation: cal-tick 3.2s infinite; }
 @keyframes cal-tick { 0%,88%,100% { transform: none; } 92% { transform: translateY(-2px); } 96% { transform: none; } }
@@ -305,7 +318,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   filter: grayscale(0.4);
 }
 .tool:hover { border-color: var(--accent); transform: scale(1.08); }
-.tool.sel { border-color: var(--accent); background: var(--accent-dim); filter: none; box-shadow: 0 0 10px rgba(61,223,166,0.3); }
+.tool.sel { border-color: var(--accent); background: var(--accent-dim); filter: none; box-shadow: 0 0 10px rgba(244,195,202,0.3); }
 .palette { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .swatch {
   width: 26px; height: 26px;
@@ -381,7 +394,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   color: var(--accent-ink);
   border-radius: var(--r);
   padding: 15px 30px;
-  box-shadow: 0 5px 0 rgba(0,0,0,0.4), 0 0 24px rgba(61,223,166,0.25);
+  box-shadow: 0 5px 0 rgba(0,0,0,0.4), 0 0 24px rgba(244,195,202,0.25);
   transition: background .15s, transform .05s, box-shadow .05s;
   white-space: nowrap;
 }
@@ -498,7 +511,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   border: 2px solid var(--border-2);
   border-radius: var(--r-lg);
   padding: 30px 28px 26px;
-  box-shadow: 0 0 0 4px rgba(0,0,0,0.3), 0 30px 80px rgba(0,0,0,0.6), inset 0 0 60px rgba(61,223,166,0.03);
+  box-shadow: 0 0 0 4px rgba(0,0,0,0.3), 0 30px 80px rgba(0,0,0,0.6), inset 0 0 60px rgba(244,195,202,0.03);
   animation: modal-in .28s var(--expo);
   text-align: center;
 }
@@ -893,8 +906,8 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 .crop-box::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background:
-    linear-gradient(rgba(61,223,166,0.25) 1px, transparent 1px) 0 0 / 100% 33.33%,
-    linear-gradient(90deg, rgba(61,223,166,0.25) 1px, transparent 1px) 0 0 / 33.33% 100%;
+    linear-gradient(rgba(244,195,202,0.25) 1px, transparent 1px) 0 0 / 100% 33.33%,
+    linear-gradient(90deg, rgba(244,195,202,0.25) 1px, transparent 1px) 0 0 / 33.33% 100%;
 }
 .crop-box .ch {
   position: absolute; width: 11px; height: 11px;
@@ -998,7 +1011,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 @media (max-width: 1080px) {
   .legend { display: none; }
   .brand-text h1 { font-size: 13px; }
-  .sp { height: 14px; }
+  .tg-en { display: none; }
 }
 @media (max-width: 860px) {
   .topbar { flex-wrap: wrap; }
@@ -1111,11 +1124,9 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   .topbar { padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: 8px; gap: 10px; }
   .brand { gap: 10px; }
   .brand-logo { height: 34px; }
-  .brand-text h1 { font-size: 11px; letter-spacing: 0.5px; text-shadow: 2px 2px 0 rgba(61,223,166,0.22); }
-  .sponsors { gap: 8px; margin-top: 5px; }
-  .sp-label { display: none; }
-  .sp-logos { gap: 10px; }
-  .sp { height: 12px; }
+  .brand-text h1 { font-size: 11px; letter-spacing: 0.5px; text-shadow: 2px 2px 0 rgba(244,195,202,0.22); }
+  .tagline { gap: 8px; margin-top: 5px; }
+  .tg-ar { font-size: 12px; }
 
   .statsbar { gap: 10px 14px; padding: 8px 14px; }
   .price-stat { display: none; }          /* the help modal already explains pricing */
@@ -1234,7 +1245,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   .topbar { padding: 6px 14px; gap: 10px; }
   .brand-logo { height: 26px; }
   .brand-text h1 { font-size: 10px; }
-  .sponsors { display: none; }
+  .tagline { display: none; }
   .cycle-badge { display: none; }
 
   .statsbar { padding: 5px 14px; gap: 12px; }

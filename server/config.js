@@ -106,7 +106,7 @@ const STATE_DIR = path.resolve(env.STATE_DIR || (ON_VERCEL ? os.tmpdir() : ROOT)
    actually open — ephemeral, which is exactly why §1 of the plan moves the
    deploy to a VPS with a real volume. */
 const DATA_DIR = path.resolve(env.DATA_DIR ||
-  (ON_VERCEL ? path.join(os.tmpdir(), 'reelpixel-data') : path.join(ROOT, 'data')));
+  (ON_VERCEL ? path.join(os.tmpdir(), 's37-data') : path.join(ROOT, 'data')));
 
 const DEV_SECRET = 'dev-insecure-session-secret';
 let SESSION_SECRET = String(env.SESSION_SECRET || '');

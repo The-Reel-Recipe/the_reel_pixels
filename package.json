@@ -1,15 +1,16 @@
 {
-  "name": "the-reel-pixels",
+  "name": "s37-pixel-wall",
   "version": "1.0.0",
   "private": true,
-  "description": "The Reel Recipe pixel wall — 1,000,000 pixels, free to paint, wiped clean every month.",
+  "description": "S37 — shakhbat 3al 7eet. A 1,000,000 pixel wall: free to paint, wiped clean every month.",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js 5174",
     "test": "node --test test/*.test.js",
     "migrate": "node tools/migrate.js",
     "backup": "node tools/backup-nightly.js",
-    "export-wall": "node tools/export-wall-png.js"
+    "export-wall": "node tools/export-wall-png.js",
+    "make-brand": "node tools/make-brand.js"
   },
   "engines": {
     "node": "22.x"

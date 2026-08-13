@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   THE REEL RECIPE — PIXEL WALL  ·  boot
+   S37 — SHAKHBAT 3AL 7EET · PIXEL WALL  ·  boot
 
      node server.js [port]
 

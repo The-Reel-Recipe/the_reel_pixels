@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════
-   THE REEL RECIPE — PIXEL WALL  (interactive prototype)
+   S37 — SHAKHBAT 3AL 7EET · PIXEL WALL
    1000×1000 canvas · 20 free pixels per person, refilling every 30 min
    prepaid PAINT 10 EGP/pixel · brand pre-orders 10 EGP/pixel
 
@@ -22,12 +22,15 @@ const W = 1000, H = 1000;
 const PRICE_COMPANY = 10;
 const CAP = 20;                       // free pixels per person, per batch
 const DAY = 86400000;
-const LS_KEY = 'trrpixel.help';       // the one thing still ours to remember
+const LS_KEY = 's37.help';            // the one thing still ours to remember
 
+/* Every one of these has to read on white paper, which is what rules the
+   pale UI pink out and puts the heavier rose in its place. Brand family
+   first, then a full spread, then the inks. */
 const PALETTE = [
-  '#3DDFA6', '#22C55E', '#14B8A6', '#59C2FF', '#2E6BE6', '#3D3D8F',
-  '#8B5CF6', '#FF5D8F', '#E63946', '#FF8C42', '#FFD23F', '#8B5A2B',
-  '#111118', '#5C5C7A', '#9CA3AF', '#ECECF4'
+  '#D81B60', '#F06292', '#AD1457', '#7B2D4B', '#E23B2E', '#FF8C42',
+  '#FFD23F', '#22C55E', '#14B8A6', '#59C2FF', '#2E6BE6', '#8B5CF6',
+  '#2B1620', '#6E5A62', '#B9A6AD', '#ECE4E7'
 ];
 
 /* ── State ── */
@@ -1792,152 +1795,11 @@ function loop(t) {
   requestAnimationFrame(loop);
 }
 
-/* ═══════════ DEMO SEEDING ═══════════ */
+/* The sample logo for the brand pre-order flow. The wall's own starting
+   artwork used to be composed here with canvas and uploaded on first boot;
+   it lives in seed.bin now (tools/make-brand.js), which is why ~150 lines of
+   badge drawing went with it — all of it existed to fake sponsor logos. */
 const logoImg = new Image(); logoImg.src = 'assets/logo-icon.png';
-
-function cellsFromCanvas(t, snap) {
-  const d = t.getContext('2d').getImageData(0, 0, t.width, t.height).data, out = [];
-  for (let y = 0; y < t.height; y++) for (let x = 0; x < t.width; x++) {
-    const k = (y * t.width + x) * 4;
-    if (d[k + 3] < 128) continue;
-    let hex = '#' + ((1 << 24) | (d[k] << 16) | (d[k + 1] << 8) | d[k + 2]).toString(16).slice(1);
-    if (snap) hex = snapColor(d[k], d[k + 1], d[k + 2], snap);
-    out.push([x, y, hex]);
-  }
-  return out;
-}
-function snapColor(r, g, b, list) {
-  let best = list[0], bd = 1e9;
-  for (const hx of list) {
-    const rr = parseInt(hx.slice(1, 3), 16), gg = parseInt(hx.slice(3, 5), 16), bb = parseInt(hx.slice(5, 7), 16);
-    const d = (r - rr) ** 2 + (g - gg) ** 2 + (b - bb) ** 2;
-    if (d < bd) { bd = d; best = hx; }
-  }
-  return best;
-}
-function makeCanvas(w, h) {
-  const t = document.createElement('canvas'); t.width = w; t.height = h;
-  return [t, t.getContext('2d', { willReadFrequently: true })];
-}
-function textCells(text, font, color, spacing = 0) {
-  const [mt, mc] = makeCanvas(10, 10);
-  mc.font = font;
-  const tw = Math.ceil(mc.measureText(text).width + spacing * text.length) + 4;
-  const th = Math.ceil(parseInt(font.match(/(\d+)px/)[1] * 1) * 1.5);
-  const [t, tc] = makeCanvas(tw, th);
-  tc.font = font; tc.fillStyle = color; tc.textBaseline = 'middle';
-  if (spacing) {
-    let x = 2;
-    for (const ch of text) { tc.fillText(ch, x, th / 2); x += mc.measureText(ch).width + spacing; }
-  } else tc.fillText(text, 2, th / 2);
-  return cellsFromCanvas(t, [color]);
-}
-function badgeCells(text, { font, fg, bg, w, h, spacing = 0, radius = 3 }) {
-  const [t, tc] = makeCanvas(w, h);
-  tc.fillStyle = bg;
-  tc.beginPath(); tc.roundRect(0, 0, w, h, radius); tc.fill();
-  tc.font = font; tc.fillStyle = fg; tc.textAlign = spacing ? 'left' : 'center'; tc.textBaseline = 'middle';
-  if (spacing) {
-    let total = 0; for (const ch of text) total += tc.measureText(ch).width + spacing;
-    let x = (w - total + spacing) / 2;
-    for (const ch of text) { tc.fillText(ch, x, h / 2 + 1); x += tc.measureText(ch).width + spacing; }
-  } else tc.fillText(text, w / 2, h / 2 + 1);
-  return cellsFromCanvas(t, [fg, bg]);
-}
-function pepsiCells(d) {
-  const [t, tc] = makeCanvas(d, d);
-  const r = d / 2;
-  tc.fillStyle = '#fff'; tc.beginPath(); tc.arc(r, r, r, 0, 7); tc.fill();
-  tc.fillStyle = '#E32934'; tc.beginPath();
-  tc.arc(r, r, r, Math.PI * 0.94, Math.PI * 1.94); tc.quadraticCurveTo(r * 0.9, r * 1.18, r * 0.06, r * 1.18); tc.fill();
-  tc.fillStyle = '#004B93'; tc.beginPath();
-  tc.arc(r, r, r, Math.PI * 0.06, Math.PI * 0.94); tc.quadraticCurveTo(r * 1.1, r * 0.94, r * 1.94, r * 0.94); tc.fill();
-  return cellsFromCanvas(t, ['#ffffff', '#E32934', '#004B93']);
-}
-function nikeCells(w, h) {
-  const [t, tc] = makeCanvas(w, h);
-  tc.fillStyle = '#111118';
-  tc.beginPath();
-  tc.moveTo(w, h * 0.06);
-  tc.bezierCurveTo(w * 0.55, h * 0.45, w * 0.25, h * 0.72, w * 0.13, h * 0.78);
-  tc.bezierCurveTo(w * 0.02, h * 0.84, -w * 0.02, h * 0.68, w * 0.08, h * 0.5);
-  tc.bezierCurveTo(w * 0.11, h * 0.44, w * 0.16, h * 0.36, w * 0.22, h * 0.3);
-  tc.bezierCurveTo(w * 0.15, h * 0.52, w * 0.2, h * 0.6, w * 0.32, h * 0.55);
-  tc.closePath(); tc.fill();
-  return cellsFromCanvas(t, ['#111118']);
-}
-
-/* The demo artwork is drawn with canvas, which the server has no way to do,
-   so it's composed here and uploaded — the server just takes the pixels. */
-async function seedDemo() {
-  const seed = { live: [], queue: [], owners: [], ids: new Map(), brands: {}, nextBrands: {} };
-  const seedOwner = (name, type) => {
-    const k = name + ' ' + type;
-    if (!seed.ids.has(k)) { seed.ids.set(k, seed.owners.length); seed.owners.push({ n: name, t: type }); }
-    return seed.ids.get(k);
-  };
-  const stamp = (cells, ox, oy, owner, type, queue) => {
-    const o = seedOwner(owner, type);
-    const into = queue ? seed.queue : seed.live;
-    for (const [dx, dy, col] of cells) {
-      const x = ox + dx, y = oy + dy;
-      if (x < 0 || y < 0 || x >= W || y >= H) continue;
-      into.push([idx(x, y), rgbInt(col), o]);
-    }
-  };
-
-  // Hidden/background tabs can stall font & image loading forever — never
-  // let the seed (and init) hang on them.
-  const assets = Promise.all([document.fonts.load('10px "Press Start 2P"'), logoImg.decode()]).catch(() => {});
-  await Promise.race([assets, new Promise(r => setTimeout(r, 2500))]);
-
-  // center: The Reel Recipe logo + wordmark
-  if (logoImg.naturalWidth > 0) {
-    const lw = 150, lh = Math.max(8, Math.round(lw * logoImg.naturalHeight / logoImg.naturalWidth));
-    const [lt, lc] = makeCanvas(lw, lh);
-    lc.imageSmoothingEnabled = true;
-    lc.drawImage(logoImg, 0, 0, lw, lh);
-    stamp(cellsFromCanvas(lt, ['#221F4E', '#3DD9A5', '#ffffff']), 425, 285, 'THE REEL RECIPE', 'c');
-  }
-  const title = textCells('THE REEL RECIPE', '10px "Press Start 2P"', '#23205A', 2);
-  const titleW = title.reduce((m, c) => Math.max(m, c[0]), 0);
-  stamp(title, Math.round(500 - titleW / 2), 505, 'THE REEL RECIPE', 'c');
-
-  // sponsor logos — brands that prepaid last cycle, so the reset put them up
-  seed.brands = {
-    'THE REEL RECIPE': { url: 'https://thereelrecipe.com', cta: 'VISIT SITE' },
-    'COCA-COLA':  { url: 'https://www.coca-cola.com', cta: 'VISIT SITE' },
-    'PEPSI':      { url: 'https://www.pepsi.com', cta: 'VISIT SITE' },
-    'NIKE':       { url: 'https://www.nike.com', cta: 'SHOP NOW' },
-    "MCDONALD'S": { url: 'https://www.mcdonalds.com', cta: 'ORDER NOW' }
-  };
-  stamp(badgeCells('Coca-Cola', { font: 'italic bold 17px "Brush Script MT","Segoe Script",serif', fg: '#ffffff', bg: '#F40009', w: 72, h: 26 }), 130, 105, 'COCA-COLA', 'c');
-  stamp(pepsiCells(30), 745, 140, 'PEPSI', 'c');
-  stamp(nikeCells(52, 20), 730, 450, 'NIKE', 'c');
-  stamp(badgeCells('M', { font: '900 30px Georgia,serif', fg: '#FFC72C', bg: '#DA291C', w: 32, h: 30 }), 795, 610, "MCDONALD'S", 'c');
-
-  // …and one that has already prepaid for the *next* cycle, so the queue layer
-  // is visible from the start
-  seed.nextBrands = { SAMSUNG: { url: 'https://www.samsung.com', cta: 'EXPLORE' } };
-  stamp(badgeCells('SAMSUNG', { font: 'bold 12px Arial', fg: '#ffffff', bg: '#1B4DE4', w: 78, h: 20, spacing: 1 }), 120, 690, 'SAMSUNG', 'c', true);
-
-  // confetti pixels from random fans
-  const confColors = ['#3DDFA6', '#22C55E', '#59C2FF', '#2E6BE6', '#8B5CF6', '#FF5D8F', '#E63946', '#FF8C42', '#FFD23F', '#14B8A6'];
-  const used = new Set(seed.live.map(e => e[0]));
-  for (let n = 0; n < 260; n++) {
-    const x = 8 + Math.floor(Math.random() * (W - 16)), y = 8 + Math.floor(Math.random() * (H - 16));
-    const i = idx(x, y);
-    if (used.has(i)) continue;
-    used.add(i);
-    seed.live.push([i, rgbInt(confColors[Math.floor(Math.random() * confColors.length)]),
-      seedOwner(`Pixel fan #${Math.floor(Math.random() * 900 + 100)}`, 'u')]);
-  }
-
-  await apiEnvelope('/api/dev/seed',
-    { owners: seed.owners, brands: seed.brands, nextBrands: seed.nextBrands },
-    seed.live, seed.queue);
-  await loadWall();                      // …and read back what the server stored
-}
 
 /* Demo controls — every one of these is a server call now, because the wall
    isn't ours to change. */
@@ -1952,10 +1814,9 @@ $('demoRefill').onclick = () => devCall('/api/dev/refill', d => {
   applyAllowance(d); updateAll();
   toast(`&#9203; Free pixels topped back up to <b>${CAP}</b>.`);
 });
-$('demoReseed').onclick = async () => {
-  try { await seedDemo(); toast('Demo artwork reseeded.'); }
-  catch (e) { toast('Reseed failed — is the server running with dev routes on?', { cls: 'err' }); }
-};
+$('demoReseed').onclick = () => devCall('/api/dev/reseed', d => {
+  toast(`Wall restored from the committed artwork — ${fmt(d.live)} pixels.`);
+});
 $('demoWipe').onclick = () => devCall('/api/dev/wipe', () => {
   toast('Wall wiped — fully empty 1,000×1,000 grid.');
 });
@@ -1970,11 +1831,9 @@ $('demoWipe').onclick = () => devCall('/api/dev/wipe', () => {
 
   try {
     await loadWall();
-    // an empty wall on a fresh server: draw the demo artwork and upload it
-    if (!pixels.size && !reserved.size) {
-      try { await seedDemo(); }
-      catch (e) { window.__seedErr = (e && e.stack) || String(e); console.warn('demo seed failed:', e); }
-    }
+    // an empty wall needs nothing from us any more: a virgin database adopts
+    // seed.bin on its way up, so by the time this resolves the artwork is
+    // already there (or the wall is genuinely empty, which is also an answer)
     openStream();
   } catch (e) {
     serverDown(e);

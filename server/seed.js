@@ -9,7 +9,7 @@
    submission per owner per layer to hang the cells off.
 
    Runs once per database — wall.js checks meta.seed_source before
-   calling — and again on demand behind /api/dev/seed.
+   calling — and again on demand behind /api/dev/reseed.
 
    Takes an already-decoded envelope so it never has to reach back
    into wall.js for the codec; db is the only thing below it.
@@ -130,7 +130,7 @@ function importEnvelope(meta, a, b, cycle, now, source) {
   });
 }
 
-/* /api/dev/seed replaces the wall wholesale, so the cycle is cleared first.
+/* A reseed replaces the wall wholesale, so the cycle is cleared first.
    Cells go before submissions — they hold the foreign key. */
 function replaceCycle(meta, a, b, cycle, now, source) {
   return tx(() => {

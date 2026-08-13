@@ -21,7 +21,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 /* has to be set before server.js is required — it reads env at load */
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'reelpixel-test-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 's37-test-'));
 const STATE_DIR = path.join(TMP, 'state');
 fs.mkdirSync(STATE_DIR);
 process.env.STATE_DIR = STATE_DIR;
@@ -33,8 +33,18 @@ delete process.env.ALLOW_ORIGIN;
 const app = require('../server.js');
 const db = require('../server/db.js');
 
-/* what seed.bin holds — the numbers the whole test file hangs off */
-const SEED_LIVE = 17600, SEED_BOOKED = 1556;
+/* What seed.bin holds — the numbers the whole test file hangs off. Read
+   rather than remembered: the artwork is a generated artifact now
+   (tools/make-brand.js), and a hard-coded count turned every change to the
+   mark into five failing assertions about nothing. */
+function seedCounts(file) {
+  const buf = fs.readFileSync(file);
+  let o = 4 + buf.readUInt32LE(0);              // past [u32 metaLen][meta]
+  const live = buf.readUInt32LE(o); o += 4 + live * 9;
+  return { live, booked: buf.readUInt32LE(o) };
+}
+const { live: SEED_LIVE, booked: SEED_BOOKED } =
+  seedCounts(path.join(__dirname, '..', 'seed.bin'));
 
 /* ── envelope codec (copied from app.js, deliberately) ────────── */
 /* The client's decoder, not the server's — if the two ever drift
@@ -189,7 +199,10 @@ test('GET /api/wall serves the seed as a decodable envelope', async () => {
   }
 
   seedBody = bodyHash(r.body);
-  assert.equal(SEED_HASH, '8e2a0067e023829b', 'seed.bin itself changed');
+  /* Bump this deliberately, never to make the suite green: it is the tripwire
+     that says the committed artwork moved. Last set when the wall was
+     rebranded to S37 and the five unlicensed sponsor logos came out of it. */
+  assert.equal(SEED_HASH, 'f17635c8109f630b', 'seed.bin itself changed');
   assert.equal(seedBody, SEED_HASH, 'pixel payload drifted from the seed');
 
   /* the owner table is index-addressed by every entry above, so it has to

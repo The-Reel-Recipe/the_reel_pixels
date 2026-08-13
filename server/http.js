@@ -208,9 +208,8 @@ async function handler(req, res) {
         identity.refill(row);
         return sendJson(res, 200, identity.allowanceOf(row, now));
       }
-      if (urlPath === '/api/dev/seed' && req.method === 'POST') {
-        const { meta, a, b } = wall.decodeEnvelope(await readBody(req, 16 << 20));
-        return sendJson(res, 200, wall.seedFrom(meta, a, b));
+      if (urlPath === '/api/dev/reseed' && req.method === 'POST') {
+        return sendJson(res, 200, wall.reseed(now));
       }
       if (urlPath === '/api/dev/wipe' && req.method === 'POST') {
         return sendJson(res, 200, wall.wipe());

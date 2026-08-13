@@ -400,10 +400,12 @@ setInterval(() => checkCycle(Date.now()), 30000).unref();
 
 /* ── Prototype affordances (behind DEV, deleted in Phase 7) ───── */
 
-/* the artwork is drawn with canvas in the browser, so the demo seed is
-   uploaded rather than generated here */
-function seedFrom(meta, a, b, now = Date.now()) {
-  seed.replaceCycle(meta, a, b, wall.cycle, now, 'dev');
+/* Lays the committed artwork back over whatever is on the wall. Always
+   seed.bin and never .wall.bin: the latter is a one-time migration off the
+   file-backed prototype, not a fixture to keep returning to. */
+function reseed(now = Date.now()) {
+  const { meta, a, b } = decodeEnvelope(fs.readFileSync(cfg.SEED_FILE));
+  seed.replaceCycle(meta, a, b, wall.cycle, now, 'seed.bin');
   rebuildCache();
   broadcast({ t: 'reset' });
   return { live: wall.live.size, booked: wall.reserved.size };
@@ -426,5 +428,5 @@ module.exports = {
   ENTRY, encodeEnvelope, decodeEnvelope, snapshotFor,
   load, rebuildCache, setSink, broadcast, publish,
   checkCycle, resetCycle, claimPixels, bookBrand,
-  seedFrom, wipe, rollCycle, archiveWall
+  reseed, wipe, rollCycle, archiveWall
 };

@@ -21,7 +21,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'reelpixel-identity-'));
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 's37-identity-'));
 const STATE_DIR = path.join(TMP, 'state');            // empty: no .wall.bin to inherit
 fs.mkdirSync(STATE_DIR, { recursive: true });
 
