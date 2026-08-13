@@ -26,12 +26,17 @@ const STATE_DIR = path.join(TMP, 'state');
 fs.mkdirSync(STATE_DIR);
 process.env.STATE_DIR = STATE_DIR;
 process.env.DATA_DIR = path.join(TMP, 'data');
+/* Not 'off': that hands submissions to a timer, and a wire contract test
+   that races an auto-approver is a flaky one. Approvals here are driven by
+   hand — moderation.test.js is where the auto path is exercised. */
+process.env.TG_MODE = 'webhook';
 delete process.env.VERCEL;
 delete process.env.DEV;
 delete process.env.ALLOW_ORIGIN;
 
 const app = require('../server.js');
 const db = require('../server/db.js');
+const submissions = require('../server/submissions.js');
 
 /* What seed.bin holds — the numbers the whole test file hangs off. Read
    rather than remembered: the artwork is a generated artifact now
@@ -242,20 +247,35 @@ test('POST /api/claim paints, spends free pixels and shows up in the snapshot', 
   assert.equal(r.json.short, 0);
   assert.equal(r.json.free, 17);
   assert.equal(r.json.cap, 20);
+  assert.equal(r.json.pending, true, 'a claim reserves, it does not paint');
+  assert.ok(r.json.sid > 0, 'the claim comes back with its submission id');
 
-  const after = decodeEnvelope((await req('GET', '/api/wall')).body);
-  assert.equal(after.a.length, SEED_LIVE + 3);
-  assert.equal(after.meta.rev, 1, 'a paint bumps the revision');
-  const painted = new Map(after.a.map(([idx, c, o]) => [idx, [c, o]]));
-  for (const [idx] of want) assert.equal(painted.get(idx)[0], 0xff00ff);
-  assert.equal(after.meta.owners[painted.get(want[0][0])[1]].t, 'u', 'owned as a user');
+  /* Nothing public has moved: the cells are held, not painted. They show up
+     in this caller's own meta and in nobody else's, and the revision — the
+     client's "did I miss a pixel" marker — has not budged. */
+  const held = decodeEnvelope((await req('GET', '/api/wall')).body);
+  assert.equal(held.a.length, SEED_LIVE, 'the public wall did not change');
+  assert.equal(held.meta.rev, 0, 'a pending claim is not a revision');
+  assert.deepEqual(held.meta.pending.live.map(([idx]) => idx), want.map(([idx]) => idx));
+  assert.deepEqual(held.meta.pending.next, []);
 
-  /* claiming an occupied cell is reported, not fatal */
+  /* …and the ground is still held against anyone else asking for it */
   const again = await getJson('POST', '/api/claim',
     encodeEnvelope({}, [want[0]]), 'application/octet-stream');
   assert.equal(again.json.placed, 0);
   assert.equal(again.json.occupied, 1);
-  assert.equal(again.json.free, 17, 'a rejected claim costs nothing');
+  assert.equal(again.json.free, 17, 'a refused claim costs nothing');
+
+  /* approved — now it is everybody's wall */
+  assert.equal(submissions.approve(r.json.sid, 'tg:1 (test)').ok, true);
+
+  const after = decodeEnvelope((await req('GET', '/api/wall')).body);
+  assert.equal(after.a.length, SEED_LIVE + 3);
+  assert.equal(after.meta.rev, 1, 'going live bumps the revision');
+  assert.deepEqual(after.meta.pending.live, [], 'no longer pending for the owner either');
+  const painted = new Map(after.a.map(([idx, c, o]) => [idx, [c, o]]));
+  for (const [idx] of want) assert.equal(painted.get(idx)[0], 0xff00ff);
+  assert.equal(after.meta.owners[painted.get(want[0][0])[1]].t, 'u', 'owned as a user');
 });
 
 test('GET /api/allowance matches what the claim reported', async () => {

@@ -495,7 +495,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 /* ═══════════ MODALS ═══════════ */
 .overlay {
   position: fixed; inset: 0; z-index: 50;
-  background: rgba(10,10,26,0.78);
+  background: rgba(14,7,11,0.80);
   backdrop-filter: blur(3px);
   display: grid; place-items: center;
   padding: 20px;
@@ -521,7 +521,7 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
   position: sticky; bottom: 0; z-index: 2;
   margin: 6px -28px 0;
   padding: 14px 28px 20px;
-  background: linear-gradient(rgba(20,20,44,0) 0%, var(--surface) 34%, var(--surface) 100%);
+  background: linear-gradient(rgba(26,13,19,0) 0%, var(--surface) 34%, var(--surface) 100%);
 }
 .modal-foot .modal-cta { margin-top: 0; }
 
@@ -599,6 +599,64 @@ button, .swatch, .tool, .pm, .chk, .pack, label { touch-action: manipulation; }
 }
 .pm input:checked + span { border-color: var(--accent); color: var(--text); background: var(--accent-dim); }
 .fine { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; }
+
+/* ═══════════ MY PIXELS ═══════════ */
+/* The gap between "sent" and "on the wall" needs somewhere to live now that
+   a person reads every batch. */
+.btn-history { color: var(--text-dim); transition: border-color .15s, color .15s; }
+.btn-history:hover { border-color: var(--accent); color: var(--text); }
+.pend-badge {
+  font-family: var(--fp); font-size: 8px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  color: var(--accent) !important;
+  border-radius: 99px;
+  padding: 3px 7px;
+  animation: pend-breathe 2.4s ease-in-out infinite;
+}
+@keyframes pend-breathe { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+
+.modal-history { width: min(560px, 100%); }
+.hs-list { display: flex; flex-direction: column; gap: 10px; }
+.hs-row {
+  display: flex; gap: 14px; align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  padding: 12px 14px;
+}
+/* the thumbnail keeps the batch's own aspect ratio inside a fixed box, so a
+   long thin scribble and a square logo both stay recognisable */
+.hs-thumb-box {
+  flex: 0 0 46px; height: 46px;
+  display: grid; place-items: center;
+  background: #fff;                      /* the wall is white paper */
+  border-radius: 4px;
+  overflow: hidden;
+}
+.hs-thumb { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+.hs-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.hs-head { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.hs-head b { font-family: var(--fp); font-size: 8px; color: var(--text); }
+.hs-px { font-size: 12px; color: var(--text-dim); }
+.hs-chip {
+  font-family: var(--fp); font-size: 7px;
+  border-radius: 99px; padding: 4px 8px;
+  border: 1px solid currentColor;
+  margin-left: auto;
+}
+.hs-wait { color: var(--warn); }
+.hs-live { color: var(--accent); }
+.hs-bad  { color: var(--danger); }
+.hs-dim  { color: var(--text-dim); }
+.hs-note { font-size: 12px; color: var(--text-dim); }
+.hs-why {
+  font-size: 12.5px; color: var(--text);
+  border-left: 2px solid var(--danger);
+  padding-left: 9px;
+}
+.hs-empty { font-size: 13px; color: var(--text-dim); line-height: 1.6; padding: 8px 2px; }
+.hs-more { display: block; margin: 14px auto 0; }
 
 .co-success { padding: 18px 0 8px; }
 .big-emoji { font-size: 44px; margin-bottom: 12px; animation: pop .4s var(--expo); }

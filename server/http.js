@@ -12,6 +12,7 @@ const path = require('path');
 const cfg = require('./config.js');
 const identity = require('./identity.js');
 const wall = require('./wall.js');
+const submissions = require('./submissions.js');
 
 const ROOT = cfg.ROOT;
 
@@ -152,6 +153,16 @@ async function handler(req, res) {
       return sendJson(res, 200, identity.me(row, now));
     }
 
+    /* Everything this caller has ever sent for review, newest first — the
+       one place a pending submission stops being a shimmer on the canvas
+       and becomes something with a status and a reason. */
+    if (urlPath === '/api/me/history' && req.method === 'GET') {
+      const q = new URLSearchParams((req.url || '').split('?')[1] || '');
+      return sendJson(res, 200, submissions.historyFor(row.id, {
+        limit: q.get('limit'), offset: q.get('offset')
+      }));
+    }
+
     /* ── accounts ── */
     if (urlPath === '/api/auth/signup' && req.method === 'POST') {
       const body = JSON.parse((await readBody(req, 64 << 10)).toString('utf8'));
@@ -181,7 +192,11 @@ async function handler(req, res) {
       const capped = identity.takeClaim(ses.ip, row, now);
       if (capped) return sendJson(res, 429, capped);
       const { a } = wall.decodeEnvelope(await readBody(req, 1 << 20));
-      return sendJson(res, 200, wall.claimPixels(row, a, now));
+      const r = wall.claimPixels(row, a, now);
+      /* Nothing is on the wall yet — this is where it gets queued for a
+         moderator, or, with no bot configured, approves itself shortly. */
+      submissions.afterCreate(r.sid);
+      return sendJson(res, 200, r);
     }
 
     if (urlPath === '/api/book' && req.method === 'POST') {
@@ -189,7 +204,9 @@ async function handler(req, res) {
       const gate = identity.bookGate(row);
       if (gate) return sendJson(res, 403, gate);
       const { meta, a } = wall.decodeEnvelope(await readBody(req, 16 << 20));
-      return sendJson(res, 200, wall.bookBrand(row, meta, a, now));
+      const r = wall.bookBrand(row, meta, a, now);
+      submissions.afterCreate(r.sid);
+      return sendJson(res, 200, r);
     }
 
     if (urlPath === '/api/paint' && req.method === 'POST') {

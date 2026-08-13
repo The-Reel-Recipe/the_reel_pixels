@@ -36,6 +36,10 @@ const PALETTE = [
 /* ── State ── */
 const pixels = new Map();             // idx -> {c,o,t}  — live wall, this cycle
 const reserved = new Map();           // idx -> {c,o,t}  — brand bookings, up at the next reset
+/* Ours, claimed, and waiting on a moderator. The server sends these only to
+   the person who owns them, so this map is never anybody else's pixels — it
+   is the shimmer that says "sent, not up yet". */
+const pending = new Map();            // idx -> color
 const sel = new Map();                // idx -> color (preview basket)
 const yours = new Set();              // idx of committed pixels owned by YOU
 const brands = new Map();             // owner name -> {url, cta} for clickable sponsor logos
@@ -205,6 +209,9 @@ const pctx = prevCvs.getContext('2d');
    coming, then blitted onto the real board when the reset promotes it */
 const nextCvs = document.createElement('canvas'); nextCvs.width = W; nextCvs.height = H;
 const nctx = nextCvs.getContext('2d');
+/* awaiting approval — drawn over the wall with a pulse, and only ever ours */
+const pendCvs = document.createElement('canvas'); pendCvs.width = W; pendCvs.height = H;
+const pdctx = pendCvs.getContext('2d');
 const thumb = document.createElement('canvas');   thumb.width = 148; thumb.height = 148;
 const thctx = thumb.getContext('2d');
 let thumbDirty = true;
@@ -279,6 +286,17 @@ function addReserved(i, p, defer) {
   }
   thumbDirty = true;
 }
+/* Same idea for the ones still waiting on a decision: a board of their own,
+   never the live one, so an approval is a move between layers and a
+   rejection is a clear. */
+function addPending(i, c, defer) {
+  pending.set(i, c);
+  if (!defer) { pdctx.fillStyle = c; pdctx.fillRect(i % W, (i / W) | 0, 1, 1); }
+}
+function removePending(i) {
+  if (!pending.delete(i)) return;
+  pdctx.clearRect(i % W, (i / W) | 0, 1, 1);
+}
 
 /* ── Loading the wall ──
    One request bootstraps everything: both pixel layers, the brand links, the
@@ -289,11 +307,12 @@ async function loadWall() {
   if (!res.ok) throw await readError('/api/wall', res);
   const { meta, a, b } = decodeEnvelope(await res.arrayBuffer());
 
-  pixels.clear(); reserved.clear(); yours.clear();
+  pixels.clear(); reserved.clear(); yours.clear(); pending.clear();
   brands.clear(); nextBrands.clear();
   taken = 0;
   bctx.clearRect(0, 0, W, H);
   nctx.clearRect(0, 0, W, H);
+  pdctx.clearRect(0, 0, W, H);
 
   api.on = true; api.rev = meta.rev || 0;
   cycle = meta.cycle;
@@ -317,6 +336,11 @@ async function loadWall() {
   // defer the per-pixel fill and blit both layers once at the end
   for (const [i, c, o] of a) { const w = own(o); addPixel(i, { c: hex(c), o: w.n, t: w.t }, true); }
   for (const [i, c, o] of b) { const w = own(o); addReserved(i, { c: hex(c), o: w.n, t: w.t }, true); }
+  // ours alone, and in the meta rather than the pixel body — see server/wall.js
+  const mine = meta.pending || { live: [], next: [] };
+  for (const list of [mine.live || [], mine.next || []]) {
+    for (const [i, c] of list) addPending(i, hex(c), true);
+  }
   repaintBoards();
   updateAll();
 }
@@ -333,6 +357,8 @@ function repaintBoards() {
   };
   bctx.clearRect(0, 0, W, H); img(pixels, bctx);
   nctx.clearRect(0, 0, W, H); img(reserved, nctx);
+  pdctx.clearRect(0, 0, W, H);
+  for (const [i, c] of pending) { pdctx.fillStyle = c; pdctx.fillRect(i % W, (i / W) | 0, 1, 1); }
   thumbDirty = true;
 }
 
@@ -363,7 +389,12 @@ function openStream() {
     if (d.rev) api.rev = d.rev;
     if (d.t === 'paint') {
       const target = d.layer === 'res' ? addReserved : addPixel;
-      for (const [i, c] of d.px) target(i, { c: hex(c), o: d.o.n, t: d.o.ty });
+      for (const [i, c] of d.px) {
+        // if this was ours, it has just stopped being pending and started
+        // being wall — take it off the shimmer layer on the way past
+        removePending(i);
+        target(i, { c: hex(c), o: d.o.n, t: d.o.ty });
+      }
       if (d.brand && d.o.ty === 'c') {
         const safe = safeUrl(d.brand.url);
         if (safe) (d.layer === 'res' ? nextBrands : brands).set(d.o.n, { url: safe, cta: d.brand.cta });
@@ -371,6 +402,19 @@ function openStream() {
       // another tab on this connection spent our allowance — don't wait for the poll
       if (d.o.ty === 'u' && d.o.n === myHandle) syncAllowance();
       updateStats();
+    } else if (d.t === 'paint-remove') {
+      // a rejection or a takedown of something that was already up
+      for (const i of d.px) {
+        if (d.layer === 'res') { reserved.delete(i); nctx.clearRect(i % W, (i / W) | 0, 1, 1); }
+        else removePixel(i);
+        removePending(i);
+      }
+      thumbDirty = true;
+      updateStats();
+    } else if (d.t === 'mod') {
+      // a decision landed. Only ours are in the history we hold, and only
+      // ours can be on the pending layer, so anything else is a no-op.
+      onDecision(d.sid, d.status);
     } else if (d.t === 'reset') {
       resync('reset');
       toast('&#128465; The wall reset — prepaid pixels are up on a fresh cycle.', { cls: 'warn', dur: 5200 });
@@ -469,6 +513,11 @@ function updateStats() {
   $('statNext').textContent = fmt(reserved.size);
   $('statYours').textContent = fmt(yours.size);
   $('statPaint').textContent = fmt(paint);
+  // the badge counts pixels, not batches — "6 waiting" means something to
+  // somebody watching their own shimmer, "1 waiting" does not
+  const badge = $('statPending');
+  badge.hidden = pending.size === 0;
+  badge.textContent = fmt(pending.size);
   updateClock();
 }
 function updateClock() {
@@ -549,7 +598,7 @@ function setColor(c, swatchEl) {
   document.querySelectorAll('.swatch').forEach(s => s.classList.remove('sel'));
   if (swatchEl) swatchEl.classList.add('sel');
   $('curColor').style.background = c;
-  $('customColor').value = /^#[0-9a-f]{6}$/i.test(c) ? c : '#3DDFA6';
+  $('customColor').value = /^#[0-9a-f]{6}$/i.test(c) ? c : '#D81B60';
 }
 $('customColor').addEventListener('input', e => setColor(e.target.value, null));
 
@@ -562,12 +611,13 @@ $('btnCheckout').onclick = () => {
   $('coPaintRow').hidden = paid === 0;
   $('coPaint').textContent = `−${fmt(paid)}`;
   $('coTotal').textContent = paid > 0 ? `0 EGP · ${fmt(paid)} PAINT` : 'FREE';
-  $('coFine').innerHTML = paid > 0
-    ? `Prototype — nothing is charged now, the paint is already paid for. Every pixel goes up straight away and stays until the wall resets on ${shortDate(cycleEndsAt())}.`
-    : `Prototype — nothing is charged. Your pixels stay up until the wall resets on ${shortDate(cycleEndsAt())}.`;
+  $('coFine').innerHTML = (paid > 0
+    ? 'The paint is already paid for — nothing is charged now. '
+    : 'Free pixels cost nothing. ') +
+    `Every pixel is checked by a person before it goes on the wall. Once it does, it stays until the reset on ${shortDate(cycleEndsAt())}.`;
   const btn = $('btnPay');
   btn.disabled = false;
-  btn.textContent = paid > 0 ? `CONFIRM · SPEND ${fmt(paid)} PAINT` : 'CLAIM';
+  btn.textContent = paid > 0 ? `SEND FOR REVIEW · ${fmt(paid)} PAINT` : 'SEND FOR REVIEW';
   $('coBody').hidden = false; $('coSuccess').hidden = true;
   openModal('modalCheckout');
 };
@@ -585,12 +635,15 @@ $('btnPay').onclick = () => {
       const d = await apiEnvelope('/api/claim', {}, [...sel].map(([i, c]) => [i, rgbInt(c), 0]));
       applyAllowance(d);
 
+      /* Claimed is not painted any more — these move from the basket to the
+         pending layer and sit there until a moderator says yes. */
       for (const i of d.placedIdx) {
         const c = sel.get(i); if (c === undefined) continue;
-        addPixel(i, { c, o: myHandle, t: 'u' });
+        addPending(i, c);
         sel.delete(i);                                  // the rest stay in the basket
         pctx.clearRect(i % W, (i / W) | 0, 1, 1);
       }
+      if (d.sid) knownSubs.add(d.sid);
       if (d.occupied) {                                 // taken while we were choosing
         for (const [i] of [...sel]) {
           if (!pixels.has(i)) continue;
@@ -600,10 +653,9 @@ $('btnPay').onclick = () => {
       updateAll();
 
       $('coBody').hidden = true;
-      $('coSuccessMsg').textContent = `${fmt(d.placed)} PIXEL${d.placed === 1 ? '' : 'S'} CLAIMED!`;
-      $('coSuccessSub').textContent = waitingOnRefill()
-        ? `Up until the reset on ${shortDate(cycleEndsAt())}. Your next ${CAP} free pixels land in ${mmss(refillLeft())}.`
-        : `They're yours until the wall resets on ${shortDate(cycleEndsAt())}.`;
+      $('coSuccessMsg').textContent = `${fmt(d.placed)} PIXEL${d.placed === 1 ? '' : 'S'} SENT FOR REVIEW`;
+      $('coSuccessSub').textContent = 'A person checks every pixel before it goes up — usually minutes. ' +
+        'Yours are held and shimmering on the wall until then, and MY PIXELS tracks them.';
       $('coSuccess').hidden = false;
       if (d.occupied) {
         toast(`${fmt(d.occupied)} pixel${d.occupied === 1 ? ' was' : 's were'} claimed by someone else first — dropped from your basket.`, { cls: 'warn' });
@@ -651,6 +703,155 @@ document.querySelectorAll('.pack').forEach(p => p.addEventListener('click', asyn
 
 /* ── Help ── */
 $('btnHelp').onclick = () => openModal('modalHelp');
+
+/* ═══════════ MY PIXELS ═══════════
+   Nothing goes on the wall unreviewed, which means "claimed" and "up" are
+   two different things and the gap between them needs somewhere to live.
+   This is it: every batch, its status, and — when a moderator turned one
+   down — the reason they gave. */
+
+const HS_PAGE = 12;
+/* submission ids we know are ours. The `mod` SSE event is broadcast to
+   everyone, so this is what turns it into "was that mine?" without asking
+   the server on every decision anyone gets. */
+const knownSubs = new Set();
+const history = { rows: [], total: 0, loaded: 0, open: false, busy: false };
+
+const HS_CHIP = {
+  pending:  { cls: 'wait', label: '⏳ WAITING' },
+  approved: { cls: 'live', label: '✅ ON THE WALL' },
+  rejected: { cls: 'bad',  label: '❌ TURNED DOWN' },
+  expired:  { cls: 'dim',  label: '⌛ EXPIRED' }
+};
+const HS_TYPE = { free: '\u{1F58C}️ FREE', paint: '\u{1F9F4} PAINT', brand: '\u{1F3E2} BRAND' };
+/* a paid row says where the money got to as well as where the pixels did */
+const HS_PAY = {
+  awaiting_transfer: 'awaiting your transfer',
+  submitted: 'checking your transfer',
+  verified: 'payment confirmed',
+  rejected: 'payment not received',
+  refund_due: '\u{1F4B8} refund on the way',
+  refunded: '\u{1F4B8} refunded',
+  expired: 'order expired'
+};
+
+/* The server sends at most 256 sampled pixels per row (see thumbOf), which
+   is plenty at this size and bounded whether the batch was 4 pixels or a
+   160,000-pixel logo. */
+function thumbCanvas(row) {
+  const c = document.createElement('canvas');
+  const w = Math.max(1, row.bbox[2] - row.bbox[0] + 1);
+  const h = Math.max(1, row.bbox[3] - row.bbox[1] + 1);
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  for (const [dx, dy, col] of row.thumb || []) {
+    g.fillStyle = hex(col);
+    g.fillRect(dx, dy, 1, 1);
+  }
+  c.className = 'hs-thumb';
+  // let the box decide the display size; the bitmap stays 1px per pixel
+  c.style.aspectRatio = `${w} / ${h}`;
+  return c;
+}
+
+function historyRow(row) {
+  const el = document.createElement('div');
+  el.className = 'hs-row';
+  const chip = HS_CHIP[row.status] || HS_CHIP.pending;
+
+  const box = document.createElement('div');
+  box.className = 'hs-thumb-box';
+  box.appendChild(thumbCanvas(row));
+  el.appendChild(box);
+
+  const body = document.createElement('div');
+  body.className = 'hs-body';
+  const head = document.createElement('div');
+  head.className = 'hs-head';
+  head.innerHTML = `<b>${HS_TYPE[row.type] || row.type}</b>` +
+    `<span class="hs-px">${fmt(row.px)} px</span>` +
+    `<span class="hs-chip hs-${chip.cls}">${chip.label}</span>`;
+  body.appendChild(head);
+
+  const note = document.createElement('div');
+  note.className = 'hs-note';
+  const when = new Date(row.at).toLocaleString('en-US',
+    { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+  let text = when;
+  if (row.brand) text += ` · ${row.brand}`;
+  if (row.layer === 'next') text += ' · next cycle';
+  if (row.payment) {
+    text += ` · ${HS_PAY[row.payment.status] || row.payment.status}`;
+    if (row.payment.amount) text += ` (${fmt(Math.round(row.payment.amount / 100))} EGP)`;
+  }
+  note.textContent = text;
+  body.appendChild(note);
+
+  if (row.reason) {
+    const why = document.createElement('div');
+    why.className = 'hs-why';
+    why.textContent = row.reason;
+    body.appendChild(why);
+  }
+  el.appendChild(body);
+  return el;
+}
+
+function renderHistory() {
+  const list = $('hsList');
+  list.textContent = '';
+  for (const row of history.rows) list.appendChild(historyRow(row));
+  $('hsEmpty').hidden = history.rows.length > 0;
+  $('hsMore').hidden = history.rows.length >= history.total;
+}
+
+async function loadHistory(more) {
+  if (history.busy) return;
+  history.busy = true;
+  try {
+    const offset = more ? history.rows.length : 0;
+    const d = await apiJson(`/api/me/history?limit=${HS_PAGE}&offset=${offset}`);
+    history.rows = more ? history.rows.concat(d.rows) : d.rows;
+    history.total = d.total;
+    for (const r of history.rows) knownSubs.add(r.sid);
+    renderHistory();
+  } catch (e) {
+    $('hsEmpty').hidden = false;
+    $('hsEmpty').textContent = 'Could not reach the server — try again in a moment.';
+  } finally { history.busy = false; }
+}
+
+/* A decision landed somewhere. If it is one of ours, the wall needs
+   refetching (our pending pixels either became wall or vanished) and the
+   allowance may have moved with it. */
+let decisionTimer = null;
+function onDecision(sid, status) {
+  if (!knownSubs.has(sid)) return;
+  clearTimeout(decisionTimer);
+  decisionTimer = setTimeout(() => {
+    syncAllowance();
+    if (history.open) loadHistory(false);
+  }, 150);
+  if (status === 'rejected' || status === 'expired') {
+    toast(status === 'rejected'
+      ? 'One of your batches was turned down — open <b>MY PIXELS</b> for the reason.'
+      : 'A batch expired before it was reviewed — see <b>MY PIXELS</b>.',
+      { cls: 'warn', dur: 6000, action: { label: 'MY PIXELS', fn: openHistory } });
+  } else if (status === 'approved') {
+    toast('✅ Your pixels are on the wall.');
+  }
+}
+
+function openHistory() {
+  history.open = true;
+  openModal('modalHistory');
+  loadHistory(false);
+}
+$('btnHistory').onclick = openHistory;
+$('hsMore').onclick = () => loadHistory(true);
+$('modalHistory').addEventListener('click', e => {
+  if (e.target.hasAttribute('data-close') || e.target.id === 'modalHistory') history.open = false;
+});
 
 /* ═══════════ BRAND ACCOUNT ═══════════
    Painting needs nobody's permission — the cookie the server hands out on
@@ -1702,6 +1903,15 @@ function loop(t) {
     ctx.globalAlpha = 1;
   }
 
+  // ours, sent, waiting on a moderator. Slower and shallower than the
+  // preview pulse below, so "I have not sent this yet" and "I have sent
+  // this and it is being looked at" never read as the same thing.
+  if (pending.size) {
+    ctx.globalAlpha = 0.42 + 0.24 * Math.sin(t / 520);
+    ctx.drawImage(pendCvs, ox, oy, bw, bh);
+    ctx.globalAlpha = 1;
+  }
+
   // visible world range
   const x0 = Math.max(0, Math.floor(-ox / s)), x1 = Math.min(W, Math.ceil((cw - ox) / s));
   const y0 = Math.max(0, Math.floor(-oy / s)), y1 = Math.min(H, Math.ceil((ch - oy) / s));
@@ -1740,7 +1950,7 @@ function loop(t) {
   // "yours" flash
   if (yoursFlashUntil > t && yours.size) {
     const pulse = 0.5 + 0.5 * Math.sin(t / 110);
-    ctx.strokeStyle = `rgba(61,223,166,${0.35 + 0.6 * pulse})`;
+    ctx.strokeStyle = `rgba(216,27,96,${0.35 + 0.6 * pulse})`;
     ctx.lineWidth = Math.max(1.5, s * 0.18);
     let n = 0;
     for (const i of yours) {
@@ -1757,14 +1967,14 @@ function loop(t) {
     ctx.drawImage(placing.ghost, ox + gx * s, oy + gy * s, gw, gh);
     ctx.globalAlpha = 1;
     if (!ghostValid) { ctx.fillStyle = 'rgba(230,57,70,0.35)'; ctx.fillRect(ox + gx * s, oy + gy * s, gw, gh); }
-    ctx.strokeStyle = ghostValid ? '#3DDFA6' : '#E63946';
+    ctx.strokeStyle = ghostValid ? '#D81B60' : '#E23B2E';
     ctx.lineWidth = 2;
     ctx.strokeRect(ox + gx * s - 1, oy + gy * s - 1, gw + 2, gh + 2);
   }
 
   // hover cell
   if (hover && !placing && (!panState || !panState.moved)) {
-    ctx.strokeStyle = 'rgba(61,223,166,0.95)';
+    ctx.strokeStyle = 'rgba(216,27,96,0.95)';
     ctx.lineWidth = Math.max(1.5, Math.min(3, s * 0.15));
     ctx.strokeRect(ox + hover.x * s - 1, oy + hover.y * s - 1, s + 2, s + 2);
   }
@@ -1789,7 +1999,7 @@ function loop(t) {
   mmctx.drawImage(thumb, 0, 0);
   const vx = (-ox / s) / W * 148, vy = (-oy / s) / H * 148;
   const vw = (cw / s) / W * 148, vh = (ch / s) / H * 148;
-  mmctx.strokeStyle = '#3DDFA6'; mmctx.lineWidth = 2;
+  mmctx.strokeStyle = '#D81B60'; mmctx.lineWidth = 2;
   mmctx.strokeRect(Math.max(1, vx), Math.max(1, vy), Math.min(146, vw), Math.min(146, vh));
 
   requestAnimationFrame(loop);

@@ -35,6 +35,9 @@ process.env.DATA_DIR = DATA_DIR;
    itself is what identity.test.js is for; here it would only be measuring
    the test's own appetite. */
 process.env.IP_CLAIM_CAP = '1000';
+/* Approvals are driven by hand here — a durability test that races a 2s
+   auto-approve timer proves nothing repeatable. See moderation.test.js. */
+process.env.TG_MODE = 'webhook';
 delete process.env.VERCEL;
 delete process.env.DEV;
 delete process.env.ALLOW_ORIGIN;
@@ -42,6 +45,7 @@ delete process.env.ALLOW_ORIGIN;
 const app = require('../server.js');
 const dbm = require('../server/db.js');
 const wall = require('../server/wall.js');
+const submissions = require('../server/submissions.js');
 const cfg = require('../server/config.js');
 
 /* Read out of the file rather than remembered — see contract.test.js. */
@@ -142,6 +146,7 @@ function bootChild(env) {
       cells: one('SELECT COUNT(*) n FROM cells'),
       seedSource: d.getMeta('seed_source'),
       found: probe.filter(i => w.wall.live.has(i)),
+      pending: probe.filter(i => w.wall.pending.live.has(i)),
       colors: probe.map(i => (w.wall.live.get(i) || {}).c)
     }));
     d.close();
@@ -253,8 +258,11 @@ test('two concurrent claims for the same pixel — exactly one wins', async () =
   assert.equal(lost[0].json.occupied, 1, 'the loser is told why');
   assert.equal(lost[0].json.short, 0);
 
+  /* The race is settled at submit time, not at approval (§4.4): one row
+     holds the ground from this moment, and it is the winner's. */
   assert.equal(cellsAt(idx), 1, 'one row, one owner, no double sale');
-  assert.equal(wall.wall.live.get(idx).c, a.json.placed === 1 ? 0xff0000 : 0x0000ff);
+  assert.equal(wall.wall.pending.live.get(idx).c, a.json.placed === 1 ? 0xff0000 : 0x0000ff);
+  assert.equal(wall.wall.live.has(idx), false, 'nothing goes public without a decision');
 
   /* the loser's transaction rolled all the way back — no orphan submission
      row, and the pixel it didn't get isn't billed to it either */
@@ -263,7 +271,7 @@ test('two concurrent claims for the same pixel — exactly one wins', async () =
     "SELECT submission_id FROM cells WHERE cycle = ? AND layer = 'live' AND idx = ?"
   ).get(wall.wall.cycle, idx);
   const sub = dbm.db.prepare('SELECT px_count, status FROM submissions WHERE id = ?').get(cell.submission_id);
-  assert.deepEqual(sub, { px_count: 1, status: 'approved' });
+  assert.deepEqual(sub, { px_count: 1, status: 'pending' });
   assert.equal(lost[0].json.free, won[0].json.free, 'a lost race costs nothing');
 });
 
@@ -304,6 +312,14 @@ test('claims survive a restart — a fresh process sees them', async () => {
   const r = await claim(idxs.map(i => [i, 0x7f00ff]));
   assert.equal(r.json.placed, 4);
 
+  /* Held first: a reservation is a committed row, so it outlives the process
+     that took it even before anyone has looked at it. */
+  const held = bootChild({ PROBE: idxs.join(',') });
+  assert.deepEqual(held.found, [], 'a pending claim is not on the public wall');
+  assert.deepEqual(held.pending, idxs, 'a fresh process rebuilt the reservation');
+
+  assert.equal(submissions.approve(r.json.sid, 'tg:1 (test)').ok, true);
+
   const child = bootChild({ PROBE: idxs.join(',') });
   assert.deepEqual(child.found, idxs, 'a new process rebuilt the wall without them');
   assert.deepEqual(child.colors, idxs.map(() => 0x7f00ff), 'colours came back wrong');
@@ -326,6 +342,10 @@ function bookNextLayer(n) {
   const r = wall.bookBrand({ id: uid, handle: 'NILE SODA CO.' },
     { name: 'NILE SODA CO.', url: 'https://nile-soda.example' }, px, now);
   assert.equal(r.booked, n, 'the fixture booking did not land');
+  /* A booking is held pending like everything else, and only an approved one
+     is sitting on the next layer waiting to be promoted — which is the thing
+     this test is about. */
+  assert.equal(submissions.approve(r.sid, 'tg:1 (test)').ok, true);
   return n;
 }
 

@@ -178,6 +178,10 @@ module.exports = Object.freeze({
   TG_WEBHOOK_SECRET: env.TG_WEBHOOK_SECRET || '',
   TG_MOD_IDS: ids('TG_MOD_IDS', env.TG_MOD_IDS),
   TG_MODE: oneOf('TG_MODE', env.TG_MODE, ['webhook', 'poll', 'off'], PROD ? 'webhook' : 'off'),
+  /* TG_MODE=off has no moderator, so submissions approve themselves after
+     this long (§5). Not zero: the pending state is the thing worth looking
+     at in dev, and at 0 ms it would never be on screen. Tests set it to 0. */
+  AUTO_APPROVE_MS: count('AUTO_APPROVE_MS', env.AUTO_APPROVE_MS, 2000),
   INSTAPAY_URL: href('INSTAPAY_URL', env.INSTAPAY_URL, ''),
   PUBLIC_URL: href('PUBLIC_URL', env.PUBLIC_URL, ''),
   ADMIN_IP_ALLOW: list(env.ADMIN_IP_ALLOW)

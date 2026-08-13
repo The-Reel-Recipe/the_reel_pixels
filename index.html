@@ -126,6 +126,9 @@
   <!-- ═══════════ ACTION BAR ═══════════ -->
   <footer class="actionbar">
     <div class="ab-left">
+      <button id="btnHistory" class="mini-stat btn-history" title="Everything you have sent for review">
+        &#128336; MY PIXELS<b id="statPending" class="pend-badge" hidden>0</b>
+      </button>
       <div class="mini-stat" id="yoursStat" title="Click to highlight your pixels">YOUR PIXELS: <b id="statYours">0</b></div>
       <div class="mini-stat paint-stat">
         <svg viewBox="0 0 16 16" class="bucket" aria-hidden="true"><path fill="currentColor" d="M6 1h4v1h1v1h1v1h1v1h1v4h-1v1h-1v1h-1v1h-1v1H8v1H6v-1H5v-1H4v-1H3V9H2V5h1V4h1V3h1V2h1V1zm0 3v1H5v1H4v2h1v1h1v1h2v1h2V9h1V8h1V6h-1V5h-1V4H6z"/><path fill="currentColor" d="M13 10h2v3h-1v1h-1v-1h-1v-2h1v-1z"/></svg>
@@ -159,8 +162,8 @@
       <h2 id="helpTitle">THE PIXEL WALL</h2>
       <p class="modal-sub">1,000,000 pixels. One wall. Wiped clean every month.</p>
       <div class="steps">
-        <div class="step"><span class="step-n">1</span><div><b>PICK &amp; PAINT</b><p>Choose a color and click up to <b>20 empty pixels</b> to preview your art on the wall.</p></div></div>
-        <div class="step"><span class="step-n">2</span><div><b>CLAIM THEM FREE</b><p>Your 20 pixels cost <b>nothing</b>. Claim them and they go live on the wall straight away.</p></div></div>
+        <div class="step"><span class="step-n">1</span><div><b>PICK &amp; PAINT</b><p>Choose a colour and click up to <b>20 empty pixels</b> to preview your art on the wall.</p></div></div>
+        <div class="step"><span class="step-n">2</span><div><b>SEND THEM FOR REVIEW</b><p>Your 20 pixels cost <b>nothing</b>. A person checks every batch before it goes up &mdash; usually minutes. Yours are held and shimmering until then.</p></div></div>
         <div class="step"><span class="step-n">3</span><div><b>WAIT 30 MINUTES</b><p>Used all 20? A fresh <b>20 free pixels</b> land <b>30 minutes</b> later. Come back and keep going.</p></div></div>
         <div class="step"><span class="step-n">4</span><div><b>THE 1st WIPES IT</b><p>On the <b>1st of every month</b> the whole wall resets to white and everyone starts over.</p></div></div>
       </div>
@@ -196,6 +199,20 @@
     </div>
   </div>
 
+  <!-- My pixels — every submission, and where it got to -->
+  <div class="overlay" id="modalHistory" hidden>
+    <div class="modal modal-history" role="dialog" aria-modal="true" aria-labelledby="hsTitle">
+      <button class="modal-x" data-close aria-label="Close">&times;</button>
+      <h2 id="hsTitle">&#128336; MY PIXELS</h2>
+      <p class="modal-sub">Every batch you have sent, newest first. A person checks each one before it
+        goes on the wall &mdash; usually within minutes.</p>
+      <div class="hs-list" id="hsList"></div>
+      <p class="hs-empty" id="hsEmpty" hidden>Nothing sent yet. Pick a colour, click some pixels, and
+        they will show up here.</p>
+      <button class="btn-mini hs-more" id="hsMore" hidden>LOAD OLDER</button>
+    </div>
+  </div>
+
   <!-- Paint shop -->
   <div class="overlay" id="modalPaint" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="psTitle">
@@ -217,7 +234,7 @@
           <span class="pk-price">3,500 EGP</span><span class="pk-save">SAVE 30%</span>
         </button>
       </div>
-      <p class="fine">Prototype — clicking a pack instantly adds paint (mock payment). Paint never expires, so it keeps until you want it.</p>
+      <p class="fine">Paint never expires, so it keeps until you want it. Pixels painted with it go through the same review as free ones &mdash; if a batch is turned down, the paint comes straight back.</p>
     </div>
   </div>
 
