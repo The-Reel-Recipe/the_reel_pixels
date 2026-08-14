@@ -412,24 +412,110 @@ body.no-paint .paint-dock {
   box-shadow: 0 0 0 3px rgba(255, 77, 157, 0.45);
 }
 
-/* The colour input IS the swatch — its own value is the current-colour
-   display, and tapping it hands over to the platform picker. */
+/* the swatch that opens our own picker */
 .cur-color {
   flex: none;
   width: 38px; height: 38px;
   padding: 0;
   border-radius: 11px;
   border: 2px solid rgba(255, 255, 255, 0.4);
-  background: none;
-  cursor: pointer;
-  -webkit-appearance: none;
-  appearance: none;
+  background: var(--pink-deep);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
-.cur-color::-webkit-color-swatch-wrapper { padding: 0; }
-.cur-color::-webkit-color-swatch { border: 0; border-radius: 8px; }
-.cur-color::-moz-color-swatch { border: 0; border-radius: 8px; }
 .cur-color:active { transform: scale(0.95); }
+
+/* ── the colour picker ────────────────────────────────────────── */
+
+.modal-color { max-width: 420px; }
+.pk-sv {
+  position: relative;
+  height: 210px;
+  margin-top: 16px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border-2);
+  touch-action: none;
+  cursor: crosshair;
+  /* white → hue across, transparent → black down: the standard square,
+     built from two gradients rather than a canvas */
+  background:
+    linear-gradient(to top, #000, rgba(0, 0, 0, 0)),
+    linear-gradient(to right, #fff, var(--pk-hue, #FF0080));
+}
+.pk-knob {
+  position: absolute;
+  width: 26px; height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 999px;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+.pk-hue {
+  width: 100%;
+  height: 34px;
+  margin-top: 14px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+}
+.pk-hue::-webkit-slider-runnable-track {
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border-2);
+  background: linear-gradient(to right,
+    #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+}
+.pk-hue::-moz-range-track {
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--border-2);
+  background: linear-gradient(to right,
+    #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%);
+}
+.pk-hue::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px; height: 26px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: #fff;
+  border: 3px solid var(--surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.pk-hue::-moz-range-thumb {
+  width: 26px; height: 26px;
+  border-radius: 999px;
+  background: #fff;
+  border: 3px solid var(--surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+.pk-foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+.pk-chip {
+  flex: none;
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+}
+.pk-hex {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--r);
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  font-family: var(--fp); font-weight: var(--fp-w);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+html[lang="ar"] .pk-hex { font-size: 14px; }
+.pk-hex:focus { outline: none; border-color: var(--pink); }
+.pk-foot .btn-claim { flex: none; }
+.pk-recent { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.pk-recent button {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+}
 
 .sel-counter {
   font-family: var(--fp); font-weight: var(--fp-w);

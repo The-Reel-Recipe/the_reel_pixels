@@ -648,10 +648,108 @@ function setColor(c, swatchEl) {
   selColor = c;
   document.querySelectorAll('.swatch').forEach(s => s.classList.remove('sel'));
   if (swatchEl) swatchEl.classList.add('sel');
-  /* the input's own value is the current-colour display */
-  $('customColor').value = /^#[0-9a-f]{6}$/i.test(c) ? c : '#D81B60';
+  $('btnColor').style.background = c;
 }
-$('customColor').addEventListener('input', e => setColor(e.target.value, null));
+
+/* ═══════════ COLOUR PICKER ═══════════
+   Ours rather than <input type="color">, which Android renders as eight
+   fixed swatches with the spectrum hidden behind a "Customised" link —
+   on a wall whose whole point is choosing a colour, that is the wrong
+   control. A saturation/value square, a hue rail, a hex box, and the
+   colours you actually used last. */
+
+const RECENT_KEY = 's37.recent';
+let pk = { h: 335, s: 0.87, v: 0.85 };
+let recent = [];
+try { recent = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]').slice(0, 12); }
+catch (e) { /* private mode */ }
+
+function hsvHex(h, s, v) {
+  const f = n => {
+    const k = (n + h / 60) % 6;
+    return Math.round(255 * v * (1 - s * Math.max(0, Math.min(k, 4 - k, 1))));
+  };
+  return '#' + [f(5), f(3), f(1)].map(n => n.toString(16).padStart(2, '0')).join('');
+}
+function hexHsv(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) {
+    if (mx === r) h = 60 * (((g - b) / d) % 6);
+    else if (mx === g) h = 60 * ((b - r) / d + 2);
+    else h = 60 * ((r - g) / d + 4);
+  }
+  return { h: (h + 360) % 360, s: mx ? d / mx : 0, v: mx };
+}
+
+function pkRender(typing) {
+  const hex = hsvHex(pk.h, pk.s, pk.v);
+  $('pkSV').style.setProperty('--pk-hue', hsvHex(pk.h, 1, 1));
+  $('pkKnob').style.left = `${pk.s * 100}%`;
+  $('pkKnob').style.top = `${(1 - pk.v) * 100}%`;
+  $('pkChip').style.background = hex;
+  if (!typing) $('pkHex').value = hex.toUpperCase();
+  $('pkHue').value = Math.round(pk.h);
+  return hex;
+}
+function pkRenderRecent() {
+  const host = $('pkRecent');
+  host.textContent = '';
+  for (const c of recent) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.style.background = c; b.title = c;
+    b.onclick = () => { const v = hexHsv(c); if (v) { pk = v; pkRender(); } };
+    host.appendChild(b);
+  }
+}
+function pkRemember(c) {
+  recent = [c, ...recent.filter(x => x.toLowerCase() !== c.toLowerCase())].slice(0, 12);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch (e) { /* private mode */ }
+}
+
+/* the square: one pointer handler, dragged or tapped, capture so a finger
+   that slides off the edge keeps steering it */
+(function pkSquare() {
+  const sq = $('pkSV');
+  let dragging = false;
+  const at = e => {
+    const r = sq.getBoundingClientRect();
+    pk.s = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    pk.v = 1 - Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    pkRender();
+  };
+  sq.addEventListener('pointerdown', e => {
+    dragging = true;
+    try { sq.setPointerCapture(e.pointerId); } catch (err) {}
+    at(e); e.preventDefault();
+  });
+  sq.addEventListener('pointermove', e => { if (dragging) at(e); });
+  sq.addEventListener('pointerup', () => { dragging = false; });
+  sq.addEventListener('pointercancel', () => { dragging = false; });
+})();
+
+$('pkHue').addEventListener('input', e => { pk.h = Number(e.target.value); pkRender(); });
+$('pkHex').addEventListener('input', e => {
+  const v = hexHsv(e.target.value);
+  if (v) { pk = v; pkRender(true); }
+});
+$('btnColor').onclick = () => {
+  const v = hexHsv(selColor);
+  if (v) pk = v;
+  pkRender();
+  pkRenderRecent();
+  openModal('modalColor');
+};
+$('pkDone').onclick = () => {
+  const hex = hsvHex(pk.h, pk.s, pk.v);
+  setColor(hex, null);
+  pkRemember(hex);
+  closeModal('modalColor');
+};
 
 /* ── Checkout ── */
 $('btnCheckout').onclick = () => {
@@ -2322,7 +2420,7 @@ const L = {
     'dock.claimFree': 'SEND {n} · FREE',
     'dock.claimPaint': 'SEND {n} PX · {paid} PAINT',
     'dock.claimMix': 'SEND {n} PX · {free} FREE + {paid} PAINT',
-    'dock.clear': 'CLEAR', 'dock.custom': 'Pick any color',
+    'dock.clear': 'CLEAR', 'dock.custom': 'Pick any color', 'pk.title': 'PICK A COLOUR', 'pk.done': 'USE IT',
     'common.paint': 'PAINT', 'common.paintLower': 'paint',
     'common.optional': 'OPTIONAL', 'common.choosefile': 'CHOOSE FILE',
     'common.nofile': 'No file chosen', 'common.egppx': 'EGP/PX',
@@ -2483,7 +2581,7 @@ const L = {
     'dock.claimFree': 'ابعت {n} · ببلاش',
     'dock.claimPaint': 'ابعت {n} بكسل · {paid} بوية',
     'dock.claimMix': 'ابعت {n} بكسل · {free} ببلاش + {paid} بوية',
-    'dock.clear': 'امسح', 'dock.custom': 'اختار أي لون',
+    'dock.clear': 'امسح', 'dock.custom': 'اختار أي لون', 'pk.title': 'اختار لون', 'pk.done': 'خدها',
     'common.paint': 'بوية', 'common.paintLower': 'بوية',
     'common.optional': 'اختياري', 'common.choosefile': 'اختار ملف',
     'common.nofile': 'مفيش ملف متختار', 'common.egppx': 'جنيه/بكسل',
