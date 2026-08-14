@@ -57,8 +57,11 @@ const CSP = [
   STYLE_SRC,
   FONT_SRC,
   /* data: for the history thumbnails and the crop preview, both of which
-     are canvases the page drew itself */
-  "img-src 'self' data:",
+     are canvases the page drew itself. blob: for a picked logo file before
+     it's ever uploaded — createObjectURL() is how the crop tool previews
+     it client-side, and without this every choice, valid or not, failed
+     to decode with no server involved at all. */
+  "img-src 'self' data: blob:",
   "connect-src 'self'",
   "form-action 'self'",
   "base-uri 'none'",

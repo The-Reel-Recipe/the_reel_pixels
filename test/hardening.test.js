@@ -89,6 +89,7 @@ test('the policy allows nothing it does not have to', async () => {
   assert.deepEqual(dir['connect-src'], ["'self'"]);
   assert.deepEqual(dir['form-action'], ["'self'"]);
   assert.ok(dir['img-src'].includes('data:'), 'the history thumbnails are canvas data URIs');
+  assert.ok(dir['img-src'].includes('blob:'), 'a picked logo previews via a blob: URL before it is ever uploaded');
 
   /* Google is named only while the fonts are still theirs. `npm run fonts`
      pulls them in-house and this becomes 'self' with no code change —
