@@ -236,6 +236,35 @@ test('rejection frees the ground and says why', async () => {
   assert.equal(row.reason, 'not on a charity wall');
 });
 
+/* Rejecting paint-bought pixels hands the paint back (§5): the money
+   changed hands at the pack, and the pixels are never going up. Free
+   quota is not refunded — that is a daily allowance, not a purchase. */
+test('a rejected paint claim gets its paint back, and only the paint', async () => {
+  const me = visitor('203.0.113.32');
+  await req(me, 'GET', '/api/wall');
+  const uid = uidOf(me);
+
+  /* two pixels of free quota left, then paint for whatever is past it —
+     so this one claim spends both, and only one half is owed back */
+  dbm.tx(() => identity.creditPaintRaw(uid, 10));
+  dbm.db.prepare('UPDATE allowances SET used = ? WHERE user_id = ?').run(cfg.CAP - 2, uid);
+  identity.cache.delete(uid);
+
+  const r = await claim(me, freeRange(5).map(i => [i, 0x445566]));
+  assert.equal(r.json.placed, 5);
+  const row = dbm.db.prepare('SELECT used_free, used_paint FROM submissions WHERE id = ?').get(r.json.sid);
+  assert.deepEqual(row, { used_free: 2, used_paint: 3 }, 'the split is recorded, not just the total');
+
+  const paintBefore = dbm.db.prepare('SELECT paint FROM allowances WHERE user_id = ?').get(uid).paint;
+  const usedBefore = dbm.db.prepare('SELECT used FROM allowances WHERE user_id = ?').get(uid).used;
+
+  assert.equal(submissions.reject(r.json.sid, 'tg:99 (sara)', 'no').ok, true);
+
+  const after = dbm.db.prepare('SELECT used, paint FROM allowances WHERE user_id = ?').get(uid);
+  assert.equal(after.paint, paintBefore + 3, 'the 3 paint pixels come back');
+  assert.equal(after.used, usedBefore, 'the 2 free ones do not — the allowance is not extended by a rejection');
+});
+
 /* ── §4.5 idempotency ─────────────────────────────────────────── */
 
 test('a second tap decides nothing and says who got there first', async () => {

@@ -29,6 +29,7 @@
 
 const cfg = require('./config.js');
 const { db, tx, logEvent } = require('./db.js');
+const identity = require('./identity.js');
 
 /* wall.js injects itself on load — see the header. Only ever used after
    boot, so the null window is never observable from a request. */
@@ -82,7 +83,7 @@ const dropCells = db.prepare('DELETE FROM cells WHERE submission_id = ?');
 
 const selPending = db.prepare(
   `SELECT s.id, s.user_id, s.type, s.layer, s.cycle, s.px_count, s.created_at, s.payment_id,
-          u.handle FROM submissions s JOIN users u ON u.id = s.user_id
+          s.used_free, s.used_paint, u.handle FROM submissions s JOIN users u ON u.id = s.user_id
      WHERE s.status = 'pending' ORDER BY s.id`);
 const countPending = db.prepare("SELECT COUNT(*) n FROM submissions WHERE status = 'pending'");
 
@@ -191,6 +192,11 @@ function eraseTx(stmt, action, sid, actor, reason, now) {
 
   const cells = selCells.all(sid);
   dropCells.run(sid);
+  /* Paint was spent on pixels that are not going up after all — the money
+     for it changed hands at the pack, not here, so what comes back is
+     paint (PLAN §5). Free quota is not refunded: rejection is a decision
+     about the submission, not an extension of the daily allowance. */
+  if (sub.used_paint > 0) identity.creditPaintRaw(sub.user_id, sub.used_paint);
   const payment = settlePayment(sub, now);
   logEvent(actor, action, { sid, px: cells.length, type: sub.type, reason: reason || null, payment }, now);
   return { ok: true, sid, sub, cells, payment, status: action === 'expire' ? 'expired' : 'rejected' };
@@ -291,10 +297,13 @@ function sweepAtReset(cycle, now) {
     dropCells.run(sub.id);
     out.expired++;
     /* Paint was spent on pixels that will now never exist. The money for it
-       changed hands at the pack, not here, so what goes back is paint (§5). */
-    if (sub.type === 'paint' && sub.px_count > 0) {
-      refundPaint.run(sub.px_count, sub.user_id);
-      out.paintBack += sub.px_count;
+       changed hands at the pack, not here, so what goes back is paint (§5).
+       used_paint, not px_count — a mixed claim spends free quota first and
+       paint for the rest, and refunding the whole count as paint on a claim
+       that was mostly free pixels would hand back money nobody paid. */
+    if (sub.used_paint > 0) {
+      refundPaint.run(sub.used_paint, sub.user_id);
+      out.paintBack += sub.used_paint;
     }
     if (settlePayment(sub, now) === 'refund_due') out.refunds++;
   }

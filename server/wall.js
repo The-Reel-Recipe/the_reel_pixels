@@ -194,7 +194,9 @@ const insSub = db.prepare(
   `INSERT INTO submissions (user_id, type, cycle, layer, px_count, bbox, pixels,
      brand_name, brand_url, brand_cta, status, created_at)
    VALUES (?, ?, ?, ?, 0, '[]', x'', ?, ?, ?, 'pending', ?)`);
-const fillSub = db.prepare('UPDATE submissions SET px_count = ?, bbox = ?, pixels = ? WHERE id = ?');
+const fillSub = db.prepare(
+  `UPDATE submissions SET px_count = ?, bbox = ?, pixels = ?, used_free = ?, used_paint = ?
+     WHERE id = ?`);
 const dropSub = db.prepare('DELETE FROM submissions WHERE id = ?');
 const insCell = db.prepare(
   `INSERT OR IGNORE INTO cells (cycle, layer, idx, color, submission_id, user_id, state)
@@ -331,10 +333,11 @@ function claimTx(e, want, now, ip) {
     if (insCell.run(wall.cycle, 'live', idx, c, sid, e.id).changes) placed.push([idx, c]);
   }
   if (!placed.length) { dropSub.run(sid); return null; }
-  fillSub.run(placed.length, JSON.stringify(seed.bboxOf(placed)), seed.packPixels(placed), sid);
-
   const usedFree = Math.min(placed.length, freeQuota);
   const usedPaint = placed.length - usedFree;
+  fillSub.run(placed.length, JSON.stringify(seed.bboxOf(placed)), seed.packPixels(placed),
+    usedFree, usedPaint, sid);
+
   const after = {
     id: e.id,
     used: e.used + usedFree,
@@ -397,7 +400,8 @@ function bookTx(e, name, meta, want, now) {
     if (insCell.run(wall.cycle, 'next', idx, c, sid, e.id).changes) placed.push([idx, c]);
   }
   if (!placed.length) { dropSub.run(sid); return null; }
-  fillSub.run(placed.length, JSON.stringify(seed.bboxOf(placed)), seed.packPixels(placed), sid);
+  fillSub.run(placed.length, JSON.stringify(seed.bboxOf(placed)), seed.packPixels(placed),
+    0, 0, sid);            // a brand pays through InstaPay, not its own allowance
 
   logEvent(`user:${e.id}`, 'book', { sid, name, px: placed.length, url }, now);
   return { sid, placed, url, cta };
