@@ -76,20 +76,22 @@ const selByCode = db.prepare('SELECT * FROM payments WHERE code = ?');
 const linkSub = db.prepare('UPDATE submissions SET payment_id = ? WHERE id = ?');
 const selSubForPayment = db.prepare('SELECT id, status FROM submissions WHERE payment_id = ?');
 
+/* Every transition stamps updated_at — the notifications feed (§3) orders
+   on "when did this payment last change", which created_at cannot answer. */
 const goSubmitted = db.prepare(
-  `UPDATE payments SET status = 'submitted', instapay_ref = ?, payer_handle = ?
+  `UPDATE payments SET status = 'submitted', instapay_ref = ?, payer_handle = ?, updated_at = ?
      WHERE id = ? AND status IN ('awaiting_transfer','submitted')`);
 const setShot = db.prepare('UPDATE payments SET screenshot_path = ? WHERE id = ?');
 const goVerified = db.prepare(
-  `UPDATE payments SET status = 'verified', verified_at = ?, verified_by = ?
+  `UPDATE payments SET status = 'verified', verified_at = ?, verified_by = ?, updated_at = ?
      WHERE id = ? AND status = 'submitted'`);
 const goRejected = db.prepare(
-  `UPDATE payments SET status = 'rejected' WHERE id = ? AND status IN ('awaiting_transfer','submitted')`);
+  `UPDATE payments SET status = 'rejected', updated_at = ? WHERE id = ? AND status IN ('awaiting_transfer','submitted')`);
 const goRefunded = db.prepare(
-  `UPDATE payments SET status = 'refunded', refunded_at = ?, refunded_by = ?
+  `UPDATE payments SET status = 'refunded', refunded_at = ?, refunded_by = ?, updated_at = ?
      WHERE id = ? AND status = 'refund_due'`);
 const goExpired = db.prepare(
-  `UPDATE payments SET status = 'expired' WHERE id = ? AND status = 'awaiting_transfer'`);
+  `UPDATE payments SET status = 'expired', updated_at = ? WHERE id = ? AND status = 'awaiting_transfer'`);
 
 const staleOrders = db.prepare(
   `SELECT * FROM payments WHERE status = 'awaiting_transfer' AND hold_expires IS NOT NULL
@@ -172,7 +174,7 @@ function submitProof(paymentId, userId, body, now = Date.now()) {
   }
 
   const changed = tx(() => {
-    if (!goSubmitted.run(ref, handle, paymentId).changes) return false;
+    if (!goSubmitted.run(ref, handle, now, paymentId).changes) return false;
     logEvent(`user:${userId}`, 'payment-submitted', { payment: paymentId, ref, handle }, now);
     return true;
   });
@@ -201,7 +203,7 @@ function verify(paymentId, actor, now = Date.now()) {
   if (!p) return { ok: false, missing: true };
 
   const r = tx(() => {
-    if (!goVerified.run(now, actor, paymentId).changes) return null;
+    if (!goVerified.run(now, actor, now, paymentId).changes) return null;
     if (p.kind === 'paint_pack' && p.pack) identity.creditPaintRaw(p.user_id, p.pack);
     logEvent(actor, 'payment-verified',
       { payment: paymentId, user: p.user_id, amount: p.amount, kind: p.kind }, now);
@@ -220,7 +222,7 @@ function reject(paymentId, actor, now = Date.now()) {
   if (!p) return { ok: false, missing: true };
 
   const r = tx(() => {
-    if (!goRejected.run(paymentId).changes) return null;
+    if (!goRejected.run(now, paymentId).changes) return null;
     logEvent(actor, 'payment-rejected', { payment: paymentId, user: p.user_id }, now);
     return true;
   });
@@ -243,7 +245,7 @@ function markRefunded(paymentId, actor, now = Date.now()) {
   if (!p) return { ok: false, missing: true };
 
   const r = tx(() => {
-    if (!goRefunded.run(now, actor, paymentId).changes) return null;
+    if (!goRefunded.run(now, actor, now, paymentId).changes) return null;
     logEvent(actor, 'payment-refunded',
       { payment: paymentId, user: p.user_id, amount: p.amount, to: p.payer_handle }, now);
     return true;
@@ -265,7 +267,7 @@ function sweep(now = Date.now()) {
 
   for (const p of staleOrders.all(now)) {
     const done = tx(() => {
-      if (!goExpired.run(p.id).changes) return false;
+      if (!goExpired.run(now, p.id).changes) return false;
       logEvent('system', 'payment-expired', { payment: p.id, user: p.user_id }, now);
       return true;
     });

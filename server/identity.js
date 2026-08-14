@@ -72,8 +72,13 @@ const selUser = db.prepare(
           a.used, a.refill_at, a.paint
      FROM users u LEFT JOIN allowances a ON a.user_id = u.id
     WHERE u.id = ?`);
-const selByEmail = db.prepare(
-  "SELECT id, pass_hash, token_epoch, status FROM users WHERE kind = 'brand' AND email = ?");
+/* One email is one account, whichever kind holds it — the partial unique
+   index (009) is the backstop, these are the polite checks in front of it. */
+const selByEmailAny = db.prepare(
+  'SELECT id, kind, pass_hash, token_epoch, status FROM users WHERE email = ? AND pass_hash IS NOT NULL');
+const emailTaken = db.prepare('SELECT 1 FROM users WHERE email = ?');
+const setCredentials = db.prepare(
+  "UPDATE users SET email = ?, pass_hash = ? WHERE id = ? AND kind = 'guest' AND email IS NULL");
 const insGuest = db.prepare(
   "INSERT INTO users (kind, handle, created_at, last_seen) VALUES ('guest', '', ?, ?)");
 const insBrand = db.prepare(
@@ -488,7 +493,7 @@ function validateSignup(body) {
 }
 
 function signupTx(v, now) {
-  if (selByEmail.get(v.email)) return { taken: true };
+  if (emailTaken.get(v.email)) return { taken: true };
   const id = Number(insBrand.run(
     v.business_name, v.email, hashPassword(v.password), now, now).lastInsertRowid);
   insProfile.run(id, v.business_name, v.category, v.description, v.website || null,
@@ -526,15 +531,61 @@ function login(body, now) {
   const password = typeof b.password === 'string' ? b.password : '';
   if (!email || !password) return LOGIN_FAILED;
 
-  const u = selByEmail.get(email);
+  const u = selByEmailAny.get(email);
   if (!u || u.status !== 'active') return LOGIN_FAILED;
   if (!verifyPassword(password, u.pass_hash)) return LOGIN_FAILED;
 
   const e = rowFor(u.id, now);
   e.epoch = u.token_epoch || 0;
   touch(e, now);
-  logEvent(`user:${u.id}`, 'brand-login', { email }, now);
+  logEvent(`user:${u.id}`, u.kind === 'brand' ? 'brand-login' : 'painter-login', { email }, now);
   return { e, cookie: sessionCookie(e, now) };
+}
+
+/* ── Painter accounts (§3, optional) ──────────────────────────────
+   Registering doesn't create anyone: it attaches an email + password
+   to the guest the caller already is, so the pixels, history, paint
+   and handle they've accumulated become reachable from any device.
+   The identity — id, kind, cookie — does not change. */
+function register(e, body, now) {
+  const b = body && typeof body === 'object' ? body : {};
+  const email = text(b.email).toLowerCase();
+  const password = typeof b.password === 'string' ? b.password : '';
+
+  const f = {};
+  if (!email) f.email = 'We need an email address.';
+  else if (email.length > 160 || !EMAIL_RE.test(email)) f.email = 'That does not look like an email address.';
+  if (password.length < cfg.PASS_MIN) f.password = `Passwords need at least ${cfg.PASS_MIN} characters.`;
+  else if (password.length > 200) f.password = 'That password is too long (200 characters max).';
+  if (Object.keys(f).length) return { status: 400, error: 'invalid', fields: f };
+
+  if (e.kind === 'brand') {
+    return { status: 409, error: 'already-registered', message: 'This is a brand account — it already signs in with email.' };
+  }
+  if (e.email) {
+    return { status: 409, error: 'already-registered', message: 'This identity already has an account. Log out to make another.' };
+  }
+
+  const TAKEN = {
+    status: 409, error: 'email-taken',
+    fields: { email: 'That email already has an account — log in instead.' }
+  };
+  try {
+    const r = tx(() => {
+      if (emailTaken.get(email)) return { taken: true };
+      setCredentials.run(email, hashPassword(password), e.id);
+      logEvent(`user:${e.id}`, 'painter-register', { email }, now);
+      return { ok: true };
+    });
+    if (r.taken) return TAKEN;
+  } catch (err) {
+    /* the unique index caught a race the polite check missed */
+    if (String(err.code).startsWith('SQLITE_CONSTRAINT')) return TAKEN;
+    throw err;
+  }
+
+  e.email = email;                      // the cached row learns its new name
+  return { e };
 }
 
 /* ── Brand standing ───────────────────────────────────────────── */
@@ -602,7 +653,11 @@ function meta(e) {
 }
 function me(e, now) {
   const out = meta(e);
-  if (e.kind === 'brand') out.email = e.email || null;
+  if (e.email) out.email = e.email;
+  /* a guest with an email is a painter account — same identity, reachable
+     from other devices. The client renders "create account" vs "signed in"
+     off this bit rather than sniffing for the email field. */
+  if (e.kind === 'guest') out.registered = !!e.email;
   out.allowance = allowanceOf(e, now);
   return out;
 }
@@ -666,6 +721,6 @@ module.exports = {
   /* caps */
   dayKey, ipCounts, takeIp: take, takeClaim, CAPPED,
   /* accounts */
-  hashPassword, verifyPassword, validateSignup, signup, login,
+  hashPassword, verifyPassword, validateSignup, signup, login, register,
   brandStatus, decideBrand, bookGate, meta, me
 };

@@ -14,6 +14,7 @@ const { S } = require('./settings.js');
 const identity = require('./identity.js');
 const wall = require('./wall.js');
 const submissions = require('./submissions.js');
+const notifications = require('./notifications.js');
 const payments = require('./payments.js');
 const uploads = require('./uploads.js');
 const telegram = require('./telegram.js');
@@ -563,7 +564,13 @@ async function handler(req, res) {
      event stream included. An IP that has spent its guest budget for the day
      gets no identity at all, and there is nothing personal to serve without
      one. */
-  const ses = identity.resolve(req, now, { mint: !urlPath.startsWith('/api/auth/') });
+  /* /api/auth/register is the one auth route that *wants* the caller's
+     guest identity — registering is adopting it — so it mints like any
+     normal route. login/signup/logout stay mint-free: handing a fresh
+     identity to somebody who cleared cookies to log in would spend the
+     very budget that exists to stop cookie-clearing (§3). */
+  const ses = identity.resolve(req, now,
+    { mint: !/^\/api\/auth\/(signup|login|logout)$/.test(urlPath) });
   if (ses.cookie) res.setHeader('set-cookie', ses.cookie);
   if (ses.capped) return sendJson(res, 429, ses.capped);
   const row = ses.e;                      // null only on the auth routes
@@ -611,6 +618,18 @@ async function handler(req, res) {
       }));
     }
 
+    /* The bell (§3): decisions, money and application news, newest first,
+       with the unread count keyed on the caller's own high-water mark. */
+    if (urlPath === '/api/me/notifications' && req.method === 'GET') {
+      const q = new URLSearchParams((req.url || '').split('?')[1] || '');
+      return sendJson(res, 200, notifications.feedFor(row.id, {
+        limit: q.get('limit'), offset: q.get('offset')
+      }));
+    }
+    if (urlPath === '/api/me/notifications/seen' && req.method === 'POST') {
+      return sendJson(res, 200, notifications.markSeen(row.id, now));
+    }
+
     /* ── accounts ── */
     if (urlPath === '/api/auth/signup' && req.method === 'POST') {
       const body = JSON.parse((await readBody(req, 64 << 10)).toString('utf8'));
@@ -618,6 +637,15 @@ async function handler(req, res) {
       if (r.error) return sendJson(res, r.status, { error: r.error, fields: r.fields, message: r.message });
       telegram.cardForBrand(r.e.id, now);               // a person reads every one (§3)
       res.setHeader('set-cookie', r.cookie);            // the application signs them in
+      return sendJson(res, 200, identity.me(r.e, now));
+    }
+
+    /* The painter upgrade (§3): attach email+password to the guest the
+       caller already is. Same id, same cookie — nothing to re-issue. */
+    if (urlPath === '/api/auth/register' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req, 4096)).toString('utf8'));
+      const r = identity.register(row, body, now);
+      if (r.error) return sendJson(res, r.status, { error: r.error, fields: r.fields, message: r.message });
       return sendJson(res, 200, identity.me(r.e, now));
     }
 

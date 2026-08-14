@@ -135,19 +135,19 @@ const countHistory = db.prepare(
    The payments table exists from 001 and nothing writes it until Phase 5,
    so this is a no-op today and correct the moment it isn't. */
 const oweRefund = db.prepare(
-  `UPDATE payments SET status = 'refund_due' WHERE id = ? AND status = 'verified'`);
+  `UPDATE payments SET status = 'refund_due', updated_at = ? WHERE id = ? AND status = 'verified'`);
 /* Money that never arrived just voids with the submission. */
 const voidPayment = db.prepare(
-  `UPDATE payments SET status = 'expired'
+  `UPDATE payments SET status = 'expired', updated_at = ?
      WHERE id = ? AND status IN ('awaiting_transfer','submitted')`);
 
 function settlePayment(sub, now) {
   if (!sub.payment_id) return null;
-  if (oweRefund.run(sub.payment_id).changes) {
+  if (oweRefund.run(now, sub.payment_id).changes) {
     logEvent('system', 'refund-due', { sid: sub.id, payment: sub.payment_id }, now);
     return 'refund_due';
   }
-  return voidPayment.run(sub.payment_id).changes ? 'expired' : null;
+  return voidPayment.run(now, sub.payment_id).changes ? 'expired' : null;
 }
 
 /* ── Transitions ──────────────────────────────────────────────── */
