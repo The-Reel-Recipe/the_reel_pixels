@@ -66,6 +66,9 @@ const MAP = {
   /* tools */
   hand: 'hand',                 // pan
   brush: 'brush',               // paint
+  /* pixelarticons has no eraser; `delete` is the backspace key, which is
+     the set's own "take this back" glyph and the closest honest match. */
+  eraser: 'delete',             // rub pixels back out of the basket
   search: 'search',             // find a free spot
   crop: 'scissors',             // crop tightly around a logo
   fit: 'scale',                 // fit the whole wall on screen

@@ -217,11 +217,16 @@ test('rejection frees the ground and says why', async () => {
   const bus = listen();
   assert.equal(submissions.reject(r.json.sid, 'tg:99 (sara)', 'not on a charity wall').ok, true);
   const removed = bus.seen.find(e => e.t === 'paint-remove');
+  const decided = bus.seen.find(e => e.t === 'mod');
   bus.stop();
 
   assert.equal(statusOf(r.json.sid), 'rejected');
   assert.equal(cellCount(r.json.sid), 0, 'the cells are gone, not just hidden');
   assert.equal(removed, undefined, 'nothing to remove from a wall it never reached');
+  /* …which is exactly why the decision has to carry them: it is the only
+     event the submitter gets, and their own screen is still shimmering */
+  assert.deepEqual((decided.px || []).slice().sort((a, b) => a - b), px.slice().sort((a, b) => a - b),
+    'the decision names the pending cells so the owner can drop them live');
 
   const mine = await snapshot(me);
   assert.deepEqual(mine.meta.pending.live, [], 'the overlay clears');

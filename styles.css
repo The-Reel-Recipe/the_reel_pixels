@@ -411,22 +411,25 @@ body.no-paint .paint-dock {
   transform: scale(1.12);
   box-shadow: 0 0 0 3px rgba(255, 77, 157, 0.45);
 }
-/* the door to every colour the sixteen are not */
-.swatch-custom {
-  background:
-    conic-gradient(#FF4D9D, #FFD23F, #8FE5AE, #4FC3F7, #B388FF, #FF4D9D);
-}
 
-.cur-color-wrap { position: relative; display: flex; align-items: center; }
-#customColor { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+/* The colour input IS the swatch — its own value is the current-colour
+   display, and tapping it hands over to the platform picker. */
 .cur-color {
-  display: block;
-  width: 32px; height: 32px;
-  border-radius: 9px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  background: #D81B60;
+  flex: none;
+  width: 38px; height: 38px;
+  padding: 0;
+  border-radius: 11px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  background: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
-.cur-color-wrap .caret { margin-inline-start: 2px; color: var(--dim); width: 12px; height: 12px; }
+.cur-color::-webkit-color-swatch-wrapper { padding: 0; }
+.cur-color::-webkit-color-swatch { border: 0; border-radius: 8px; }
+.cur-color::-moz-color-swatch { border: 0; border-radius: 8px; }
+.cur-color:active { transform: scale(0.95); }
 
 .sel-counter {
   font-family: var(--fp); font-weight: var(--fp-w);

@@ -1,0 +1,332 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-14T00:00:00Z",
+  "title": "Design System: S37 — Shakhbat 3al 7eet",
+  "extensions": {
+    "colorMeta": {
+      "night-plum": {
+        "role": "neutral",
+        "displayName": "Night Plum",
+        "canonical": "#150A10",
+        "note": "Page ground and canvas floor, lifted by radial-gradient(120% 90% at 50% 0%, #241119 0%, #150A10 58%).",
+        "tonalRamp": ["#080407", "#150A10", "#241119", "#3A1C28", "#563041", "#7C4C60", "#AE8494", "#E4D2DA"]
+      },
+      "plum-surface": {
+        "role": "neutral",
+        "displayName": "Plum Surface",
+        "canonical": "#1F1019",
+        "note": "Sheet bodies. Opaque, never glass.",
+        "tonalRamp": ["#0A0508", "#12080D", "#1F1019", "#331A28", "#4D283C", "#734159", "#A67F92", "#DFCBD5"]
+      },
+      "plum-raised": {
+        "role": "neutral",
+        "displayName": "Plum Raised",
+        "canonical": "#2C1722",
+        "note": "The only solid raised surface: the nav brush when paint mode is off.",
+        "tonalRamp": ["#0D060A", "#180C12", "#2C1722", "#412334", "#5C3349", "#824B66", "#B389A0", "#E6D3DE"]
+      },
+      "hot-pink": {
+        "role": "primary",
+        "displayName": "Hot Pink",
+        "canonical": "#FF4D9D",
+        "note": "The one action colour. Shipped as a gradient on filled controls: #FF67AC 0% -> #FF4D9D 55% -> #F02D85 100%.",
+        "tonalRamp": ["#2A0413", "#4D0724", "#730F38", "#99164C", "#C22463", "#FF4D9D", "#FF9AC6", "#FFE4EF"]
+      },
+      "pink-deep": {
+        "role": "primary",
+        "displayName": "Pink Deep",
+        "canonical": "#D81B60",
+        "note": "Bottom stop of the pink gradient; also PALETTE[0], the wall's default paint colour.",
+        "tonalRamp": ["#28040F", "#47071C", "#6B0A2B", "#90103C", "#B4144E", "#D81B60", "#EE6494", "#FBD3E1"]
+      },
+      "ink-on-pink": {
+        "role": "primary",
+        "displayName": "Ink on Pink",
+        "canonical": "#22050F",
+        "note": "Type colour on pink fills only. Never a background.",
+        "tonalRamp": ["#160309", "#22050F", "#380A1B", "#521029", "#6F1839", "#92264D", "#C05A7E", "#E9B8C9"]
+      },
+      "rose": {
+        "role": "secondary",
+        "displayName": "Rose",
+        "canonical": "#F5C4C1",
+        "note": "Text-level accent: links, ghost labels, countdown chip, sheet icons.",
+        "tonalRamp": ["#2E1614", "#4B2422", "#6B3733", "#8F4C47", "#B4665F", "#D48F88", "#F5C4C1", "#FCEAE8"]
+      },
+      "rose-bright": {
+        "role": "secondary",
+        "displayName": "Rose Bright",
+        "canonical": "#FBE1DF",
+        "note": "The display-type colour. Pixel-face headings land here, not on pure white.",
+        "tonalRamp": ["#33191A", "#4F2A2A", "#6F3D3C", "#925451", "#B67169", "#D69B95", "#FBE1DF", "#FEF4F3"]
+      },
+      "paper-pink": {
+        "role": "neutral",
+        "displayName": "Paper Pink",
+        "canonical": "#FAF2F4",
+        "note": "Body text. Pure #FFF appears only on crop handles, thumbnail backing and the custom-swatch border.",
+        "tonalRamp": ["#1C1517", "#302629", "#493A3E", "#665458", "#8A7579", "#B4A0A4", "#DDCED2", "#FAF2F4"]
+      },
+      "dim-mauve": {
+        "role": "neutral",
+        "displayName": "Dim Mauve",
+        "canonical": "#CDAFBA",
+        "note": "Secondary text, unselected nav, captions; placeholders at 55% alpha.",
+        "tonalRamp": ["#221820", "#3A2A32", "#533E48", "#6F5661", "#8D707C", "#AC8E99", "#CDAFBA", "#EDDCE3"]
+      },
+      "mint-ok": {
+        "role": "tertiary",
+        "displayName": "Mint OK",
+        "canonical": "#8FE5AE",
+        "note": "Approved, live, saved, free space on the wall. Border variant at 0.35-0.5 alpha.",
+        "tonalRamp": ["#04170C", "#093018", "#0E4A26", "#146536", "#1D8248", "#2FA15F", "#8FE5AE", "#DEF8E8"]
+      },
+      "amber-warn": {
+        "role": "tertiary",
+        "displayName": "Amber Warn",
+        "canonical": "#FFC24B",
+        "note": "Pending, waiting, out of paint, offline. The most-used semantic colour, because pre-moderation makes most states waiting states. Its ink is #241300.",
+        "tonalRamp": ["#241300", "#3D2400", "#5A3700", "#784B00", "#976100", "#B77800", "#FFC24B", "#FFEBC4"]
+      },
+      "coral-danger": {
+        "role": "tertiary",
+        "displayName": "Coral Danger",
+        "canonical": "#FF6A57",
+        "note": "Rejected, invalid field, booked space. Never a destructive button fill.",
+        "tonalRamp": ["#2B0904", "#4A1209", "#6C1C11", "#8F281B", "#B33526", "#D74534", "#FF6A57", "#FFCFC7"]
+      },
+      "glass": {
+        "role": "neutral",
+        "displayName": "Glass",
+        "canonical": "rgba(28, 14, 22, 0.58)",
+        "note": "Resting fill of anything floating over the canvas. Alpha ladder rather than a tonal ramp: 0.58 glass, 0.82 glass-hard, 0.94 the @supports-not fallback.",
+        "alphaLadder": ["rgba(28,14,22,0.30)", "rgba(28,14,22,0.58)", "rgba(28,14,22,0.82)", "rgba(28,14,22,0.94)"]
+      },
+      "glass-hard": {
+        "role": "neutral",
+        "displayName": "Glass Hard",
+        "canonical": "rgba(28, 14, 22, 0.82)",
+        "note": "For content that must stay readable at any canvas zoom: toasts and tooltips."
+      },
+      "glass-border": {
+        "role": "neutral",
+        "displayName": "Glass Border",
+        "canonical": "rgba(255, 255, 255, 0.14)",
+        "note": "The hairline light edge of every glass pill."
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "rgba(255, 255, 255, 0.10)",
+        "note": "Dividers and quiet borders inside opaque surfaces.",
+        "alphaLadder": ["rgba(255,255,255,0.045)", "rgba(255,255,255,0.05)", "rgba(255,255,255,0.07)", "rgba(255,255,255,0.10)", "rgba(255,255,255,0.12)", "rgba(255,255,255,0.14)", "rgba(255,255,255,0.18)", "rgba(255,255,255,0.35)"]
+      },
+      "hairline-strong": {
+        "role": "neutral",
+        "displayName": "Hairline Strong",
+        "canonical": "rgba(255, 255, 255, 0.18)",
+        "note": "The edge of interactive objects: inputs, ghost buttons, cards that act."
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Largest pixel-face moment: pack amounts and the InstaPay total. Nothing sets the pixel face above 15px." },
+      "headline": { "displayName": "Headline", "purpose": "Sheet titles, preceded by an 18px pink icon, with 40px inline-end padding to clear the close button." },
+      "title": { "displayName": "Title", "purpose": "The S37 lockup, success headings, status-card headings." },
+      "action": { "displayName": "Action", "purpose": "Primary CTA label, pixel selection counter, step numerals, checkout total." },
+      "label": { "displayName": "Label", "purpose": "Field labels, chips, mini buttons, coordinates. Sub-steps at 7.5px and 7px exist for chips inside 20-26px pills." },
+      "nav-label": { "displayName": "Nav Label", "purpose": "Bottom-nav doors only. The floor of the system; do not reuse elsewhere. Steps to 10px in Arabic." },
+      "body": { "displayName": "Body", "purpose": "The document default, 15px/1.5 Figtree." },
+      "body-small": { "displayName": "Body Small", "purpose": "The working size inside sheets: descriptions, list rows, toasts, checkout lines." },
+      "caption": { "displayName": "Caption", "purpose": "Hints, fine print, timestamps, character counts — always on Dim Mauve." },
+      "input": { "displayName": "Input", "purpose": "All text fields and the stepper. 16px is a floor, not a preference: iOS zooms below it." }
+    },
+    "fonts": [
+      { "name": "Press Start 2P", "role": "display (Latin)", "weights": [400], "selfHosted": "assets/fonts/", "variable": "--fp", "note": "No Arabic glyphs — the reason --fp exists." },
+      { "name": "Figtree", "role": "body (Latin)", "weights": [300, 400, 500, 600, 700], "selfHosted": "assets/fonts/", "variable": "--fb" },
+      { "name": "Cairo", "role": "display and body (Arabic)", "weights": [400, 600, 700, 800, 900], "selfHosted": "assets/fonts/", "variable": "--fp / --fb under html[lang=\"ar\"]", "note": "Display weight shipped as --fp-w: 800." }
+    ],
+    "shadows": [
+      { "name": "glass-lift", "value": "0 12px 32px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.09)", "purpose": "Every .glass pill and the zoom rail. The inset highlight is what makes the pill read as a lit edge." },
+      { "name": "brush-lift", "value": "0 10px 26px rgba(255,61,138,0.5), inset 0 1px 0 rgba(255,255,255,0.55)", "purpose": "The raised nav brush only." },
+      { "name": "pink-lift", "value": "0 8px 22px rgba(255,61,138,0.38), inset 0 1px 0 rgba(255,255,255,0.5)", "purpose": "The primary CTA. Removed entirely when disabled." },
+      { "name": "sheet-lift", "value": "0 -18px 60px rgba(0,0,0,0.55)", "purpose": "Bottom sheet rising from the bottom edge on a phone." },
+      { "name": "dialog-lift", "value": "0 30px 90px rgba(0,0,0,0.6)", "purpose": "The same sheet once it becomes a centered dialog at 760px." },
+      { "name": "toast-lift", "value": "0 14px 34px rgba(0,0,0,0.45)", "purpose": "Toasts and the minimap (at 26px blur)." },
+      { "name": "focus-ring", "value": "0 0 0 3px rgba(255,77,157,0.22)", "purpose": "Input focus halo, paired with a hot-pink border shift." },
+      { "name": "swatch-ring", "value": "0 0 0 3px rgba(255,77,157,0.45)", "purpose": "The selected paint swatch, paired with a white border and scale(1.12)." },
+      { "name": "tab-lift", "value": "0 4px 12px rgba(255,61,138,0.35)", "purpose": "The selected auth tab pill." },
+      { "name": "crop-scrim", "value": "0 0 0 999px rgba(10,4,8,0.38)", "purpose": "A spread shadow used as a dimmer for everything outside the crop box." }
+    ],
+    "motion": [
+      { "name": "expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "The one curve. Sheet entry, toast entry, dock hide, badge pop, success pop, every press transform." },
+      { "name": "sheet-in", "value": "translateY(46px) + opacity 0.4 -> 0, 380ms expo", "purpose": "Every sheet arrival." },
+      { "name": "toast-in", "value": "translateY(-12px) scale(0.97) -> 0, 340ms expo", "purpose": "Toast arrival; exit translates up 8px at zero opacity over 300ms ease." },
+      { "name": "fade-in", "value": "opacity 0 -> 1, 220ms ease", "purpose": "Scrim only. Linear easing is reserved for fades." },
+      { "name": "press", "value": "transform 160ms expo", "purpose": "Buttons and swatches. Presses are physical: translate or scale, never a colour swap." },
+      { "name": "dock-hide", "value": "transform 340ms expo, opacity 280ms ease", "purpose": "The paint dock leaving when the app enters placement mode." },
+      { "name": "badge-pop", "value": "scale 0.5 -> 1.25 -> 1, 300ms expo", "purpose": "Nav badge appearing." },
+      { "name": "pop", "value": "scale 0.4 -> 1.12 -> 1 with fade, 500ms expo", "purpose": "Success icons in confirmation states." },
+      { "name": "shake", "value": "±3px horizontal, 500ms", "purpose": "Refusal feedback on the pixel counter. A refused action shakes; it does not change colour." },
+      { "name": "err-in", "value": "translateY(-3px) + fade, 250ms expo", "purpose": "Field error message arriving." },
+      { "name": "reduced-motion", "value": "animation-duration: 0.01ms; transition-duration: 0.01ms", "purpose": "Everything collapses under prefers-reduced-motion: reduce." }
+    ],
+    "breakpoints": [
+      { "name": "base", "value": "390px", "note": "Mobile-first: the base stylesheet is a phone in one hand." },
+      { "name": "duo", "value": "560px", "note": "Pre-order source image and preview go side by side." },
+      { "name": "dialog", "value": "760px", "note": "Sheets become centered dialogs; auth two-column; packs three-across; minimap 84 -> 148px; dock centers at min(680px, 100% - 20px)." },
+      { "name": "editor", "value": "900px", "note": "Pre-order editor becomes a two-column workspace with its own scrolling form column." },
+      { "name": "wide", "value": "1100px", "note": "Sheet widths settle: 620 default / 1140 wide editor / 480 alerts-me-more." },
+      { "name": "landscape-short", "value": "max-height: 500px and (orientation: landscape)", "note": "Lockup drops its text, dock becomes one row at 74px, nav 56px with a 48px brush, coordinates hide." }
+    ],
+    "material": {
+      "name": "liquid glass",
+      "value": "background: rgba(28,14,22,0.58); backdrop-filter: blur(20px) saturate(160%); border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 12px 32px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.09)",
+      "fallback": "@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { background: rgba(28,14,22,0.94) }",
+      "purpose": "The single depth rule for anything floating over the wall. Sheets are opaque and layer tonally instead."
+    },
+    "paintPalette": {
+      "note": "Content colours owned by app.js (PALETTE), not chrome. A seventeenth swatch is a conic-gradient door to the native colour picker.",
+      "values": ["#D81B60", "#F06292", "#AD1457", "#7B2D4B", "#E23B2E", "#FF8C42", "#FFD23F", "#22C55E", "#14B8A6", "#59C2FF", "#2E6BE6", "#8B5CF6", "#2B1620", "#6E5A62", "#B9A6AD", "#ECE4E7"]
+    },
+    "iconography": {
+      "source": "pixelarticons (MIT), generated into an inline SVG sprite by tools/make-icons.js",
+      "usage": "<svg class=\"ic\" aria-hidden=\"true\"><use href=\"#i-name\"/></svg>",
+      "sizes": ["12px in small chips", "16px default", "18px in sheet headings and rows", "20px in list rows and tools", "22px in nav", "24px in the me avatar", "26px in the raised brush", "44px in celebratory states"],
+      "rendering": "shape-rendering: crispEdges; fill: currentColor; vertical-align: -0.22em",
+      "rtl": "[dir=\"rtl\"] flips chevrons and directional glyphs with transform: scaleX(-1)"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one loud thing on a surface — the claim / pay / start action.",
+      "html": "<button class=\"ds-btn-primary\">CLAIM 12 PIXELS</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 18px; border: 0; border-radius: 999px; background: linear-gradient(180deg, #FF67AC 0%, #FF4D9D 55%, #F02D85 100%); color: #22050F; font-family: 'Press Start 2P', monospace; font-weight: 400; font-size: 10px; letter-spacing: 0.02em; cursor: pointer; box-shadow: 0 8px 22px rgba(255,61,138,0.38), inset 0 1px 0 rgba(255,255,255,0.5); transition: transform 0.16s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s ease, filter 0.2s ease; } .ds-btn-primary:hover { transform: translateY(-1px); } .ds-btn-primary:active { transform: translateY(1px) scale(0.99); } .ds-btn-primary:focus-visible { outline: 2px solid #FF4D9D; outline-offset: 2px; } .ds-btn-primary:disabled { filter: saturate(0.25) brightness(0.7); box-shadow: none; cursor: default; transform: none; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "The secondary action inside a sheet. Full width, rose label, hairline edge.",
+      "html": "<button class=\"ds-btn-ghost\"><svg class=\"ds-ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 2h6v2H9zM7 4h2v2H7zm8 0h2v2h-2zM5 6h2v7H5zm12 0h2v7h-2zM3 13h2v4H3zm16 0h2v4h-2zM3 15h18v2H3zm5 3h2v2H8zm6 0h2v2h-2zm-4 2h4v2h-4z\"/></svg> ALERTS</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.05); color: #F5C4C1; font-family: 'Press Start 2P', monospace; font-weight: 400; font-size: 9px; cursor: pointer; } .ds-btn-ghost .ds-ic { width: 16px; height: 16px; fill: currentColor; shape-rendering: crispEdges; flex: none; } .ds-btn-ghost:hover { background: rgba(255,255,255,0.12); } .ds-btn-ghost:active { background: rgba(255,255,255,0.10); } .ds-btn-ghost:focus-visible { outline: 2px solid #FF4D9D; outline-offset: 2px; }"
+    },
+    {
+      "name": "Glass Chip",
+      "kind": "chip",
+      "refersTo": "glass-chip",
+      "description": "The countdown / language / brand pills that float over the canvas. This is the material rule made visible.",
+      "html": "<div class=\"ds-chip-glass\"><svg class=\"ds-ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8 5h8v2H8zm0 14h8v2H8zM6 7h2v2H6zm0 10h2v2H6zM16 7h2v2h-2zm0 10h2v2h-2zM4 9h2v8H4zm14 0h2v8h-2zM4 2h2v2H4zm0 17h2v2H4zm14 0h2v2h-2zm0-17h2v2h-2zM2 4h2v2H2zm18 0h2v2h-2zm-9 5h2v4h-2zm2 4h2v2h-2z\"/></svg><span class=\"ds-chip-lines\"><b>12D 04:31</b><span>until the wipe</span></span></div>",
+      "css": ".ds-chip-glass { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px; color: #F5C4C1; background: rgba(28,14,22,0.58); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 12px 32px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.09); } @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .ds-chip-glass { background: rgba(28,14,22,0.94); } } .ds-chip-glass .ds-ic { width: 18px; height: 18px; fill: currentColor; shape-rendering: crispEdges; flex: none; } .ds-chip-lines { display: flex; flex-direction: column; gap: 2px; } .ds-chip-lines b { font-family: 'Press Start 2P', monospace; font-weight: 400; font-size: 9px; line-height: 1; color: #FBE1DF; } .ds-chip-lines span { font-family: Figtree, sans-serif; font-size: 9.5px; line-height: 1; font-weight: 600; color: #CDAFBA; }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "refersTo": "status-chip",
+      "description": "The pending / approved / rejected spine of the product. Colour reinforces the word, never replaces it.",
+      "html": "<span class=\"ds-status ds-status-pending\">PENDING</span> <span class=\"ds-status ds-status-approved\">LIVE</span> <span class=\"ds-status ds-status-rejected\">REJECTED</span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-family: 'Press Start 2P', monospace; font-weight: 400; font-size: 7.5px; letter-spacing: 0.05em; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: #CDAFBA; } .ds-status-pending { color: #FFC24B; border-color: rgba(255,194,75,0.5); } .ds-status-approved { color: #8FE5AE; border-color: rgba(143,229,174,0.5); } .ds-status-rejected { color: #FF6A57; border-color: rgba(255,106,87,0.55); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-text",
+      "description": "A dark well under an 8px pixel label. 16px text is a floor, not a preference.",
+      "html": "<label class=\"ds-fld\"><span class=\"ds-lbl\">EMAIL</span><input type=\"email\" placeholder=\"you@example.com\"><span class=\"ds-fld-err\">That email does not look right.</span></label>",
+      "css": ".ds-fld { display: flex; flex-direction: column; gap: 6px; } .ds-lbl { font-family: 'Press Start 2P', monospace; font-weight: 400; font-size: 8px; letter-spacing: 0.06em; color: #CDAFBA; } .ds-fld input { width: 100%; padding: 12px 14px; border-radius: 10px; background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.18); color: #FAF2F4; font-family: Figtree, sans-serif; font-size: 16px; transition: border-color 0.2s ease, box-shadow 0.2s ease; } .ds-fld input::placeholder { color: rgba(205,175,186,0.55); } .ds-fld input:focus { outline: none; border-color: #FF4D9D; box-shadow: 0 0 0 3px rgba(255,77,157,0.22); } .ds-fld input.ds-bad { border-color: #FF6A57; } .ds-fld-err { color: #FF6A57; font-family: Figtree, sans-serif; font-size: 12.5px; }"
+    },
+    {
+      "name": "Glass Nav Bar",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "The whole map: five doors in one floating pill, with the raised brush breaking the silhouette in the middle.",
+      "html": "<nav class=\"ds-nav\"><button class=\"ds-nav-item ds-sel\"><svg class=\"ds-ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 20h16v2H4zm16-10h2v10h-2zM2 10h2v10H2zm2-2h2v2H4zm2-2h2v2H6zm2-2h2v2H8zm2-2h4v2h-4zm4 2h2v2h-2zm2 2h2v2h-2zm2 2h2v2h-2zM8 14h2v6H8zm2-2h4v2h-4zm4 2h2v6h-2z\"/></svg><span>WALL</span></button><button class=\"ds-nav-item\"><svg class=\"ds-ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 2h6v2H9zM7 4h2v2H7zm8 0h2v2h-2zM5 6h2v7H5zm12 0h2v7h-2zM3 13h2v4H3zm16 0h2v4h-2zM3 15h18v2H3zm5 3h2v2H8zm6 0h2v2h-2zm-4 2h4v2h-4z\"/></svg><span>ALERTS</span><b class=\"ds-nav-badge\">3</b></button><button class=\"ds-nav-brush\" aria-pressed=\"true\"><svg class=\"ds-ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M7 2h10v2H7zM5 4h2v10H5zm12-2h2v12h-2zM13 2h2v6h-2zM9 2h2v4H9zm-4 8h14v2H5zm2 4h10v2H7zm2 2h2v4H9zm4 0h2v4h-2zm-4 4h6v2H9z\"/></svg></button><button class=\"ds-nav-item\"><svg class=\"ds-ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 2h6v2H9zm0 8h6v2H9zm6-6h2v6h-2zM7 4h2v6H7zM4 18h2v4H4zm14 0h2v4h-2zM8 14h8v2H8zm-2 2h2v2H6zm10 0h2v2h-2z\"/></svg><span>ME</span></button><button class=\"ds-nav-item\"><svg class=\"ds-ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 9h2v2H3zm8 0h2v2h-2zm8 0h2v2h-2zM1 11h2v2H1zm8 0h2v2H9zm8 0h2v2h-2zM3 13h2v2H3zm8 0h2v2h-2zm8 0h2v2h-2zM5 11h2v2H5zm8 0h2v2h-2zm8 0h2v2h-2z\"/></svg><span>MORE</span></button></nav>",
+      "css": ".ds-nav { position: relative; display: grid; grid-template-columns: 1fr 1fr auto 1fr 1fr; align-items: center; width: min(430px, 100%); height: 64px; padding: 0 6px; margin: 34px auto 0; border-radius: 999px; background: rgba(28,14,22,0.58); -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 12px 32px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.09); } .ds-nav-item { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0; border: 0; background: none; color: #CDAFBA; border-radius: 18px; cursor: pointer; transition: color 0.2s ease; } .ds-nav-item span { font-family: 'Press Start 2P', monospace; font-weight: 400; font-size: 6.5px; letter-spacing: 0.06em; } .ds-nav-item:hover { color: #F5C4C1; } .ds-nav-item.ds-sel { color: #FBE1DF; } .ds-nav-item.ds-sel::after { content: ''; position: absolute; bottom: 1px; width: 14px; height: 3px; border-radius: 2px; background: #FF4D9D; } .ds-nav-item .ds-ic { width: 22px; height: 22px; fill: currentColor; shape-rendering: crispEdges; } .ds-nav-badge { position: absolute; top: 2px; inset-inline-end: calc(50% - 20px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: #FF4D9D; color: #22050F; font: 700 10px/16px Figtree, sans-serif; text-align: center; } .ds-nav-brush { width: 58px; height: 58px; margin-top: -26px; display: grid; place-items: center; border-radius: 999px; background: linear-gradient(180deg, #FF67AC 0%, #FF4D9D 55%, #F02D85 100%); color: #22050F; border: 1px solid rgba(255,255,255,0.35); cursor: pointer; box-shadow: 0 10px 26px rgba(255,61,138,0.5), inset 0 1px 0 rgba(255,255,255,0.55); transition: transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s ease; } .ds-nav-brush .ds-ic { width: 26px; height: 26px; fill: currentColor; shape-rendering: crispEdges; } .ds-nav-brush:active { transform: scale(0.94); } .ds-nav-brush[aria-pressed=\"false\"] { background: #2C1722; color: #CDAFBA; border-color: rgba(255,255,255,0.18); box-shadow: 0 8px 20px rgba(0,0,0,0.4); } .ds-nav-brush:focus-visible, .ds-nav-item:focus-visible { outline: 2px solid #FF4D9D; outline-offset: 2px; }"
+    },
+    {
+      "name": "Paint Swatch Strip",
+      "kind": "custom",
+      "refersTo": "swatch",
+      "description": "The wall-paint palette inside the floating dock. Colours run off both edges under a gradient mask instead of stopping at a border.",
+      "html": "<div class=\"ds-palette\"><button class=\"ds-swatch\" style=\"background:#D81B60\"></button><button class=\"ds-swatch ds-sel\" style=\"background:#F06292\"></button><button class=\"ds-swatch\" style=\"background:#FFD23F\"></button><button class=\"ds-swatch\" style=\"background:#22C55E\"></button><button class=\"ds-swatch\" style=\"background:#59C2FF\"></button><button class=\"ds-swatch\" style=\"background:#8B5CF6\"></button><button class=\"ds-swatch ds-swatch-custom\"></button></div>",
+      "css": ".ds-palette { display: flex; gap: 6px; padding: 2px; overflow-x: auto; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent); mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent); } .ds-palette::-webkit-scrollbar { display: none; } .ds-swatch { width: 32px; height: 32px; flex: none; border-radius: 9px; border: 2px solid rgba(255,255,255,0.14); cursor: pointer; transition: transform 0.16s cubic-bezier(0.16,1,0.3,1); } .ds-swatch:hover { transform: scale(1.1); } .ds-swatch.ds-sel { border-color: #fff; transform: scale(1.12); box-shadow: 0 0 0 3px rgba(255,77,157,0.45); } .ds-swatch-custom { background: conic-gradient(#FF4D9D, #FFD23F, #8FE5AE, #4FC3F7, #B388FF, #FF4D9D); } .ds-swatch:focus-visible { outline: 2px solid #FF4D9D; outline-offset: 2px; }"
+    },
+    {
+      "name": "Bottom Sheet",
+      "kind": "card",
+      "refersTo": "sheet",
+      "description": "Every destination. Rises from the bottom edge with a grab handle on a phone; becomes a centered dialog at 760px.",
+      "html": "<div class=\"ds-sheet\"><button class=\"ds-sheet-x\" aria-label=\"Close\">&times;</button><h2><svg class=\"ds-ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M9 3h4v4H9zM7 7h8v2H7zM5 21h12v2H5zM15 9h2v12h-2zM5 9h2v12H5zm4 8h6v2H9zm0-4h2v6H9zm0 0h8v2H9zm6-10h2v2h-2zm2-2h2v2h-2zm0 4h2v2h-2z\"/></svg> BUY PAINT</h2><p class=\"ds-sheet-sub\">Paint past the free twenty. Pay by InstaPay, credited when a moderator sees the transfer.</p></div>",
+      "css": ".ds-sheet { position: relative; width: 100%; max-width: 560px; padding: 26px 20px 20px; border-radius: 26px 26px 0 0; background: linear-gradient(180deg, rgba(255,255,255,0.05), transparent 120px), #1F1019; border: 1px solid rgba(255,255,255,0.14); border-bottom: 0; box-shadow: 0 -18px 60px rgba(0,0,0,0.55); } .ds-sheet::before { content: ''; position: absolute; top: 9px; inset-inline-start: calc(50% - 20px); width: 40px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.22); } .ds-sheet h2 { display: flex; align-items: center; gap: 10px; margin: 0; padding-inline-end: 40px; font-family: 'Press Start 2P', monospace; font-weight: 400; font-size: 13px; letter-spacing: 0.02em; color: #FBE1DF; } .ds-sheet h2 .ds-ic { width: 18px; height: 18px; fill: #FF4D9D; shape-rendering: crispEdges; flex: none; } .ds-sheet-sub { margin: 10px 0 0; color: #CDAFBA; font-family: Figtree, sans-serif; font-size: 13.5px; line-height: 1.5; } .ds-sheet-x { position: absolute; top: 14px; inset-inline-end: 14px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.10); color: #CDAFBA; font-size: 18px; line-height: 1; cursor: pointer; } .ds-sheet-x:hover { background: rgba(255,255,255,0.12); }"
+    },
+    {
+      "name": "List Row",
+      "kind": "card",
+      "refersTo": "list-row",
+      "description": "The repeating unit inside sheets — a menu row, a history entry, an alert. Tonal, not lifted.",
+      "html": "<button class=\"ds-row\"><svg class=\"ds-ic ds-row-lead\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 4h16v2H4zm0 14h16v2H4zM2 6h2v12H2zm18 0h2v12h-2zM4 8h16v4H4zm2 6h6v2H6z\"/></svg><span>MY PAINT</span><b>140</b><svg class=\"ds-ic ds-chev\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M13 16h-2v-2h2v2Zm-2-2H9v-2h2v2Zm4 0h-2v-2h2v2Zm-6-2H7v-2h2v2Zm8 0h-2v-2h2v2ZM7 10H5V8h2v2Zm12 0h-2V8h2v2Z\"/></svg></button>",
+      "css": ".ds-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px; border-radius: 18px; background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.10); color: #FAF2F4; text-align: start; font-family: Figtree, sans-serif; font-size: 13.5px; cursor: pointer; } .ds-row:hover { background: rgba(255,255,255,0.08); } .ds-row:active { background: rgba(255,255,255,0.09); } .ds-row .ds-ic { width: 20px; height: 20px; fill: currentColor; shape-rendering: crispEdges; flex: none; } .ds-row .ds-row-lead { fill: #FF4D9D; } .ds-row span { flex: 1; font-family: 'Press Start 2P', monospace; font-weight: 400; font-size: 8.5px; letter-spacing: 0.04em; } .ds-row b { font-variant-numeric: tabular-nums; color: #FBE1DF; } .ds-row .ds-chev { width: 16px; height: 16px; opacity: 0.45; } .ds-row:focus-visible { outline: 2px solid #FF4D9D; outline-offset: 2px; }"
+    },
+    {
+      "name": "Toast",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Hard-glass notice stacked below the top chrome. Variants recolour the border only; the text stays paper-pink.",
+      "html": "<div class=\"ds-toast\"><svg class=\"ds-ic\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M10 18H8v-2h2v2Zm-2-2H6v-2h2v2Zm4-2v2h-2v-2h2Zm-6 0H4v-2h2v2Zm8 0h-2v-2h2v2Zm2-2h-2v-2h2v2Zm2-2h-2V8h2v2Zm2-2h-2V6h2v2Z\"/></svg><span>12 pixels sent for review.</span><button>MY PIXELS</button></div>",
+      "css": ".ds-toast { display: flex; align-items: center; gap: 10px; max-width: min(92vw, 440px); padding: 11px 16px; border-radius: 18px; background: rgba(28,14,22,0.82); -webkit-backdrop-filter: blur(18px) saturate(150%); backdrop-filter: blur(18px) saturate(150%); border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 14px 34px rgba(0,0,0,0.45); color: #FAF2F4; font-family: Figtree, sans-serif; font-size: 13.5px; animation: ds-toast-in 0.34s cubic-bezier(0.16,1,0.3,1); } .ds-toast .ds-ic { width: 16px; height: 16px; fill: #8FE5AE; shape-rendering: crispEdges; flex: none; } .ds-toast button { padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255,77,157,0.5); background: none; color: #FF4D9D; font-family: 'Press Start 2P', monospace; font-weight: 400; font-size: 8px; white-space: nowrap; cursor: pointer; } .ds-toast.ds-warn { border-color: rgba(255,194,75,0.5); } .ds-toast.ds-err { border-color: rgba(255,106,87,0.55); } @keyframes ds-toast-in { from { transform: translateY(-12px) scale(0.97); opacity: 0; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Lit Window on a Plum Night",
+    "overview": "The wall is the room; everything else is glass you look through to see it. A million pixels of other people's marks fill the phone from notch to home bar, and every control the app owns — the lockup, the countdown, the language toggle, the paint dock, the five-door nav — is a blurred, translucent, hairline-bordered pill floating on top of that artwork. Nothing is stacked above or below the canvas. There is no header band, no footer band, no letterboxed content well. Chrome is weather over the wall, not architecture around it.\n\nThe ground is a dark plum night (#150A10) with one warm radial lift toward the top of the canvas, so the surface never reads as flat black. Against it the system speaks in two registers: a rose family for everything that is merely text (#F5C4C1 into #FBE1DF), and one hot pink (#FF4D9D) reserved for the single thing you are meant to press. The pixel display face — Press Start 2P at 400, Cairo at 800 when the page speaks Arabic — never grows large; it lives from 6.5px to 15px and works as a label voice, while Figtree carries every real sentence at 12–16px. That inversion is the personality: the arcade voice is small and clipped, the human voice is bigger and softer.\n\nDensity is generous for thumbs and tight for pixels. Touch targets sit at 38–58px, sheets rise from the bottom edge on a phone and become centered dialogs at 760px, and every fixed offset carries a safe-area inset. Confirmed refusal: the category-default chrome sandwich — an opaque top bar over a scrolling content column over an opaque bottom bar — which shrinks the artwork to a window. That composition is not available in this system.",
+    "keyCharacteristics": [
+      "Full-bleed live canvas; all chrome floats over it",
+      "Liquid glass as the single material: 20px blur, 160% saturation, hairline light border",
+      "Dark plum night ground with one hot-pink primary action per surface",
+      "Pixel display face used small (6.5–15px) as a label voice; Figtree used larger for prose",
+      "Pill-shaped floating controls, panel-radius sheets, zero square corners outside the canvas",
+      "Mobile-first, logical-property layout that mirrors whole for Arabic RTL",
+      "Sprite-only pixelarticons, always sized in px"
+    ],
+    "rules": [
+      { "name": "The One Loud Thing Rule", "body": "Exactly one hot-pink filled control per surface. On the wall that is the raised brush; inside a sheet it is the single primary CTA. Everything else that wants attention gets rose text, a pink hairline, or a pink icon — never a second pink fill.", "section": "colors" },
+      { "name": "The Two Palettes Rule", "body": "Chrome colours and wall-paint colours are separate sets and do not borrow from each other. The only sanctioned crossing is #D81B60, which is both the deep stop of the chrome pink and the default paint colour.", "section": "colors" },
+      { "name": "The Veil, Not Blackout Rule", "body": "Sheet scrims are rgba(10, 4, 8, 0.30) with blur(2px). The wall stays alive and visible behind every overlay — a modal never turns the artwork off.", "section": "colors" },
+      { "name": "The Small Pixel Rule", "body": "The pixel display face never grows. It runs 6.5px to 15px and is always a label, a heading or a numeral — never a sentence, never a paragraph. Prose is Figtree, and Figtree is the larger of the two faces on screen.", "section": "typography" },
+      { "name": "The Never Hardcode a Family Rule", "body": "Every display moment goes through var(--fp) + var(--fp-w) and every body moment through var(--fb). Writing font-family: 'Press Start 2P' directly breaks Arabic silently, because Press Start 2P has no Arabic glyphs.", "section": "typography" },
+      { "name": "The 16px Input Rule", "body": "Text inputs are 16px, always. Anything smaller makes iOS Safari zoom the viewport on focus and the full-bleed canvas never recovers its framing.", "section": "typography" },
+      { "name": "The Safe-Area Rule", "body": "Every fixed edge offset is written as calc(<n>px + var(--sat|--sab|--sal|--sar)). The page renders under the notch on purpose (viewport-fit=cover); the insets are what keeps controls out from under it.", "section": "layout" },
+      { "name": "The Logical Property Rule", "body": "Shell layout uses logical properties only — inset-inline, padding-inline, margin-inline, text-align: start, border-inline-end. Setting dir=\"rtl\" must mirror the whole shell with no extra CSS. The only physical offsets in the system are the eight crop handles, which are geometric positions on an image rather than layout.", "section": "layout" },
+      { "name": "The Hidden Property Rule", "body": "Every conditional element — sheets, error lines, badges, optional rows — toggles via the HTML hidden property, backed by [hidden] { display: none !important }. Do not invent .is-open / .d-none classes; the attribute is the state.", "section": "layout" },
+      { "name": "The Glass-Over-Canvas Rule", "body": "If it floats above the wall, it wears .glass. If it lives inside a sheet, it is a tonal surface with a hairline border. Never nest glass inside glass — the second blur has nothing left to blur.", "section": "elevation" },
+      { "name": "The Pink Glow Rule", "body": "Coloured shadows belong to the primary action alone. Two elements carry a pink glow (the raised brush and the CTA); a third would flatten both.", "section": "elevation" },
+      { "name": "The Pill-or-Panel Rule", "body": "Floating controls are pills; grouped content is a panel at 10 / 18 / 26px. There is no third shape and no square corner outside the canvas.", "section": "shapes" },
+      { "name": "The Sprite-Only Rule", "body": "Every icon is <svg class=\"ic\"><use href=\"#i-…\"/></svg> from the generated pixelarticons sprite. New icons are added to the mapping in tools/make-icons.js and regenerated — never hand-drawn into the markup, and never sized in em/rem.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do keep the canvas full-bleed and float new chrome over it as a .glass pill positioned with position: fixed plus a safe-area inset.",
+      "Do give each surface exactly one hot-pink filled control (The One Loud Thing Rule); express every other emphasis as rose text, a pink icon, or a pink hairline.",
+      "Do write display type as font-family: var(--fp); font-weight: var(--fp-w) and add an Arabic size bump (html[lang=\"ar\"] .thing { font-size: … }) whenever the Latin size is under 9px.",
+      "Do use logical properties for every offset, padding and alignment so dir=\"rtl\" mirrors the shell for free.",
+      "Do toggle every conditional element with the hidden property, and keep error messages as pre-existing hidden elements rather than injected nodes.",
+      "Do pair every semantic colour with words — a pending row says \"pending\" and is amber; the colour is reinforcement, not the message.",
+      "Do size icons in px on a .ic override (12 / 16 / 18–22 / 26 / 44) and pull them from the inline sprite with <use>.",
+      "Do keep text inputs at 16px and touch targets at 38px or larger (44px for standalone controls).",
+      "Do keep behaviour in app.js — the page ships no inline script and no inline handlers."
+    ],
+    "donts": [
+      "Don't build a chrome sandwich: no opaque top bar plus scrolling content column plus opaque bottom bar. Nothing may reduce the canvas to a letterboxed window.",
+      "Don't blur a .glass surface inside another .glass surface, and don't apply glass to content that lives inside a sheet — sheets are opaque and layer tonally.",
+      "Don't add a second pink-filled control, or a second coloured shadow, to a surface that already has one.",
+      "Don't set the pixel display face above 15px, or use it for a sentence. Prose is Figtree.",
+      "Don't hardcode 'Press Start 2P' or 'Figtree' anywhere — Arabic swaps both through custom properties and a hardcoded family renders tofu.",
+      "Don't use physical left / right / margin-left in shell layout; the RTL mirror depends on logical properties.",
+      "Don't hand-draw SVG path data into the markup — extend the mapping in tools/make-icons.js and regenerate the sprite.",
+      "Don't blacken the wall behind an overlay; the scrim stays at 30% with a 2px blur so the artwork keeps showing through.",
+      "Don't reuse the 6.5px nav label size outside the bottom nav — 8px with 0.06em tracking is the floor everywhere else.",
+      "Don't leave a scrollable surface on the stock scrollbar; re-skin it thin and translucent-white like .modal."
+    ]
+  }
+}

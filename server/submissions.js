@@ -236,7 +236,15 @@ function takedown(sid, actor, reason, now = Date.now()) {
    on the card and "rejected" everywhere a status is a status. */
 function notifyOwner(r, label, actor, reason) {
   if (!r.ok) return;
-  if (wall) wall.notify({ t: 'mod', sid: r.sid, status: r.status });
+  /* An erasure of work that was still pending changes nothing public, so
+     publishErasure has nothing to broadcast — but the submitter's own
+     screen is still shimmering with those cells. The decision event is the
+     only thing that reaches them, so it carries the indices to drop. */
+  const evt = { t: 'mod', sid: r.sid, status: r.status };
+  if (r.status !== 'approved' && r.cells && r.cells.length) {
+    evt.px = r.cells.map(c => c.idx);
+  }
+  if (wall) wall.notify(evt);
   announce(decidedHooks, [r.sub, label, actor, reason || null]);
 }
 

@@ -424,7 +424,7 @@ function openStream() {
     } else if (d.t === 'mod') {
       // a decision landed. Only ours are in the history we hold, and only
       // ours can be on the pending layer, so anything else is a no-op.
-      onDecision(d.sid, d.status);
+      onDecision(d.sid, d.status, d.px);
     } else if (d.t === 'pay') {
       onPayment(d.pid, d.status);
     } else if (d.t === 'reset') {
@@ -601,13 +601,28 @@ function toast(html, opts = {}) {
   setTimeout(dismiss, opts.dur || 3600);
 }
 
-/* ── Modals ── */
-function openModal(id) { $(id).hidden = false; }
-function closeModal(id) { $(id).hidden = true; }
+/* ── Modals ──
+   Sheets stack: opening one from inside another (the paint shop from a cap
+   toast, the brand door from MORE) has to put the new one in front, and DOM
+   order alone decides that otherwise — which on a phone reads as the tap
+   having done nothing at all. */
+let sheetZ = 50;
+function openModal(id) {
+  const ov = $(id);
+  if (ov.hidden) ov.style.zIndex = ++sheetZ;
+  ov.hidden = false;
+}
+function closeModal(id) {
+  const ov = $(id);
+  ov.hidden = true;
+  ov.style.zIndex = '';
+  /* nothing left open — start the next stack from the floor again */
+  if (!document.querySelector('.overlay:not([hidden])')) sheetZ = 50;
+}
 document.querySelectorAll('.overlay').forEach(ov => {
-  ov.addEventListener('pointerdown', e => { if (e.target === ov) ov.hidden = true; });
+  ov.addEventListener('pointerdown', e => { if (e.target === ov) closeModal(ov.id); });
   ov.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
-    ov.hidden = true;
+    closeModal(ov.id);
     if (ov.id === 'modalHelp' && !helpSeen) {
       helpSeen = true;
       try { localStorage.setItem(LS_KEY, '1'); } catch (e) { /* private mode — just show it again */ }
@@ -624,17 +639,16 @@ function buildPalette() {
     b.onclick = () => setColor(c, b);
     pal.appendChild(b);
   });
-  const custom = document.createElement('button');
-  custom.className = 'swatch swatch-custom'; custom.title = 'Custom color';
-  custom.onclick = () => $('customColor').click();
-  pal.appendChild(custom);
+  /* no custom swatch here any more: the colour input in the dock is a real
+     visible control, and proxying a .click() at a hidden one is exactly what
+     mobile browsers decline to honour */
   setColor(selColor, pal.firstChild);
 }
 function setColor(c, swatchEl) {
   selColor = c;
   document.querySelectorAll('.swatch').forEach(s => s.classList.remove('sel'));
   if (swatchEl) swatchEl.classList.add('sel');
-  $('curColor').style.background = c;
+  /* the input's own value is the current-colour display */
   $('customColor').value = /^#[0-9a-f]{6}$/i.test(c) ? c : '#D81B60';
 }
 $('customColor').addEventListener('input', e => setColor(e.target.value, null));
@@ -1010,8 +1024,16 @@ async function loadHistory(more) {
    refetching (our pending pixels either became wall or vanished) and the
    allowance may have moved with it. */
 let decisionTimer = null;
-function onDecision(sid, status) {
+function onDecision(sid, status, px) {
   if (!knownSubs.has(sid)) return;
+  /* Turned down: the shimmer comes off the wall now, not on the next
+     reload. These cells were never public, so no paint-remove is coming
+     for them — this event is the whole notification. */
+  if (px && px.length) {
+    for (const i of px) removePending(i);
+    thumbDirty = true;
+    updateStats();
+  }
   clearTimeout(decisionTimer);
   decisionTimer = setTimeout(() => {
     syncAllowance();
@@ -1874,17 +1896,22 @@ let panState = null, pinchState = null;
 let hover = null;                      // {x,y}
 let tooltipCell = -1, tooltipTimer = null;
 let yoursFlashUntil = 0;
-let brushMode = false, spaceHeld = false;
+let brushMode = false, eraseMode = false, spaceHeld = false;
 let stroke = null;                     // {last:{x,y}, warned, erase}
 
-/* Tool switching */
+/* Tool switching. Brush and eraser share the stroke machinery — the only
+   difference is which function each cell goes through — so `brushMode`
+   stays true for both and `eraseMode` picks the verb. */
 function setTool(t) {
-  brushMode = t === 'brush';
-  $('toolBrush').classList.toggle('sel', brushMode);
-  $('toolPan').classList.toggle('sel', !brushMode);
+  brushMode = t === 'brush' || t === 'erase';
+  eraseMode = t === 'erase';
+  $('toolPan').classList.toggle('sel', t === 'pan');
+  $('toolBrush').classList.toggle('sel', t === 'brush');
+  $('toolErase').classList.toggle('sel', eraseMode);
 }
 $('toolBrush').onclick = () => setTool('brush');
 $('toolPan').onclick = () => setTool('pan');
+$('toolErase').onclick = () => setTool('erase');
 
 /* Brush stroke painting */
 function lineCells(x0, y0, x1, y1, fn) {
@@ -1935,7 +1962,7 @@ cvs.addEventListener('pointerdown', e => {
   if (wantsBrush && (e.button === 0 || e.button === 2)) {
     // hold-to-paint: start painting right under the mouse
     if (e.button === 0 && cell && pixels.has(idx(cell.x, cell.y))) { showTooltip(cell, e, true); }
-    stroke = { last: null, warned: false, erase: e.button === 2 };
+    stroke = { last: null, warned: false, erase: eraseMode || e.button === 2 };
     if (cell) strokeTo(cell);
     hideTooltipSoon();
     return;
@@ -2069,7 +2096,7 @@ window.addEventListener('keydown', e => {
   if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
   if (e.key === 'Escape') {
     if (placing) return cancelPlacing();
-    document.querySelectorAll('.overlay:not([hidden])').forEach(o => o.hidden = true);
+    document.querySelectorAll('.overlay:not([hidden])').forEach(o => closeModal(o.id));
     return;
   }
   if (e.key === '+' || e.key === '=') zoomAt(cw / 2, ch / 2, 1.6);
@@ -2077,6 +2104,7 @@ window.addEventListener('keydown', e => {
   else if (e.key === '0') fit();
   else if (e.key === 'b' || e.key === 'B') setTool('brush');
   else if (e.key === 'v' || e.key === 'V') setTool('pan');
+  else if (e.key === 'e' || e.key === 'E') setTool('erase');
   else if (e.key === ' ') { spaceHeld = true; e.preventDefault(); }
   else if (e.key.startsWith('Arrow')) {
     const d = 100;
@@ -2415,6 +2443,7 @@ const L = {
     'zoom.in': 'Zoom in (+)', 'zoom.out': 'Zoom out (−)', 'zoom.fit': 'Fit whole wall (0)',
     'tool.pan': 'Move — drag to pan, tap to place one pixel (V)',
     'tool.brush': 'Brush — hold and drag to paint (B)',
+    'tool.erase': 'Eraser — hold and drag to rub pixels out (E)',
     'place.hint': "PICK YOUR SPOT ON NEXT MONTH'S WALL · <span class=\"ok\">GREEN = FREE</span> · <span class=\"bad\">RED = BOOKED</span>",
     'place.find': 'FIND FREE SPOT',
     'cp.title': 'BRAND PRE-ORDER',
@@ -2575,6 +2604,7 @@ const L = {
     'zoom.in': 'قرّب (+)', 'zoom.out': 'بعّد (−)', 'zoom.fit': 'الحيط كله (0)',
     'tool.pan': 'تحريك — اسحب تتنقل، دوس تحط بكسل (V)',
     'tool.brush': 'فرشة — دوس واسحب تلوّن (B)',
+    'tool.erase': 'أستيكة — دوس واسحب تمسح (E)',
     'place.hint': 'اختار مكانك على حيط الشهر الجاي · <span class="ok">الأخضر = فاضي</span> · <span class="bad">الأحمر = محجوز</span>',
     'place.find': 'دوّر على مكان فاضي',
     'cp.title': 'حجز براند',
@@ -2653,7 +2683,7 @@ function closeNavSheets() {
 }
 
 $('navWall').onclick = () => {
-  document.querySelectorAll('.overlay:not([hidden])').forEach(ov => { ov.hidden = true; });
+  document.querySelectorAll('.overlay:not([hidden])').forEach(ov => closeModal(ov.id));
   history.open = false;
   syncNavSel();
 };
