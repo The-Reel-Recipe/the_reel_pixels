@@ -1492,6 +1492,7 @@ function loadSource(img, label) {
   $('bgRemove').checked = !src.hadAlpha;
   $('bgOpts').hidden = !$('bgRemove').checked;
   $('cpEditor').hidden = false;
+  $('cpTools').hidden = false;      // the controls live outside the stage now
   applyBg();
   resetCrop();
   if (!src.hadAlpha) {

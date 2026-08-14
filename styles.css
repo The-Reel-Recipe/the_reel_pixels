@@ -1277,12 +1277,18 @@ html[lang="ar"] .auth-tab { font-size: 13px; }
 html[lang="ar"] .bs-note { font-size: 11px; }
 .brand-strip .btn-mini { margin-inline-start: auto; }
 
-.cp-grid { display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 6px; }
-/* source and preview live side by side the moment there is room for two */
-.cp-duo { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
-@media (min-width: 560px) {
-  .cp-duo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.cp-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 6px; }
+/* Source and preview always sit side by side, phone included: seeing the
+   crop and what it pixelates into at the same time is the entire job of
+   this screen, and stacking them puts a scroll between the two halves of
+   one comparison. */
+.cp-duo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
 }
+@media (min-width: 560px) { .cp-duo { gap: 18px; } }
 .size-row { display: flex; align-items: center; gap: 8px; }
 .stepper {
   display: flex;
@@ -1348,9 +1354,10 @@ html[lang="ar"] .bs-note { font-size: 11px; }
 .cp-stage {
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: 12px;
+  padding: 10px;
   background: rgba(0, 0, 0, 0.22);
 }
+@media (min-width: 560px) { .cp-stage { padding: 12px; } }
 .cp-prev-label {
   display: block;
   font-family: var(--fp); font-weight: var(--fp-w);
@@ -1360,8 +1367,19 @@ html[lang="ar"] .bs-note { font-size: 11px; }
   margin-bottom: 10px;
 }
 html[lang="ar"] .cp-prev-label { font-size: 11px; }
-.crop-wrap { position: relative; display: inline-block; max-width: 100%; }
-#cpSrc { max-width: 100%; display: block; border-radius: 6px; background: #fff; }
+/* overflow:hidden is load-bearing — the crop box dims everything outside
+   itself with a 999px shadow spread, and without something to clip it that
+   dimming floods the whole sheet instead of just the picture */
+.crop-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: 6px;
+  line-height: 0;
+}
+#cpSrc { max-width: 100%; max-height: 150px; display: block; background: #fff; }
+@media (min-width: 560px) { #cpSrc { max-height: 260px; } }
 .crop-box {
   position: absolute;
   border: 2px solid var(--pink);
@@ -1394,15 +1412,24 @@ html[lang="ar"] .cp-prev-label { font-size: 11px; }
   border-radius: 999px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
-/* every handle centered ON its edge or corner — nothing floats off the box */
-.ch[data-h="nw"] { top: -11px; left: -11px; cursor: nwse-resize; }
-.ch[data-h="n"]  { top: -11px; left: calc(50% - 11px); cursor: ns-resize; }
-.ch[data-h="ne"] { top: -11px; right: -11px; cursor: nesw-resize; }
-.ch[data-h="w"]  { top: calc(50% - 11px); left: -11px; cursor: ew-resize; }
-.ch[data-h="e"]  { top: calc(50% - 11px); right: -11px; cursor: ew-resize; }
-.ch[data-h="sw"] { bottom: -11px; left: -11px; cursor: nesw-resize; }
-.ch[data-h="s"]  { bottom: -11px; left: calc(50% - 11px); cursor: ns-resize; }
-.ch[data-h="se"] { bottom: -11px; right: -11px; cursor: nwse-resize; }
+/* Handles sit inside the box, not straddling its edge: the wrap has to clip
+   the dimming shadow, and anything hanging outside would be clipped with
+   it — including the grab targets at the picture's own border. */
+.ch[data-h="nw"] { top: 0; left: 0; cursor: nwse-resize; }
+.ch[data-h="n"]  { top: 0; left: calc(50% - 11px); cursor: ns-resize; }
+.ch[data-h="ne"] { top: 0; right: 0; cursor: nesw-resize; }
+.ch[data-h="w"]  { top: calc(50% - 11px); left: 0; cursor: ew-resize; }
+.ch[data-h="e"]  { top: calc(50% - 11px); right: 0; cursor: ew-resize; }
+.ch[data-h="sw"] { bottom: 0; left: 0; cursor: nesw-resize; }
+.ch[data-h="s"]  { bottom: 0; left: calc(50% - 11px); cursor: ns-resize; }
+.ch[data-h="se"] { bottom: 0; right: 0; cursor: nwse-resize; }
+/* the sticky CTA floats over the scroll, so the last panel needs room to
+   clear it instead of ending underneath */
+.modal-wide .cp-grid { padding-bottom: 8px; }
+.cp-tools { margin-top: 10px; }
+/* on the narrowest phones the label's own hint is what pushes it to two
+   lines — the handles say "drag me" better than the words do */
+@media (max-width: 430px) { .cp-prev-label .lbl-dim { display: none; } }
 .crop-tools { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .crop-tools button {
   display: inline-flex; align-items: center; gap: 6px;
@@ -1423,6 +1450,8 @@ html[lang="ar"] .crop-tools button { font-size: 12px; }
 .rng input[type="range"] { width: 100%; accent-color: var(--pink); height: 28px; }
 #cpCanvas {
   width: 100%;
+  max-height: 150px;
+  object-fit: contain;
   image-rendering: pixelated;
   border-radius: 6px;
   background:
@@ -1518,6 +1547,8 @@ html[lang="ar"] .crop-tools button { font-size: 12px; }
   .modal-wide { max-width: min(1140px, calc(100% - 32px)); }
   .cp-grid { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); }
   .cp-form { max-height: calc(88dvh - 180px); overflow-y: auto; padding-inline-end: 8px; }
+  /* the controls belong under the picture they act on, not under the form */
+  .cp-tools { grid-column: 2; margin-top: 0; }
 }
 @media (min-width: 1100px) {
   .modal { max-width: 620px; }

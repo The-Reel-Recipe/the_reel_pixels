@@ -667,7 +667,7 @@ finish review, the verdict, and DESIGN.md.
         <div class="cp-duo">
         <div class="cp-col">
           <div class="cp-stage" id="cpEditor" hidden>
-            <span class="cp-prev-label"><span data-i18n="cp.source">SOURCE</span> &middot; <i class="lbl-dim" data-i18n="cp.drag">drag to crop</i></span>
+            <span class="cp-prev-label"><span data-i18n="cp.source">SOURCE</span> <i class="lbl-dim">&middot; <span data-i18n="cp.drag">drag to crop</span></i></span>
             <div class="crop-wrap" id="cropWrap">
               <canvas id="cpSrc"></canvas>
               <div class="crop-box" id="cropBox">
@@ -675,22 +675,6 @@ finish review, the verdict, and DESIGN.md.
                 <i class="ch" data-h="w"></i><i class="ch" data-h="e"></i>
                 <i class="ch" data-h="sw"></i><i class="ch" data-h="s"></i><i class="ch" data-h="se"></i>
               </div>
-            </div>
-            <div class="crop-tools">
-              <button id="cropAuto" title="Crop tightly around the logo"><svg class="ic" aria-hidden="true"><use href="#i-crop"/></svg> <span data-i18n="cp.autocrop">AUTO CROP</span></button>
-              <button id="cropReset" data-i18n="cp.reset">RESET</button>
-              <span class="crop-ratio"><span data-i18n="cp.ratio">RATIO</span> <b id="cropRatioVal">&mdash;</b></span>
-            </div>
-            <label class="chk bg-toggle">
-              <input type="checkbox" id="bgRemove">
-              <span><span data-i18n="cp.removebg">REMOVE BACKGROUND</span> <i class="exp-tag" data-i18n="cp.exp">EXPERIMENTAL</i></span>
-            </label>
-            <div class="bg-opts" id="bgOpts" hidden>
-              <label class="rng">
-                <span><span data-i18n="cp.tolerance">TOLERANCE</span> <b id="tolVal">32</b></span>
-                <input type="range" id="bgTol" min="6" max="120" step="2" value="32">
-              </label>
-              <span class="cp-hint" data-i18n="cp.tolHint">Removes the background colour around the edges and any white inside the logo — the wall is white, so white pixels would be invisible.</span>
             </div>
           </div>
         </div>
@@ -703,6 +687,27 @@ finish review, the verdict, and DESIGN.md.
             <p class="cp-hint" id="cpEmpty" data-i18n="cp.empty">Choose a logo image to see how it will look on the wall.</p>
           </div>
         </div>
+        </div>
+
+        <!-- The crop controls run the full width under both previews: in the
+             narrow column beside the picture they wrapped one word per line. -->
+        <div class="cp-stage cp-tools" id="cpTools" hidden>
+          <div class="crop-tools">
+            <button id="cropAuto" title="Crop tightly around the logo"><svg class="ic" aria-hidden="true"><use href="#i-crop"/></svg> <span data-i18n="cp.autocrop">AUTO CROP</span></button>
+            <button id="cropReset" data-i18n="cp.reset">RESET</button>
+            <span class="crop-ratio"><span data-i18n="cp.ratio">RATIO</span> <b id="cropRatioVal">&mdash;</b></span>
+          </div>
+          <label class="chk bg-toggle">
+            <input type="checkbox" id="bgRemove">
+            <span><span data-i18n="cp.removebg">REMOVE BACKGROUND</span> <i class="exp-tag" data-i18n="cp.exp">EXPERIMENTAL</i></span>
+          </label>
+          <div class="bg-opts" id="bgOpts" hidden>
+            <label class="rng">
+              <span><span data-i18n="cp.tolerance">TOLERANCE</span> <b id="tolVal">32</b></span>
+              <input type="range" id="bgTol" min="6" max="120" step="2" value="32">
+            </label>
+            <span class="cp-hint" data-i18n="cp.tolHint">Removes the background colour around the edges and any white inside the logo — the wall is white, so white pixels would be invisible.</span>
+          </div>
         </div>
       </div>
       <div class="modal-foot">
