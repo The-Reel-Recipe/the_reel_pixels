@@ -12,10 +12,11 @@
 
      A  the submission's bounding box grown by max(2×bbox, 64) on each
         side and clamped to the wall. Existing approved pixels drawn
-        normally, the new ones at full colour inside a magenta ring so
-        there is never a question about which is which, and unpainted
-        ground as a pale checkerboard so white artwork is still
-        visible against it.
+        normally, the new ones at full colour inside a thin
+        black·white·black ring — dark and light bands so it reads
+        against any colour underneath — so there is never a question
+        about which is which, and unpainted ground as a pale
+        checkerboard so white artwork is still visible against it.
 
      B  the whole 1000×1000 wall at 256px with a red box where the
         submission sits — "is this in the middle of somebody's logo"
@@ -37,7 +38,7 @@ const PX = 7;                                   // packed [u32 idx · u8 r · u8
 
 /* the card's own furniture, in the project's colours */
 const BG = [0x1B, 0x0F, 0x16];                  // plum, the shell
-const RING = [0xFF, 0x00, 0xAA];                // magenta — deliberately not in the palette
+const RING_STRIPES = [[0, 0, 0], [255, 255, 255], [0, 0, 0]];  // black·white·black
 const LOCATOR = [0xE2, 0x3B, 0x2E];             // the shirt-print red
 const PAPER = [0xFF, 0xFF, 0xFF];
 const CHECK_A = [0xEC, 0xEC, 0xEC];
@@ -126,16 +127,30 @@ function contextPanel(mine, bbox, live) {
   }
   s.box(0, 0, s.w, s.h, BG, 1);            // an edge, so the panel reads as one
 
-  /* The ring: every cell touching the new pixels from outside. Drawn after
-     the fill so it always wins, and one cell thick in wall terms — which is
-     `scale` pixels on the panel, so it stays visible when zoomed out. */
+  /* The ring: a thin black·white·black band on every cell touching the new
+     pixels from outside, drawn after the fill so it always wins. Fixed at a
+     few panel pixels regardless of `scale`, rather than the full cell — a
+     ring as thick as the zoom factor swallows exactly the pixels it exists
+     to point at on a heavily zoomed-in crop. Distance is measured from the
+     shared edge (the min of the two axes on a diagonal neighbour, which is
+     what gives corners a mitred look instead of a square notch). */
+  const bandPx = Math.max(1, Math.floor(scale / (RING_STRIPES.length * 2)));
+  const ringDepth = bandPx * RING_STRIPES.length;
   for (const idx of mine.keys()) {
     const x = idx % W, y = Math.floor(idx / W);
     for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
       const nx = x + dx, ny = y + dy;
       if (nx < rx0 || ny < ry0 || nx > rx1 || ny > ry1) continue;
       if (mine.has(ny * W + nx)) continue;
-      s.block((nx - rx0) * scale, (ny - ry0) * scale, scale, scale, RING);
+      const bx = (nx - rx0) * scale, by = (ny - ry0) * scale;
+      for (let oy = 0; oy < scale; oy++) {
+        for (let ox = 0; ox < scale; ox++) {
+          const distX = dx === 0 ? Infinity : (dx < 0 ? scale - 1 - ox : ox);
+          const distY = dy === 0 ? Infinity : (dy < 0 ? scale - 1 - oy : oy);
+          const dist = Math.min(distX, distY);
+          if (dist < ringDepth) s.put(bx + ox, by + oy, RING_STRIPES[Math.floor(dist / bandPx)]);
+        }
+      }
     }
   }
   return s;
