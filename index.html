@@ -101,6 +101,11 @@ finish review, the verdict, and DESIGN.md.
       <p>The pixels live on the server. Start it and reload:</p>
       <code>node server.js</code>
     </div>
+    <!-- the standing brand door: the revenue flow never hides behind MORE -->
+    <button class="brand-fab glass" id="brandFab">
+      <svg class="ic" aria-hidden="true"><use href="#i-brand"/></svg>
+      <span data-i18n="fab.brand">BRAND</span>
+    </button>
     <div class="placement-hint glass" id="placementHint" hidden>
       <span data-i18n-html="place.hint">PICK YOUR SPOT ON NEXT MONTH'S WALL &middot; <span class="ok">GREEN = FREE</span> &middot; <span class="bad">RED = BOOKED</span></span>
       <span class="ph-actions">
@@ -641,6 +646,7 @@ finish review, the verdict, and DESIGN.md.
           </label>
         </div>
 
+        <div class="cp-duo">
         <div class="cp-col">
           <div class="cp-stage" id="cpEditor" hidden>
             <span class="cp-prev-label"><span data-i18n="cp.source">SOURCE</span> &middot; <i class="lbl-dim" data-i18n="cp.drag">drag to crop</i></span>
@@ -678,6 +684,7 @@ finish review, the verdict, and DESIGN.md.
             <div class="cp-cost"><span id="cpCount">0</span> <span data-i18n="cp.paintable">paintable pixels</span> &middot; <b id="cpCost" class="accent">0 EGP</b></div>
             <p class="cp-hint" id="cpEmpty" data-i18n="cp.empty">Choose a logo image to see how it will look on the wall.</p>
           </div>
+        </div>
         </div>
       </div>
       <div class="modal-foot">

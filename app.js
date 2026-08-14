@@ -2369,7 +2369,7 @@ const L = {
     'me.guestNote': 'You are painting as a guest. Make a free account to keep your pixels, paint and history on any device.',
     'me.create': 'CREATE ACCOUNT', 'me.login': 'LOG IN', 'me.signedin': 'Signed in as',
     'me.logout': 'LOG OUT', 'me.brandNote': 'This is a brand account.', 'me.brandDoor': 'BRAND ACCOUNT',
-    'mo.title': 'MORE', 'mo.brand': 'BRAND PRE-ORDER', 'mo.brandSub': "Your logo on next month's wall",
+    'mo.title': 'MORE', 'mo.brand': 'BRAND PRE-ORDER', 'fab.brand': 'BRAND', 'mo.brandSub': "Your logo on next month's wall",
     'mo.shop': 'PAINT SHOP', 'mo.how': 'HOW IT WORKS', 'mo.lang': 'اللغة · LANGUAGE',
     'mo.taken': 'PIXELS TAKEN', 'mo.next': 'BOOKED NEXT CYCLE',
     'mo.about': '1,000,000 pixels, wiped clean on the 1st of every month.',
@@ -2529,7 +2529,7 @@ const L = {
     'me.guestNote': 'انت بترسم كضيف. اعمل حساب ببلاش عشان بكسلاتك وبويتك وتاريخك يفضلوا معاك على أي موبايل.',
     'me.create': 'اعمل حساب', 'me.login': 'ادخل', 'me.signedin': 'داخل باسم',
     'me.logout': 'اخرج', 'me.brandNote': 'ده حساب براند.', 'me.brandDoor': 'حساب البراند',
-    'mo.title': 'كمان', 'mo.brand': 'حجز براند', 'mo.brandSub': 'لوجو شركتك على حيط الشهر الجاي',
+    'mo.title': 'كمان', 'mo.brand': 'حجز براند', 'fab.brand': 'براند', 'mo.brandSub': 'لوجو شركتك على حيط الشهر الجاي',
     'mo.shop': 'محل البوية', 'mo.how': 'بيشتغل إزاي؟', 'mo.lang': 'اللغة · LANGUAGE',
     'mo.taken': 'بكسلات متاخدة', 'mo.next': 'محجوز للشهر الجاي',
     'mo.about': 'مليون بكسل، بيتمسحوا أول كل شهر.',
@@ -2713,6 +2713,7 @@ $('btnLogoutMe').onclick = logout;
 $('btnBrandDoor').onclick = () => openAuth(null, 'brand');
 $('yoursStat').addEventListener('click', () => closeModal('modalMe'));
 $('moreShop').onclick = () => { closeModal('modalMore'); openModal('modalPaint'); };
+$('brandFab').onclick = () => $('btnCompany').click();
 
 /* create-account submit — the guest keeps everything, gains a password */
 $('paneRegister').addEventListener('submit', async e => {

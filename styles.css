@@ -575,9 +575,31 @@ html[lang="ar"] .nav-item span { font-size: 10px; letter-spacing: 0; }
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
 }
 
+/* the standing brand door, floating opposite the coords chip */
+.brand-fab {
+  position: absolute;
+  inset-inline-end: calc(12px + var(--sar));
+  bottom: calc(206px + var(--sab));
+  z-index: 19;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  color: var(--accent-hi);
+  font-family: var(--fp); font-weight: var(--fp-w);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  border-color: rgba(255, 77, 157, 0.45);
+}
+html[lang="ar"] .brand-fab { font-size: 12.5px; }
+.brand-fab .ic { color: var(--pink); }
+.brand-fab:active { transform: scale(0.96); }
+
 /* placement mode clears the stage */
 body.placing .glass-nav,
 body.placing .paint-dock,
+body.placing .brand-fab,
 body.placing .glass-top { opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
 
 /* ── toasts ───────────────────────────────────────────────────── */
@@ -631,9 +653,10 @@ body.placing .glass-top { opacity: 0; pointer-events: none; transition: opacity 
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(10, 4, 8, 0.55);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  /* a veil, not a blackout — the wall stays alive behind every sheet */
+  background: rgba(10, 4, 8, 0.30);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
   animation: fade-in 0.22s ease;
 }
 
@@ -665,6 +688,26 @@ body.placing .glass-top { opacity: 0; pointer-events: none; transition: opacity 
   width: 40px; height: 4px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.22);
+}
+
+/* one slim, dark scroller wherever a sheet scrolls — never the stock
+   light rail on a plum surface */
+.modal, .cp-form, .palette, .hs-list, .al-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
+}
+.modal::-webkit-scrollbar, .cp-form::-webkit-scrollbar { width: 8px; }
+.modal::-webkit-scrollbar-track, .cp-form::-webkit-scrollbar-track { background: transparent; }
+.modal::-webkit-scrollbar-thumb, .cp-form::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.modal::-webkit-scrollbar-thumb:hover, .cp-form::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+  background-clip: content-box;
+  border: 2px solid transparent;
 }
 
 .modal-x {
@@ -1146,6 +1189,11 @@ html[lang="ar"] .bs-note { font-size: 11px; }
 .brand-strip .btn-mini { margin-inline-start: auto; }
 
 .cp-grid { display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 6px; }
+/* source and preview live side by side the moment there is room for two */
+.cp-duo { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
+@media (min-width: 560px) {
+  .cp-duo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
 .size-row { display: flex; align-items: center; gap: 8px; }
 .stepper {
   display: flex;
@@ -1228,32 +1276,44 @@ html[lang="ar"] .cp-prev-label { font-size: 11px; }
 .crop-box {
   position: absolute;
   border: 2px solid var(--pink);
-  box-shadow: 0 0 0 999px rgba(10, 4, 8, 0.55);
+  /* dim only what the crop leaves out, gently — the photo stays readable */
+  box-shadow: 0 0 0 999px rgba(10, 4, 8, 0.38);
   cursor: move;
   touch-action: none;
 }
+/* corner marks drawn INTO the box corners, like a camera frame */
+.crop-box::before, .crop-box::after {
+  content: '';
+  position: absolute;
+  width: 14px; height: 14px;
+  border: 3px solid #fff;
+  pointer-events: none;
+}
+.crop-box::before { top: -2px; inset-inline-start: -2px; border-inline-end: 0; border-bottom: 0; }
+.crop-box::after  { bottom: -2px; inset-inline-end: -2px; border-inline-start: 0; border-top: 0; }
 .ch {
   position: absolute;
-  width: 20px; height: 20px;
-  margin: -10px;
+  width: 22px; height: 22px;
   touch-action: none;
 }
 .ch::after {
   content: '';
   position: absolute;
-  inset: 5px;
+  inset: 6px;
   background: var(--pink);
   border: 2px solid #fff;
-  border-radius: 3px;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
-.ch[data-h="nw"] { top: 0; left: 0; cursor: nwse-resize; }
-.ch[data-h="n"]  { top: 0; left: 50%; cursor: ns-resize; }
-.ch[data-h="ne"] { top: 0; right: -20px; cursor: nesw-resize; }
-.ch[data-h="w"]  { top: 50%; left: 0; cursor: ew-resize; }
-.ch[data-h="e"]  { top: 50%; right: -20px; cursor: ew-resize; }
-.ch[data-h="sw"] { bottom: -20px; left: 0; cursor: nesw-resize; }
-.ch[data-h="s"]  { bottom: -20px; left: 50%; cursor: ns-resize; }
-.ch[data-h="se"] { bottom: -20px; right: -20px; cursor: nwse-resize; }
+/* every handle centered ON its edge or corner — nothing floats off the box */
+.ch[data-h="nw"] { top: -11px; left: -11px; cursor: nwse-resize; }
+.ch[data-h="n"]  { top: -11px; left: calc(50% - 11px); cursor: ns-resize; }
+.ch[data-h="ne"] { top: -11px; right: -11px; cursor: nesw-resize; }
+.ch[data-h="w"]  { top: calc(50% - 11px); left: -11px; cursor: ew-resize; }
+.ch[data-h="e"]  { top: calc(50% - 11px); right: -11px; cursor: ew-resize; }
+.ch[data-h="sw"] { bottom: -11px; left: -11px; cursor: nesw-resize; }
+.ch[data-h="s"]  { bottom: -11px; left: calc(50% - 11px); cursor: ns-resize; }
+.ch[data-h="se"] { bottom: -11px; right: -11px; cursor: nwse-resize; }
 .crop-tools { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .crop-tools button {
   display: inline-flex; align-items: center; gap: 6px;
@@ -1363,11 +1423,16 @@ html[lang="ar"] .crop-tools button { font-size: 12px; }
   .nav-item span { font-size: 7px; }
 }
 
+/* the pre-order editor earns the whole screen: form on the left, source
+   and preview beside each other on the right — one screen, no long scroll */
+@media (min-width: 900px) {
+  .modal-wide { max-width: min(1140px, calc(100% - 32px)); }
+  .cp-grid { grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); }
+  .cp-form { max-height: calc(88dvh - 180px); overflow-y: auto; padding-inline-end: 8px; }
+}
 @media (min-width: 1100px) {
-  .modal-wide { max-width: 1060px; }
-  .cp-grid { grid-template-columns: minmax(300px, 360px) minmax(0, 1fr) minmax(0, 1fr); }
   .modal { max-width: 620px; }
-  .modal-wide.modal { max-width: 1060px; }
+  .modal-wide.modal { max-width: 1140px; }
   .modal-alerts, .modal-me, .modal-more { max-width: 480px; }
 }
 
