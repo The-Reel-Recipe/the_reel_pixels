@@ -267,6 +267,10 @@ async function adminRoutes(req, res, urlPath, now) {
      panel proper — its script and its stylesheet — needs a session, so an
      unauthenticated scrape gets a form and nothing else (§11). */
   if (urlPath === '/admin' || urlPath === '/admin/') return sendFileFrom(res, ADMIN_DIR, 'index.html');
+  /* The gate's own script. It exists because CSP forbids inline script, and
+     it serves the one crowd that by definition has no session yet — it posts
+     the login form and pulls in the panel, nothing more. */
+  if (urlPath === '/admin/gate.js') return sendFileFrom(res, ADMIN_DIR, 'gate.js');
   if (urlPath.startsWith('/admin/')) {
     if (!admin.sessionFrom(req, now)) return send(res, 403, 'text/plain', 'Sign in first.');
     return sendFileFrom(res, ADMIN_DIR, urlPath.slice('/admin/'.length));

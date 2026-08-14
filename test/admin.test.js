@@ -245,6 +245,9 @@ test('the panel itself is not readable without a session', async () => {
     assert.equal(r.code, 403, `${asset} should need a session`);
   }
   assert.equal((await req('GET', '/admin/panel.js')).code, 200, 'and be served with one');
+  /* the gate script is the exception: it is how anyone logs in at all */
+  assert.equal((await req('GET', '/admin/gate.js', null, { jar: null })).code, 200,
+    'the login page\'s own script must not need the session it exists to create');
 });
 
 test('the static server no longer hands out the source', async () => {
