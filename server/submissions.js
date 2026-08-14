@@ -56,6 +56,9 @@ const selSub = db.prepare(
   `SELECT s.*, u.handle, u.kind FROM submissions s
      JOIN users u ON u.id = s.user_id WHERE s.id = ?`);
 const selCells = db.prepare('SELECT layer, idx, color FROM cells WHERE submission_id = ?');
+/* A brand booking links a payment at order time (payments.createOrder);
+   approving it is a second gate, not a formality — see approveTx. */
+const selPaymentStatus = db.prepare('SELECT status FROM payments WHERE id = ?');
 
 /* The guards. Each returns changes() === 1 exactly once per submission,
    whatever order the taps arrive in. */
@@ -158,6 +161,10 @@ const decided = (sub, changed) => changed
 function approveTx(sid, actor, now) {
   const sub = selSub.get(sid);
   if (!sub) return { ok: false, missing: true, sid };
+  if (sub.payment_id) {
+    const pay = selPaymentStatus.get(sub.payment_id);
+    if (!pay || pay.status !== 'verified') return { ok: false, unpaid: true, sid, sub };
+  }
   if (!goApproved.run(now, actor, sid).changes) return decided(sub, false);
 
   const cells = selCells.all(sid);

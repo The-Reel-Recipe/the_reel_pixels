@@ -113,6 +113,12 @@ const setMsgId = {
   payment: db.prepare('UPDATE payments SET tg_msg_id = ? WHERE id = ?'),
   brand: db.prepare('UPDATE brand_profiles SET tg_msg_id = ? WHERE user_id = ?')
 };
+/* sendPhoto and sendMessage create a card and hand back the id to save;
+   everything else edits one that must already exist. Brand cards and
+   screenshot-less payment cards create via sendMessage, not sendPhoto —
+   keying this off the method name rather than "is it sendPhoto" is what
+   makes those work the same as the photo cards. */
+const EDIT_METHODS = new Set(['editMessageCaption', 'editMessageReplyMarkup', 'editMessageText']);
 
 /* ── The worker ───────────────────────────────────────────────── */
 
@@ -127,7 +133,7 @@ async function drainOne(now) {
     if (payload.about) {
       const found = msgIdOf[payload.about.kind].get(payload.about.id);
       const id = found && found.id;
-      if (row.method !== 'sendPhoto' && !id) {
+      if (EDIT_METHODS.has(row.method) && !id) {
         /* the card it edits has not gone out yet — wait for it rather than
            sending an edit into the void */
         bumpTry.run(now + 2000, row.id);
@@ -136,7 +142,7 @@ async function drainOne(now) {
       if (id) payload.params.message_id = id;
     }
     const result = await call(row.method, payload.params);
-    if (row.method === 'sendPhoto' && payload.about && result && result.message_id) {
+    if (!EDIT_METHODS.has(row.method) && payload.about && result && result.message_id) {
       setMsgId[payload.about.kind].run(result.message_id, payload.about.id);
     }
     dropSend.run(row.id);
@@ -193,6 +199,15 @@ const money = piasters => `${(piasters / 100).toLocaleString('en-US')} EGP`;
 
 const HEAD = { free: '🟩 FREE CLAIM', paint: '💰 PAINT', brand: '🏢 BRAND' };
 
+/* Same states payCaption() shows on the payment's own card — repeated
+   here so a moderator reading the submission card doesn't have to go
+   find the other one to see whether Approve is even going to work. */
+const PAY_WORD = {
+  awaiting_transfer: 'AWAITING TRANSFER', submitted: 'SUBMITTED', verified: '✅ VERIFIED',
+  rejected: '🚫 REJECTED', refund_due: 'REFUND DUE', refunded: 'REFUNDED', expired: 'EXPIRED'
+};
+const selSubPayment = db.prepare('SELECT code, status, instapay_ref FROM payments WHERE id = ?');
+
 function captionFor(sub, now) {
   const rec = submissions.recordOf(sub.user_id, sub.id);
   const bits = [
@@ -203,6 +218,13 @@ function captionFor(sub, now) {
   if (sub.type === 'brand') {
     if (sub.brand_url) bits.push(esc(sub.brand_url));
     bits.push(money(sub.px_count * S.PRICE_COMPANY * 100));
+  }
+  if (sub.payment_id) {
+    const p = selSubPayment.get(sub.payment_id);
+    if (p) {
+      bits.push(`payment ${esc(p.code)} ${PAY_WORD[p.status] || p.status}` +
+        (p.instapay_ref ? ` ref ${esc(p.instapay_ref)}` : ''));
+    }
   }
   bits.push(`${sub.kind === 'brand' ? 'brand' : 'guest'} since ${ago(now - (sub.created_at || now))}`);
   bits.push(`${rec.approved} prior approved / ${rec.rejected} rejected`);
@@ -504,6 +526,7 @@ async function onCallback(q) {
       : submissions.reject(sid, actor, reason, now);
 
     if (r.missing) { await answer(q.id, 'That submission is gone.', true); return r; }
+    if (r.unpaid) { await answer(q.id, 'Verify payment first.', true); return r; }
     if (!r.ok) {
       /* the other tap won. Say who, and leave the card exactly as they left it */
       await answer(q.id, `Already ${r.already}${r.by ? ` by ${r.by}` : ''}.`, true);

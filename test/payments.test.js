@@ -302,6 +302,29 @@ test('a booking holds the ground and comes with an order for it', async () => {
   assert.equal(wall.wall.pending.next.size >= 60, true, 'the cells are held');
 });
 
+test('a booking cannot be approved ahead of its payment', async () => {
+  const { who } = brand('203.0.113.113', 'TWO GATES CO.');
+  const px = freeRange(15).map(i => [i, 0x336699]);
+  const r = await json(who, 'POST', '/api/book', envelope({ name: 'TWO GATES CO.' }, px),
+    'application/octet-stream');
+  const pid = r.json.payment.paymentId, sid = r.json.sid;
+
+  const early = submissions.approve(sid, 'tg:1 (sara)');
+  assert.equal(early.ok, false);
+  assert.equal(early.unpaid, true, 'content is fine, but nobody has paid yet');
+  assert.equal(subOf(sid).status, 'pending', 'the pixels stay held, not live');
+
+  await json(who, 'POST', `/api/payments/${pid}/proof`,
+    { instapay_ref: 'two-gates-1', payer_handle: 'twogates@instapay' });
+  const stillEarly = submissions.approve(sid, 'tg:1 (sara)');
+  assert.equal(stillEarly.unpaid, true, 'a reference alone is not verified money');
+
+  payments.verify(pid, 'tg:1 (sara)');
+  const now = submissions.approve(sid, 'tg:1 (sara)');
+  assert.equal(now.ok, true, 'verified — the second gate opens');
+  assert.equal(subOf(sid).status, 'approved');
+});
+
 test('a booking nobody pays for lets the pixels go', async () => {
   const { who } = brand('203.0.113.111', 'SLOW CO.');
   const idxs = freeRange(20);

@@ -399,6 +399,38 @@ test('a brand application becomes a card, and the buttons decide it', async () =
   assert.equal(identity.brandStatus({ id: uid, kind: 'brand' }), 'approved');
 });
 
+/* A brand card and a screenshot-less payment card both create via
+   sendMessage, not sendPhoto — there is no photo ahead of them to wait
+   for, so draining must not treat "not sendPhoto" as "an edit, wait for
+   an id". Regression for the bug where such a card retried forever
+   because the id it was waiting on could only ever come from itself. */
+test('a card that creates via sendMessage sends on its own, with nothing to wait for', async () => {
+  dbm.db.prepare('DELETE FROM tg_outbox').run();
+  calls.length = 0;
+  const form = {
+    email: 'hello@second-brand.example', password: 'a-long-enough-password',
+    business_name: 'Second Brand Co.', category: 'Drinks',
+    description: 'y'.repeat(220), website: 'second-brand.example',
+    contact_name: 'Sara Fahmy', phone: '+20 100 555 0135',
+    instapay_handle: 'secondbrand@instapay'
+  };
+  const r = await request('POST', '/api/auth/signup', JSON.stringify(form));
+  assert.equal(r.code, 200);
+
+  const q = queued();
+  assert.equal(q.length, 1);
+  assert.equal(q[0].method, 'sendMessage', 'a brand card has no photo to attach');
+  const uid = JSON.parse(q[0].payload).about.id;
+
+  await telegram.drain();
+  assert.equal(queued().length, 0, 'it must not sit forever waiting for a message id only it can produce');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].method, 'sendMessage');
+
+  const row = dbm.db.prepare('SELECT tg_msg_id FROM brand_profiles WHERE user_id = ?').get(uid);
+  assert.ok(row.tg_msg_id > 0, 'saved, so approving later edits this card instead of stacking a new one');
+});
+
 /* ── the end-of-cycle nag (§5) ────────────────────────────────── */
 
 test('the wipe warning lists what is still waiting, once per window', async () => {
