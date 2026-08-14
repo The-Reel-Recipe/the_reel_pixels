@@ -1,0 +1,12 @@
+{
+  "name": "S37 — Shakhbat 3al 7eet",
+  "short_name": "S37",
+  "description": "A 1,000,000 pixel wall, wiped clean on the 1st of every month. 20 free pixels every 30 minutes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#150A10",
+  "theme_color": "#150A10",
+  "icons": [
+    { "src": "/assets/logo-icon.png", "sizes": "any", "type": "image/png" }
+  ]
+}

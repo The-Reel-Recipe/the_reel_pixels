@@ -452,8 +452,17 @@ function serverDown(err) {
   const capped = err && err.code === 429 && err.data && err.data.message;
   const note = $('offlineNote');
   if (capped) {
-    note.querySelector('b').textContent = '\u{1F6A6} TOO MANY VISITORS FROM YOUR CONNECTION';
-    note.querySelector('p').textContent = err.data.message;
+    note.querySelector('b').textContent = t('off.capped');
+    /* the known cap speaks the page's language; anything else is a raw
+       server sentence, which is English — mark it so RTL doesn't garble it */
+    const p = note.querySelector('p');
+    if (err.data.error === 'ip-guest-cap') {
+      p.textContent = t('off.cappedBody');
+      p.removeAttribute('dir'); p.removeAttribute('lang');
+    } else {
+      p.textContent = err.data.message;
+      p.setAttribute('dir', 'ltr'); p.setAttribute('lang', 'en');
+    }
     note.querySelector('code').hidden = true;
   }
   note.hidden = false;
@@ -486,7 +495,7 @@ function checkRefill(silent) {
   freeUsed = 0; refillAt = 0;
   updateAll();
   syncAllowance();
-  if (!silent) toast(`${ic('timer')} Your <b>${CAP} free pixels</b> are back — keep painting.`);
+  if (!silent) toast(`${ic('timer')} ${t('toast.refilled', { n: CAP })}`);
   return true;
 }
 const allowance = () => freeLeft() + paint;
@@ -514,9 +523,9 @@ function capHit() {
   const c = $('selCounter');
   c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake');
   const msg = freeLeft() > 0
-    ? `That's all <b>${fmt(allowance())} pixels</b> you have. Buy PAINT for more.`
-    : `Your <b>${CAP} free pixels</b> are used up — back in <b>${mmss(refillLeft())}</b>. Buy PAINT to skip the wait.`;
-  toast(msg, { cls: 'warn', action: { label: 'BUY PAINT', fn: () => openModal('modalPaint') } });
+    ? t('toast.capAll', { n: fmt(allowance()) })
+    : t('toast.capWait', { n: CAP, t: mmss(refillLeft()) });
+  toast(msg, { cls: 'warn', action: { label: t('act.buyPaint'), fn: () => openModal('modalPaint') } });
 }
 
 /* ── UI updates ── */
@@ -526,19 +535,31 @@ function updateStats() {
   $('statYours').textContent = fmt(yours.size);
   $('statPaint').textContent = fmt(paint);
   // the badge counts pixels, not batches — "6 waiting" means something to
-  // somebody watching their own shimmer, "1 waiting" does not
+  // somebody watching their own shimmer, "1 waiting" does not. It lives on
+  // the nav's ME door now, mirrored inside the sheet it opens.
   const badge = $('statPending');
   badge.hidden = pending.size === 0;
   badge.textContent = fmt(pending.size);
+  const mirror = $('statPendingMe');
+  if (mirror) { mirror.hidden = pending.size === 0; mirror.textContent = fmt(pending.size); }
   updateClock();
 }
 function updateClock() {
-  const end = cycleEndsAt();
-  $('statReset').textContent = countdown(end - serverNow());
-  $('cycleNext').textContent = `NEXT RESET ${shortDate(end)}`;
+  /* before the first snapshot lands, `cycle` is still 0 and the maths
+     below would claim the wall resets on Feb 1 1970 — say nothing
+     instead of something false. The free-pixel line below needs no
+     cycle, so it keeps rendering either way. */
+  if (!cycle) {
+    $('statReset').textContent = '—';
+    $('cycleNext').textContent = t('cycle.next', { d: '—' });
+  } else {
+    const end = cycleEndsAt();
+    $('statReset').textContent = countdown(end - serverNow());
+    $('cycleNext').textContent = t('cycle.next', { d: shortDate(end) });
+  }
   $('freeLine').innerHTML = waitingOnRefill()
-    ? `Free pixels used up — <b class="accent">${mmss(refillLeft())}</b> until your next ${CAP}.`
-    : `<b class="accent">${freeLeft()}</b> free pixels left — a fresh ${CAP} lands 30 min after you run out.`;
+    ? t('free.waiting', { t: mmss(refillLeft()), n: CAP })
+    : t('free.left', { left: freeLeft(), n: CAP });
 }
 function updateSelUI() {
   const n = sel.size;
@@ -557,12 +578,12 @@ function updateSelUI() {
   counter.classList.toggle('infinite', !full && paint > 0);
   const btn = $('btnCheckout');
   $('btnClear').disabled = n === 0;
-  if (n === 0) { btn.disabled = true; btn.textContent = 'CLICK PIXELS TO PAINT'; return; }
+  if (n === 0) { btn.disabled = true; btn.textContent = t('dock.tap'); return; }
   btn.disabled = false;
   const free = Math.min(n, freeLeft()), paid = n - free;
-  if (paid === 0) btn.textContent = `CLAIM ${n} PIXEL${n > 1 ? 'S' : ''} · FREE`;
-  else if (free === 0) btn.textContent = `CLAIM ${n} PX · ${paid} PAINT`;
-  else btn.textContent = `CLAIM ${n} PX · ${free} FREE + ${paid} PAINT`;
+  if (paid === 0) btn.textContent = t('dock.claimFree', { n });
+  else if (free === 0) btn.textContent = t('dock.claimPaint', { n, paid });
+  else btn.textContent = t('dock.claimMix', { n, free, paid });
 }
 function updateAll() { updateStats(); updateSelUI(); }
 
@@ -626,21 +647,19 @@ $('btnCheckout').onclick = () => {
   $('coFree').textContent = fmt(free);
   $('coPaintRow').hidden = paid === 0;
   $('coPaint').textContent = `−${fmt(paid)}`;
-  $('coTotal').textContent = paid > 0 ? `0 EGP · ${fmt(paid)} PAINT` : 'FREE';
-  $('coFine').innerHTML = (paid > 0
-    ? 'The paint is already paid for — nothing is charged now. '
-    : 'Free pixels cost nothing. ') +
-    `Every pixel is checked by a person before it goes on the wall. Once it does, it stays until the reset on ${shortDate(cycleEndsAt())}.`;
+  $('coTotal').textContent = paid > 0 ? `0 EGP · ${fmt(paid)} ${t('common.paint')}` : t('co.freeWord');
+  $('coFine').innerHTML = (paid > 0 ? t('co.finePaint') : t('co.fineFree')) + ' ' +
+    t('co.fineTail', { d: shortDate(cycleEndsAt()) });
   const btn = $('btnPay');
   btn.disabled = false;
-  btn.textContent = paid > 0 ? `SEND FOR REVIEW · ${fmt(paid)} PAINT` : 'SEND FOR REVIEW';
+  btn.textContent = paid > 0 ? t('co.sendPaint', { paid: fmt(paid) }) : t('co.send');
   $('coBody').hidden = false; $('coSuccess').hidden = true;
   openModal('modalCheckout');
 };
 $('btnPay').onclick = () => {
   const btn = $('btnPay');
   const label = btn.textContent;
-  btn.disabled = true; btn.textContent = 'PROCESSING…';
+  btn.disabled = true; btn.textContent = t('co.busy');
   const commit = async () => {
     try {
       // The server decides all of this: which cells are still free ground,
@@ -669,24 +688,23 @@ $('btnPay').onclick = () => {
       updateAll();
 
       $('coBody').hidden = true;
-      $('coSuccessMsg').textContent = `${fmt(d.placed)} PIXEL${d.placed === 1 ? '' : 'S'} SENT FOR REVIEW`;
-      $('coSuccessSub').textContent = 'A person checks every pixel before it goes up — usually minutes. ' +
-        'Yours are held and shimmering on the wall until then, and MY PIXELS tracks them.';
+      $('coSuccessMsg').textContent = t('co.sent', { n: fmt(d.placed) });
+      $('coSuccessSub').textContent = t('co.sentSub');
       $('coSuccess').hidden = false;
       if (d.occupied) {
-        toast(`${fmt(d.occupied)} pixel${d.occupied === 1 ? ' was' : 's were'} claimed by someone else first — dropped from your basket.`, { cls: 'warn' });
+        toast(t('toast.occupied', { n: fmt(d.occupied) }), { cls: 'warn' });
       }
       if (d.short > 0) {
-        toast(`${fmt(d.short)} pixel${d.short === 1 ? '' : 's'} left in your basket — you're out of free pixels` +
-          (waitingOnRefill() ? ` for another <b>${mmss(refillLeft())}</b>.` : '.'),
-          { cls: 'warn', action: { label: 'BUY PAINT', fn: () => openModal('modalPaint') } });
+        toast(t('toast.short', { n: fmt(d.short) }) +
+          (waitingOnRefill() ? ' ' + t('toast.shortWait', { t: mmss(refillLeft()) }) : ''),
+          { cls: 'warn', action: { label: t('act.buyPaint'), fn: () => openModal('modalPaint') } });
       }
       setTimeout(() => closeModal('modalCheckout'), 1700);
     } catch (err) {
       btn.disabled = false; btn.textContent = label;
       // a daily cap has something specific to say; anything else doesn't
       const said = err.data && err.data.message;
-      toast(said || 'Something went wrong — please try again.', { cls: said ? 'warn' : 'err', dur: said ? 6000 : 3600 });
+      toast(said || t('toast.wrong'), { cls: said ? 'warn' : 'err', dur: said ? 6000 : 3600 });
       if (!said) resync('claim failed');
     }
   };
@@ -706,6 +724,8 @@ $('btnPaintShop').onclick = () => openModal('modalPaint');
    packs are built here for the same reason, and the SAVE badges are derived
    rather than written, so a pack and its discount cannot drift apart. */
 function applyPrices(prices) {
+  /* remembered so a language switch can re-render the packs it built */
+  if (prices) lastPrices = prices; else prices = lastPrices;
   if (!prices) return;
   for (const el of document.querySelectorAll('.px-rate')) el.textContent = fmt(prices.paint);
   for (const el of document.querySelectorAll('.co-rate')) el.textContent = fmt(prices.company);
@@ -726,10 +746,10 @@ function applyPrices(prices) {
     b.className = 'pack' + (i === popular ? ' pack-pop' : '');
     b.dataset.paint = amount;
     b.innerHTML =
-      (i === popular ? '<i class="pk-tag">POPULAR</i>' : '') +
-      `<b class="pk-amt">${fmt(amount)}</b><span class="pk-unit">PAINT</span>` +
+      (i === popular ? `<i class="pk-tag">${t('ps.popular')}</i>` : '') +
+      `<b class="pk-amt">${fmt(amount)}</b><span class="pk-unit">${t('common.paint')}</span>` +
       `<span class="pk-price">${fmt(price)} EGP</span>` +
-      `<span class="pk-save">${save > 0 ? `SAVE ${save}%` : `${fmt(prices.paint)} EGP/PX`}</span>`;
+      `<span class="pk-save">${save > 0 ? t('ps.save', { pct: save }) : `${fmt(prices.paint)} EGP/PX`}</span>`;
     b.onclick = () => buyPack(b, amount);
     host.appendChild(b);
   });
@@ -742,7 +762,7 @@ async function buyPack(btn, amount) {
     closeModal('modalPaint');
     openPay(order, `${fmt(amount)} paint`);
   } catch (e) {
-    toast('The paint shop is unreachable — try again.', { cls: 'err' });
+    toast(t('toast.shopDown'), { cls: 'err' });
   } finally { btn.disabled = false; }
 }
 
@@ -873,41 +893,26 @@ const knownSubs = new Set();
 const knownPayments = new Set();
 const history = { rows: [], total: 0, loaded: 0, open: false, busy: false };
 
-const HS_CHIP = {
-  pending:  { cls: 'wait', label: `${ic('loader')} WAITING` },
-  approved: { cls: 'live', label: `${ic('check')} ON THE WALL` },
-  rejected: { cls: 'bad',  label: `${ic('cross')} TURNED DOWN` },
-  expired:  { cls: 'dim',  label: `${ic('timer')} EXPIRED` }
-};
-/* a pack never goes on a wall, so it needs its own words for the same
-   four states */
-const HS_CHIP_PACK = {
-  pending:  { cls: 'wait', label: `${ic('loader')} CHECKING` },
-  approved: { cls: 'live', label: `${ic('check')} PAINT ADDED` },
-  rejected: { cls: 'bad',  label: `${ic('cross')} NOT RECEIVED` },
-  expired:  { cls: 'dim',  label: `${ic('timer')} EXPIRED` }
-};
-const chipFor = row =>
-  (row.type === 'pack' ? HS_CHIP_PACK : HS_CHIP)[row.status] || HS_CHIP.pending;
+/* Built at render time rather than held as constants, so a language
+   switch re-renders the list in the new tongue with no special casing. */
+const HS_CHIP_CLS = { pending: 'wait', approved: 'live', rejected: 'bad', expired: 'dim' };
+const HS_CHIP_IC = { pending: 'loader', approved: 'check', rejected: 'cross', expired: 'timer' };
+function chipFor(row) {
+  const status = HS_CHIP_CLS[row.status] ? row.status : 'pending';
+  const kind = row.type === 'pack' ? 'pack' : 'sub';
+  return {
+    cls: HS_CHIP_CLS[status],
+    label: `${ic(HS_CHIP_IC[status])} ${t(`hs.${kind}.${status}`)}`
+  };
+}
 /* `pack` is the odd one out: money with no pixels behind it yet, because
    paint is only drawn when it is spent. It still belongs in this list —
    the checkout tells the buyer to look for it here. */
-const HS_TYPE = {
-  free: '\u{1F58C} FREE', paint: '\u{1F9F4} PAINT',
-  brand: '\u{1F3E2} BRAND', pack: '\u{1F4B3} PAINT PACK'
-};
+const HS_TYPE_IC = { free: 'brush', paint: 'paint', brand: 'brand', pack: 'card' };
+const hsType = type =>
+  `${ic(HS_TYPE_IC[type] || 'brush')} ${t(`hs.type.${type}`, null, type)}`;
 /* a paid row says where the money got to as well as where the pixels did */
-const HS_PAY = {
-  awaiting_transfer: 'awaiting your transfer',
-  submitted: 'checking your transfer',
-  verified: 'payment confirmed',
-  rejected: 'payment not received',
-  /* plain text — this line goes into a textContent, and the row's chip
-     beside it is already carrying the icon */
-  refund_due: 'refund on the way',
-  refunded: 'refunded',
-  expired: 'order expired'
-};
+const hsPay = status => t(`hs.pay.${status}`, null, status);
 
 /* The server sends at most 256 sampled pixels per row (see thumbOf), which
    is plenty at this size and bounded whether the batch was 4 pixels or a
@@ -942,21 +947,21 @@ function historyRow(row) {
   body.className = 'hs-body';
   const head = document.createElement('div');
   head.className = 'hs-head';
-  head.innerHTML = `<b>${HS_TYPE[row.type] || row.type}</b>` +
+  head.innerHTML = `<b>${hsType(row.type)}</b>` +
     (row.type === 'pack' ? '' : `<span class="hs-px">${fmt(row.px)} px</span>`) +
     `<span class="hs-chip hs-${chip.cls}">${chip.label}</span>`;
   body.appendChild(head);
 
   const note = document.createElement('div');
   note.className = 'hs-note';
-  const when = new Date(row.at).toLocaleString('en-US',
+  const when = new Date(row.at).toLocaleString(lang === 'ar' ? 'ar-EG' : 'en-US',
     { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
   let text = when;
   if (row.brand) text += ` · ${row.brand}`;
-  if (row.type === 'pack') text += ` · ${fmt(row.px)} paint`;
-  if (row.layer === 'next') text += ' · next cycle';
+  if (row.type === 'pack') text += ` · ${fmt(row.px)} ${t('common.paintLower')}`;
+  if (row.layer === 'next') text += ` · ${t('hs.nextCycle')}`;
   if (row.payment) {
-    text += ` · ${HS_PAY[row.payment.status] || row.payment.status}`;
+    text += ` · ${hsPay(row.payment.status)}`;
     if (row.payment.amount) text += ` (${fmt(Math.round(row.payment.amount / 100))} EGP)`;
   }
   note.textContent = text;
@@ -976,7 +981,9 @@ function renderHistory() {
   const list = $('hsList');
   list.textContent = '';
   for (const row of history.rows) list.appendChild(historyRow(row));
-  $('hsEmpty').hidden = history.rows.length > 0;
+  const empty = $('hsEmpty');
+  empty.hidden = history.rows.length > 0;
+  if (!empty.hidden) empty.textContent = t('hs.empty');
   $('hsMore').hidden = history.rows.length >= history.total;
 }
 
@@ -995,7 +1002,7 @@ async function loadHistory(more) {
     renderHistory();
   } catch (e) {
     $('hsEmpty').hidden = false;
-    $('hsEmpty').textContent = 'Could not reach the server — try again in a moment.';
+    $('hsEmpty').textContent = t('toast.unreachable');
   } finally { history.busy = false; }
 }
 
@@ -1010,13 +1017,12 @@ function onDecision(sid, status) {
     syncAllowance();
     if (history.open) loadHistory(false);
   }, 150);
+  bumpAlerts();
   if (status === 'rejected' || status === 'expired') {
-    toast(status === 'rejected'
-      ? 'One of your batches was turned down — open <b>MY PIXELS</b> for the reason.'
-      : 'A batch expired before it was reviewed — see <b>MY PIXELS</b>.',
-      { cls: 'warn', dur: 6000, action: { label: 'MY PIXELS', fn: openHistory } });
+    toast(t(status === 'rejected' ? 'toast.subRejected' : 'toast.subExpired'),
+      { cls: 'warn', dur: 6000, action: { label: t('act.myPixels'), fn: openHistory } });
   } else if (status === 'approved') {
-    toast(`${ic('check')} Your pixels are on the wall.`);
+    toast(`${ic('celebrate')} ${t('toast.subApproved')}`);
   }
 }
 
@@ -1027,15 +1033,14 @@ function onPayment(pid, status) {
   if (!knownPayments.has(pid)) return;
   syncAllowance();
   if (history.open) loadHistory(false);
+  bumpAlerts();
   if (status === 'verified') {
-    toast(`${ic('paint')} Payment confirmed — your paint is in.`);
+    toast(`${ic('paint')} ${t('toast.payVerified')}`);
   } else if (status === 'rejected' || status === 'expired') {
-    toast(status === 'rejected'
-      ? 'We could not find that transfer. Open <b>MY PIXELS</b> and try the reference again.'
-      : 'An order expired before the transfer arrived.',
-      { cls: 'warn', dur: 7000, action: { label: 'MY PIXELS', fn: openHistory } });
+    toast(t(status === 'rejected' ? 'toast.payRejected' : 'toast.payExpired'),
+      { cls: 'warn', dur: 7000, action: { label: t('act.myPixels'), fn: openHistory } });
   } else if (status === 'refunded') {
-    toast(`${ic('refund')} Your refund has been sent.`);
+    toast(`${ic('refund')} ${t('toast.payRefunded')}`);
   }
 }
 
@@ -1057,31 +1062,23 @@ $('modalHistory').addEventListener('click', e => {
    application, and only an approved account can open the pre-order flow.
    The server enforces every word of that; this is the screen for it. */
 
-const BRAND_STATUS = {
-  pending: {
-    chip: `${ic('loader')} UNDER REVIEW`,
-    note: 'Your application is with the team. We read every one by hand — usually the same day. ' +
-          'You will get an email the moment it is approved, and the pre-order flow opens here.'
-  },
-  approved: {
-    chip: `${ic('check')} APPROVED`,
-    note: 'You are cleared to book logo space on next month\'s wall.'
-  },
-  rejected: {
-    chip: `${ic('cross')} NOT APPROVED`,
-    note: 'We could not verify this business from the details given. Reply to the email we sent ' +
-          'if you think that is wrong — a real answer will reopen it.'
-  }
-};
+const BRAND_STATUS_IC = { pending: 'loader', approved: 'check', rejected: 'cross' };
 
 const isBrand = () => me.kind === 'brand';
 const canBook = () => isBrand() && me.brandStatus === 'approved';
 
 function setMe(d) {
   if (d && typeof d === 'object') {
-    me = { kind: d.kind || 'guest', handle: d.handle || '', brandStatus: d.brandStatus || null };
+    me = {
+      kind: d.kind || 'guest', handle: d.handle || '',
+      brandStatus: d.brandStatus || null,
+      /* the painter upgrade (§3): a guest with an email is a signed-in
+         painter — same identity, reachable from other devices */
+      registered: !!d.registered, email: d.email || null
+    };
   }
   renderAuth();
+  renderMe();
 }
 
 /* Asks the server who we are. The wall snapshot already says, so this is
@@ -1098,11 +1095,12 @@ async function refreshMe() {
 
 /* Everything that changes when the account does, in one place. */
 function renderAuth() {
-  const state = BRAND_STATUS[me.brandStatus] || null;
+  const status = BRAND_STATUS_IC[me.brandStatus] ? me.brandStatus : null;
   $('authWho').textContent = me.handle || '—';
-  $('authChip').innerHTML = state ? state.chip : '—';   // the chip carries an icon
+  $('authChip').innerHTML = status
+    ? `${ic(BRAND_STATUS_IC[status])} ${t('brand.chip.' + status)}` : '—';
   $('authChip').className = 'status-chip ' + (me.brandStatus || '');
-  $('authNote').textContent = state ? state.note : '';
+  $('authNote').textContent = status ? t('brand.note.' + status) : '';
   $('btnGoBook').hidden = !canBook();
 
   $('cpBrand').hidden = !canBook();
@@ -1110,27 +1108,39 @@ function renderAuth() {
 
   const btn = $('btnCompany');
   btn.classList.toggle('needs-account', isBrand() && !canBook());
-  btn.title = canBook() ? 'Pre-order a logo spot on next month\'s wall'
-    : isBrand() ? 'Your brand application is still being reviewed'
-      : 'Brands book logo space — apply once, then pre-order any month';
+  btn.title = canBook() ? t('brand.titleBook')
+    : isBrand() ? t('brand.titlePending') : t('brand.titleApply');
 }
 
-/* Which of the three panes the modal opens on: an applicant sees where
-   their application got to, everyone else sees the form. */
-function openAuth(tab) {
-  const pane = tab || (isBrand() ? 'status' : 'signup');
+/* The account door serves two crowds through one sheet. `ctx` picks the
+   voice: 'painter' offers CREATE / LOG IN for keeping a guest identity,
+   'brand' offers APPLY / LOG IN for booking logo space. Any brand session
+   lands on the status pane regardless. */
+let authCtx = 'brand';
+function openAuth(tab, ctx) {
+  if (ctx) authCtx = ctx;
+  if (isBrand()) authCtx = 'brand';
+  const pane = tab || (isBrand() ? 'status' : (authCtx === 'painter' ? 'register' : 'signup'));
+  const painter = authCtx === 'painter';
+
+  $('paneRegister').hidden = pane !== 'register';
   $('paneSignup').hidden = pane !== 'signup';
   $('paneLogin').hidden = pane !== 'login';
   $('paneStatus').hidden = pane !== 'status';
   $('authTabs').hidden = pane === 'status';
+  $('tabSignup').hidden = painter;
+  $('tabRegister').hidden = !painter;
   $('tabSignup').classList.toggle('sel', pane === 'signup');
+  $('tabRegister').classList.toggle('sel', pane === 'register');
   $('tabLogin').classList.toggle('sel', pane === 'login');
-  $('auSub').textContent = pane === 'status'
-    ? 'Where your brand application stands.'
-    : 'Logo spots are for real businesses, so a person reads every application. It takes two minutes and you only do it once.';
+
+  $('auTitleText').textContent = painter ? t('au.titlePainter') : t('au.titleBrand');
+  $('auSub').textContent = pane === 'status' ? t('au.subStatus')
+    : painter ? t('au.subPainter') : t('au.subBrand');
   openModal('modalAuth');
 }
 $('tabSignup').onclick = () => openAuth('signup');
+$('tabRegister').onclick = () => openAuth('register');
 $('tabLogin').onclick = () => openAuth('login');
 
 /* signup field id -> the server's name for it, which is also the key it
@@ -1189,7 +1199,7 @@ $('paneSignup').addEventListener('submit', async e => {
   for (const [id, name] of Object.entries(SIGNUP_FIELDS)) body[name] = $(id).value;
   body.socials = $('suSocials').value.split('\n').map(s => s.trim()).filter(Boolean);
 
-  btn.disabled = true; btn.textContent = 'SENDING…';
+  btn.disabled = true; btn.textContent = t('au.busy');
   try {
     const r = await apiPost('/api/auth/signup', body);
     if (!r.ok) { showSignupErrors(r.data); return; }
@@ -1197,11 +1207,11 @@ $('paneSignup').addEventListener('submit', async e => {
     if (r.data.allowance) applyAllowance(r.data.allowance);
     await loadWall();                    // the account is a different caller now
     openAuth('status');
-    toast(`${ic('brand')} <b>Application sent.</b> We will email you as soon as it is reviewed.`, { dur: 5200 });
+    toast(`${ic('brand')} ${t('toast.applied')}`, { dur: 5200 });
   } catch (err) {
-    showErr('errSignup', 'Could not reach the server — try again in a moment.');
+    showErr('errSignup', t('toast.unreachable'));
   } finally {
-    btn.disabled = false; btn.textContent = 'APPLY FOR A BRAND ACCOUNT';
+    btn.disabled = false; btn.textContent = t('au.applyCta');
   }
 });
 
@@ -1209,30 +1219,37 @@ $('paneLogin').addEventListener('submit', async e => {
   e.preventDefault();
   const btn = $('btnLogin');
   clearErr('errLogin');
-  btn.disabled = true; btn.textContent = 'CHECKING…';
+  btn.disabled = true; btn.textContent = t('au.checking');
   try {
     const r = await apiPost('/api/auth/login', { email: $('liEmail').value, password: $('liPass').value });
-    if (!r.ok) { showErr('errLogin', r.data.message || 'Wrong email or password.'); return; }
+    if (!r.ok) { showErr('errLogin', r.data.message || t('au.badCreds')); return; }
     $('liPass').value = '';
     setMe(r.data);
     if (r.data.allowance) applyAllowance(r.data.allowance);
     await loadWall();
-    if (canBook()) { closeModal('modalAuth'); openCompany(); }
+    loadAlerts();
+    /* a painter goes back to the wall they came for; a brand goes on with
+       the booking business the login was in the way of */
+    if (me.kind === 'guest') {
+      closeModal('modalAuth'); closeModal('modalMe');
+      toast(`${ic('check')} ${t('toast.welcomeBack', { name: me.handle })}`);
+    } else if (canBook()) { closeModal('modalAuth'); openCompany(); }
     else openAuth('status');
   } catch (err) {
-    showErr('errLogin', 'Could not reach the server — try again in a moment.');
+    showErr('errLogin', t('toast.unreachable'));
   } finally {
-    btn.disabled = false; btn.textContent = 'LOG IN';
+    btn.disabled = false; btn.textContent = t('au.loginCta');
   }
 });
 
-/* Logging out drops the brand cookie; the next request mints a plain guest
-   again, so the wall is reloaded to pick up whose pixels are whose. */
+/* Logging out drops the account cookie; the next request mints a plain
+   guest again, so the wall is reloaded to pick up whose pixels are whose. */
 async function logout() {
   try { await apiPost('/api/auth/logout'); } catch (e) { /* the cookie goes either way */ }
   try { await loadWall(); } catch (e) { /* offline handling already covers this */ }
-  closeModal('modalAuth'); closeModal('modalCompany');
-  toast('Logged out — you are painting as a guest again.');
+  closeModal('modalAuth'); closeModal('modalCompany'); closeModal('modalMe');
+  loadAlerts();
+  toast(t('toast.loggedOut'));
 }
 $('btnLogout').onclick = logout;
 $('cpBrandOut').onclick = logout;
@@ -1551,7 +1568,7 @@ function updatePriceReadout() {
   $('cpSizePrice').textContent = fmt(cost);
   $('cpBudgetVal').textContent = fmt(cost);
   $('cpSizeSub').textContent = cpCells
-    ? `${w}×${h} · ${fmt(cpCells.length)} painted px @ ${PRICE_COMPANY} EGP each`
+    ? `${w}×${h} · ${fmt(cpCells.length)} painted px @ ${PRICE_COMPANY} EGP/PX`
     : `${w}×${h} — pick a logo for an exact price`;
   if (!budgetDragging) $('cpBudget').value = sliderFromBudget(cost);
 }
@@ -1664,7 +1681,10 @@ function openCompany() { markPreset(); rebuildCpPreview(); openModal('modalCompa
 /* The button is the door to the whole brand flow. An approved account walks
    straight in; anyone else lands on the application form, or on the note
    saying where their application got to. */
-$('btnCompany').onclick = () => { if (canBook()) openCompany(); else openAuth(); };
+$('btnCompany').onclick = () => {
+  closeModal('modalMore');
+  if (canBook()) openCompany(); else openAuth(null, 'brand');
+};
 $('cpPick').onclick = () => $('cpFile').click();
 $('cpFile').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
@@ -1704,13 +1724,15 @@ $('btnPlaceLogo').onclick = () => {
   for (const [x, y, col] of cpCells) { gc.fillStyle = col; gc.fillRect(x, y, 1, 1); }
   placing = { w, h, cells: cpCells, name, ghost, url, cta };
   ghostPos = null;
-  closeModal('modalCompany');
+  closeModal('modalCompany'); closeModal('modalMore');
   cvs.classList.add('placing');
+  document.body.classList.add('placing');   // the chrome steps aside for the spot-pick
   $('placementHint').hidden = false;
 };
 function cancelPlacing() {
   placing = null; ghostPos = null;
   cvs.classList.remove('placing');
+  document.body.classList.remove('placing');
   $('placementHint').hidden = true;
 }
 /* Pre-orders are booked against next cycle's wall, so the only thing in the
@@ -2232,6 +2254,8 @@ const logoImg = new Image(); logoImg.src = 'assets/logo-icon.png';
 
   fit();
   updateAll();
+  renderMe();
+  loadAlerts();
   // 1s so the refill clock actually counts down instead of jumping
   let ticks = 0;
   setInterval(() => {
@@ -2243,4 +2267,584 @@ const logoImg = new Image(); logoImg.src = 'assets/logo-icon.png';
     updateClock(); updateSelUI();
   }, 1000);
   if (!helpSeen) openModal('modalHelp');
+})();
+
+/* ═══════════ THE GLASS SHELL ═══════════
+   Everything below is the mobile-first chrome: the five-door nav, the
+   Me / Alerts / More sheets, the painter account door, and the two
+   tongues the page speaks. It lives after init() on purpose — every
+   function here is called at event time or after the first await, by
+   which point the whole script has long been evaluated. */
+
+/* ── the two tongues ──────────────────────────────────────────── */
+
+const L = {
+  en: {
+    'off.capped': 'TOO MANY VISITORS FROM YOUR CONNECTION',
+    'off.cappedBody': 'This connection has minted its five new identities for today. If you have painted here before, allow cookies and reload — your pixels are still yours.',
+    'al.error': 'Could not load the news — close and open the bell again in a moment.',
+    'toast.refilled': 'Your <b>{n} free pixels</b> are back — keep painting.',
+    'toast.capAll': "That's all <b>{n} pixels</b> you have. Buy PAINT for more.",
+    'toast.capWait': 'Your <b>{n} free pixels</b> are used up — back in <b>{t}</b>. Buy PAINT to skip the wait.',
+    'act.buyPaint': 'BUY PAINT', 'act.myPixels': 'MY PIXELS',
+    'cycle.next': 'NEXT RESET {d}',
+    'free.waiting': 'Free pixels used up — <b class="accent">{t}</b> until your next {n}.',
+    'free.left': '<b class="accent">{left}</b> free pixels left — a fresh {n} lands 30 min after you run out.',
+    'dock.tap': 'TAP TO PAINT',
+    'dock.claimFree': 'SEND {n} · FREE',
+    'dock.claimPaint': 'SEND {n} PX · {paid} PAINT',
+    'dock.claimMix': 'SEND {n} PX · {free} FREE + {paid} PAINT',
+    'dock.clear': 'CLEAR', 'dock.custom': 'Pick any color',
+    'common.paint': 'PAINT', 'common.paintLower': 'paint',
+    'common.optional': 'OPTIONAL', 'common.choosefile': 'CHOOSE FILE',
+    'common.nofile': 'No file chosen', 'common.egppx': 'EGP/PX',
+    'co.title': 'CLAIM YOUR PIXELS', 'co.selected': 'PIXELS SELECTED',
+    'co.free': 'FREE PIXELS USED', 'co.paint': 'PAINT APPLIED', 'co.topay': 'TO PAY',
+    'co.freeWord': 'FREE', 'co.cta': 'CLAIM', 'co.busy': 'PROCESSING…',
+    'co.finePaint': 'The paint is already paid for — nothing is charged now.',
+    'co.fineFree': 'Free pixels cost nothing.',
+    'co.fineTail': 'Every pixel is checked by a person before it goes on the wall. Once it does, it stays until the reset on {d}.',
+    'co.send': 'SEND FOR REVIEW', 'co.sendPaint': 'SEND FOR REVIEW · {paid} PAINT',
+    'co.sent': '{n} PIXELS SENT FOR REVIEW',
+    'co.sentSub': 'A person checks every pixel before it goes up — usually minutes. Yours shimmer on the wall until then, and MY PIXELS tracks them.',
+    'toast.occupied': '{n} pixels were claimed by someone else first — dropped from your basket.',
+    'toast.short': "{n} pixels left in your basket — you're out of free pixels.",
+    'toast.shortWait': 'Back in <b>{t}</b>.',
+    'toast.wrong': 'Something went wrong — please try again.',
+    'toast.unreachable': 'Could not reach the server — try again in a moment.',
+    'toast.shopDown': 'The paint shop is unreachable — try again.',
+    'ps.popular': 'POPULAR', 'ps.save': 'SAVE {pct}%',
+    'hs.sub.pending': 'WAITING', 'hs.sub.approved': 'ON THE WALL',
+    'hs.sub.rejected': 'TURNED DOWN', 'hs.sub.expired': 'EXPIRED',
+    'hs.pack.pending': 'CHECKING', 'hs.pack.approved': 'PAINT ADDED',
+    'hs.pack.rejected': 'NOT RECEIVED', 'hs.pack.expired': 'EXPIRED',
+    'hs.type.free': 'FREE', 'hs.type.paint': 'PAINT', 'hs.type.brand': 'BRAND', 'hs.type.pack': 'PAINT PACK',
+    'hs.pay.awaiting_transfer': 'awaiting your transfer', 'hs.pay.submitted': 'checking your transfer',
+    'hs.pay.verified': 'payment confirmed', 'hs.pay.rejected': 'payment not received',
+    'hs.pay.refund_due': 'refund on the way', 'hs.pay.refunded': 'refunded', 'hs.pay.expired': 'order expired',
+    'hs.nextCycle': 'next cycle',
+    'hs.empty': 'Nothing sent yet. Pick a colour, tap some pixels, and they will show up here.',
+    'toast.subRejected': 'One of your batches was turned down — open <b>MY PIXELS</b> for the reason.',
+    'toast.subExpired': 'A batch expired before it was reviewed — see <b>MY PIXELS</b>.',
+    'toast.subApproved': 'Your pixels are on the wall.',
+    'toast.payVerified': 'Payment confirmed — your paint is in.',
+    'toast.payRejected': 'We could not find that transfer. Open <b>MY PIXELS</b> and try the reference again.',
+    'toast.payExpired': 'An order expired before the transfer arrived.',
+    'toast.payRefunded': 'Your refund has been sent.',
+    'brand.chip.pending': 'UNDER REVIEW', 'brand.chip.approved': 'APPROVED', 'brand.chip.rejected': 'NOT APPROVED',
+    'brand.note.pending': 'Your application is with the team. We read every one by hand — usually the same day. You will get an email the moment it is approved.',
+    'brand.note.approved': "You are cleared to book logo space on next month's wall.",
+    'brand.note.rejected': 'We could not verify this business from the details given. Reply to the email we sent if you think that is wrong.',
+    'brand.titleBook': "Pre-order a logo spot on next month's wall",
+    'brand.titlePending': 'Your brand application is still being reviewed',
+    'brand.titleApply': 'Brands book logo space — apply once, then pre-order any month',
+    'au.titlePainter': 'YOUR ACCOUNT', 'au.titleBrand': 'BRAND ACCOUNT',
+    'au.subStatus': 'Where your brand application stands.',
+    'au.subPainter': 'Keep your pixels, paint and history on any device. Painting stays free either way.',
+    'au.subBrand': 'Logo spots are for real businesses, so a person reads every application. It takes two minutes and you only do it once.',
+    'au.busy': 'SENDING…', 'au.checking': 'CHECKING…', 'au.badCreds': 'Wrong email or password.',
+    'au.applyCta': 'APPLY FOR A BRAND ACCOUNT', 'au.loginCta': 'LOG IN', 'au.createCta': 'CREATE MY ACCOUNT',
+    'au.apply': 'APPLY', 'au.create': 'CREATE', 'au.login': 'LOG IN',
+    'au.registerNote': 'Your pixels, paint and history stay exactly as they are — this just gives them an email and a password so you can sign in anywhere.',
+    'au.email': 'EMAIL', 'au.pass': 'PASSWORD', 'au.passPh': '10 characters or more',
+    'au.bizname': 'BUSINESS NAME', 'au.category': 'CATEGORY', 'au.contact': 'CONTACT NAME',
+    'au.phone': 'PHONE', 'au.site': 'WEBSITE',
+    'au.siteHint': 'A website <b>or</b> a social account is required — that is how we check you are real.',
+    'au.social': 'SOCIAL ACCOUNTS', 'au.socialHint': 'One per line.',
+    'au.instapay': 'INSTAPAY HANDLE', 'au.instapayHint': 'Where a refund goes if a booking is turned down.',
+    'au.reg': 'COMMERCIAL REG / TAX ID', 'au.desc': 'WHAT THE BUSINESS DOES',
+    'au.descPh': 'What you sell, who you sell it to, how long you have been going, where you are based.',
+    'au.applyFine': 'We use this to check the business is real and to send booking receipts. Nothing here goes on the wall.',
+    'au.loginFine': 'Painting as a guest needs no account at all.',
+    'au.book': 'START A PRE-ORDER',
+    'toast.applied': '<b>Application sent.</b> We will email you as soon as it is reviewed.',
+    'toast.welcomeBack': 'Welcome back, <b>{name}</b> — your pixels are right where you left them.',
+    'toast.loggedOut': 'Logged out — you are painting as a guest again.',
+    'toast.registered': '<b>Account created.</b> Your pixels now follow you anywhere you sign in.',
+    'nav.wall': 'WALL', 'nav.alerts': 'ALERTS', 'nav.me': 'ME', 'nav.more': 'MORE', 'nav.paint': 'Paint',
+    'chip.guest': 'GUEST', 'chip.painter': 'SIGNED IN', 'chip.brand': 'BRAND',
+    'me.title': 'ME', 'me.history': 'MY PIXELS', 'me.yours': 'ON THE WALL',
+    'me.yoursTitle': 'Highlight your pixels on the wall',
+    'me.paint': 'PAINT', 'me.buy': 'BUY',
+    'me.guestNote': 'You are painting as a guest. Make a free account to keep your pixels, paint and history on any device.',
+    'me.create': 'CREATE ACCOUNT', 'me.login': 'LOG IN', 'me.signedin': 'Signed in as',
+    'me.logout': 'LOG OUT', 'me.brandNote': 'This is a brand account.', 'me.brandDoor': 'BRAND ACCOUNT',
+    'mo.title': 'MORE', 'mo.brand': 'BRAND PRE-ORDER', 'mo.brandSub': "Your logo on next month's wall",
+    'mo.shop': 'PAINT SHOP', 'mo.how': 'HOW IT WORKS', 'mo.lang': 'اللغة · LANGUAGE',
+    'mo.taken': 'PIXELS TAKEN', 'mo.next': 'BOOKED NEXT CYCLE',
+    'mo.about': '1,000,000 pixels, wiped clean on the 1st of every month.',
+    'al.title': 'ALERTS',
+    'al.sub': 'Decisions on your pixels, your payments and your application — newest first.',
+    'al.empty': 'Nothing yet. Paint something and the news lands here.',
+    'al.submission.approved': '{n} pixels are on the wall',
+    'al.submission.rejected': 'A batch of {n} was turned down',
+    'al.submission.expired': 'A batch of {n} expired',
+    'al.payment.verified': 'Payment confirmed', 'al.payment.rejected': 'Payment not received',
+    'al.payment.refund_due': 'Refund on the way', 'al.payment.refunded': 'Refund sent',
+    'al.payment.expired': 'Order expired',
+    'al.brand.approved': 'Your brand is approved', 'al.brand.rejected': 'Application not approved',
+    'time.now': 'now', 'time.m': '{n}m', 'time.h': '{n}h', 'time.d': '{n}d',
+    'help.title': 'THE PIXEL WALL', 'help.sub': '1,000,000 pixels. One wall. Wiped clean every month.',
+    'help.s1': 'PICK & PAINT',
+    'help.s1p': 'Choose a colour and tap up to <b>20 empty pixels</b> to preview your art on the wall.',
+    'help.s2': 'SEND THEM FOR REVIEW',
+    'help.s2p': 'Your 20 pixels cost <b>nothing</b>. A person checks every batch before it goes up — usually minutes. Yours shimmer until then.',
+    'help.s3': 'WAIT 30 MINUTES',
+    'help.s3p': 'Used all 20? A fresh <b>20 free pixels</b> land <b>30 minutes</b> later. Come back and keep going.',
+    'help.s4': 'THE 1st WIPES IT',
+    'help.s4p': 'On the <b>1st of every month</b> the whole wall resets to white and everyone starts over.',
+    'help.n1': 'Switch to <b>BRUSH</b> to paint continuously while holding down.',
+    'help.n2': 'No patience? Buy <b>PAINT</b> at <span class="px-rate">—</span> EGP/PX — it paints past the free 20 right now.',
+    'help.n3': 'Brands <b>pre-order logo space</b> at <span class="co-rate">—</span> EGP/PX for the <b>next</b> cycle.',
+    'help.cta': 'START PAINTING',
+    'py.title': 'PAY WITH INSTAPAY', 'py.send': 'SEND', 'py.to': 'Send it to',
+    'py.code': 'Put this in the transfer note — it is how we match your payment:',
+    'py.copy': 'COPY', 'py.back': 'Come back here and tell us the reference from your receipt.',
+    'py.open': 'OPEN INSTAPAY', 'py.scan': 'or scan',
+    'py.proof': 'Sent it? Tell us the reference and a person will confirm it, usually within the hour.',
+    'py.ref': 'TRANSACTION REFERENCE', 'py.refPh': 'from your InstaPay receipt',
+    'py.from': 'THE HANDLE YOU PAID FROM', 'py.fromHint': 'If anything goes wrong, this is where the refund goes.',
+    'py.shot': 'SCREENSHOT', 'py.shotHint': 'Speeds it up. We strip location data before storing it.',
+    'py.sent': "I'VE SENT IT", 'py.team': 'WITH THE TEAM', 'py.gohistory': 'OPEN MY PIXELS',
+    'hs.title': 'MY PIXELS',
+    'hs.sub': 'Every batch you have sent, newest first. A person checks each one before it goes on the wall — usually within minutes.',
+    'hs.more': 'LOAD OLDER',
+    'ps.title': 'PAINT SHOP',
+    'ps.sub': 'Paint = prepaid pixels at <b><span class="px-rate">—</span> EGP/PX</b>. It takes you straight past the 20 free ones with no 30-minute wait.',
+    'ps.fine': 'Paid by InstaPay and confirmed by a person — usually within the hour. Paint never expires. If a batch is turned down, the paint comes straight back.',
+    'zoom.in': 'Zoom in (+)', 'zoom.out': 'Zoom out (−)', 'zoom.fit': 'Fit whole wall (0)',
+    'tool.pan': 'Move — drag to pan, tap to place one pixel (V)',
+    'tool.brush': 'Brush — hold and drag to paint (B)',
+    'place.hint': "PICK YOUR SPOT ON NEXT MONTH'S WALL · <span class=\"ok\">GREEN = FREE</span> · <span class=\"bad\">RED = BOOKED</span>",
+    'place.find': 'FIND FREE SPOT',
+    'cp.title': 'BRAND PRE-ORDER',
+    'cp.sub': 'Book a spot for your logo at <b><span class="co-rate">—</span> EGP/PX</b>. Pre-orders are prepaid for the <b>next cycle</b> — your logo goes up the moment the wall resets and owns that spot for the whole month.',
+    'cp.approved': 'APPROVED BRAND', 'cp.name': 'COMPANY NAME', 'cp.size': 'SIZE (PIXELS)',
+    'cp.budget': 'FIT TO BUDGET',
+    'cp.budgetHint': "Drag to set what you want to spend — only the output resolution changes, always at the logo's own ratio.",
+    'cp.logo': 'LOGO IMAGE', 'cp.sample': 'SAMPLE', 'cp.png': 'PNG preferred.',
+    'cp.pngHint': 'A transparent PNG gives the sharpest result.',
+    'cp.cta': 'CTA LINK', 'cp.ctaHint': 'Anyone who taps your logo on the wall opens this link.',
+    'cp.ctalabel': 'CTA LABEL', 'cp.source': 'SOURCE', 'cp.drag': 'drag to crop',
+    'cp.autocrop': 'AUTO CROP', 'cp.reset': 'RESET', 'cp.ratio': 'RATIO',
+    'cp.removebg': 'REMOVE BACKGROUND', 'cp.exp': 'EXPERIMENTAL', 'cp.tolerance': 'TOLERANCE',
+    'cp.tolHint': 'Removes the background colour around the edges and any white inside the logo — the wall is white, so white pixels would be invisible.',
+    'cp.preview': 'PIXEL PREVIEW', 'cp.paintable': 'paintable pixels',
+    'cp.empty': 'Choose a logo image to see how it will look on the wall.',
+    'cp.pick': 'PICK YOUR SPOT',
+    'cf.title': 'CONFIRM PRE-ORDER', 'cf.company': 'COMPANY', 'cf.pixels': 'PIXELS',
+    'cf.golive': 'GOES LIVE', 'cf.skipped': 'SKIPPED (BOOKED)', 'cf.link': 'CTA LINK',
+    'cf.hold': 'Your spot is held for 48 hours while the transfer comes through.',
+    'cf.fine': 'Your logo is reviewed like every other pixel. If it is turned down, the payment is refunded to the InstaPay handle you paid from.',
+    'cf.cta': 'BOOK & PAY'
+  },
+
+  ar: {
+    'off.capped': 'زوّار كتير أوي من نفس الشبكة',
+    'off.cappedBody': 'الشبكة دي خلّصت الخمس هويات الجديدة بتاعتها النهارده. لو شخبطت هنا قبل كده، اسمح بالكوكيز واعمل ريلود — بكسلاتك لسه بتاعتك.',
+    'al.error': 'الأخبار مش راضية تحمّل — اقفل الجرس وافتحه تاني كمان شوية.',
+    'toast.refilled': 'رجعولك <b>{n} بكسل ببلاش</b> — كمّل شخبطة.',
+    'toast.capAll': 'خلّصت كل <b>{n} بكسل</b> عندك. اشتري بوية وكمّل.',
+    'toast.capWait': 'خلّصت الـ<b>{n} بكسل</b> المجانية — هيرجعوا بعد <b>{t}</b>. اشتري بوية وما تستناش.',
+    'act.buyPaint': 'اشتري بوية', 'act.myPixels': 'بكسلاتي',
+    'cycle.next': 'المسح الجاي {d}',
+    'free.waiting': 'خلّصت المجاني — فاضل <b class="accent">{t}</b> على الـ{n} الجداد.',
+    'free.left': 'فاضلك <b class="accent">{left}</b> بكسل ببلاش — بيرجعوا {n} بعد ما تخلصهم بنص ساعة.',
+    'dock.tap': 'دوس وشخبط',
+    'dock.claimFree': 'ابعت {n} · ببلاش',
+    'dock.claimPaint': 'ابعت {n} بكسل · {paid} بوية',
+    'dock.claimMix': 'ابعت {n} بكسل · {free} ببلاش + {paid} بوية',
+    'dock.clear': 'امسح', 'dock.custom': 'اختار أي لون',
+    'common.paint': 'بوية', 'common.paintLower': 'بوية',
+    'common.optional': 'اختياري', 'common.choosefile': 'اختار ملف',
+    'common.nofile': 'مفيش ملف متختار', 'common.egppx': 'جنيه/بكسل',
+    'co.title': 'ثبّت بكسلاتك', 'co.selected': 'البكسلات المتختارة',
+    'co.free': 'من المجاني', 'co.paint': 'من البوية', 'co.topay': 'المطلوب',
+    'co.freeWord': 'ببلاش', 'co.cta': 'ثبّت', 'co.busy': 'ثواني…',
+    'co.finePaint': 'البوية مدفوعة من الأول — مفيش فلوس دلوقتي.',
+    'co.fineFree': 'البكسلات المجانية ببلاش فعلاً.',
+    'co.fineTail': 'كل بكسل بيعدّي على حد بيراجعه قبل ما يطلع الحيط. أول ما يطلع بيفضل لحد المسح يوم {d}.',
+    'co.send': 'ابعت للمراجعة', 'co.sendPaint': 'ابعت للمراجعة · {paid} بوية',
+    'co.sent': 'اتبعت {n} بكسل للمراجعة',
+    'co.sentSub': 'حد بيبص على كل بكسل قبل ما يطلع — غالبًا دقايق. بتاعتك بتلمع على الحيط لحد ما تتراجع، وتلاقيها في «بكسلاتي».',
+    'toast.occupied': 'حد سبقك على {n} بكسل — اتشالوا من سلتك.',
+    'toast.short': 'فاضل {n} بكسل في سلتك — المجاني خلص.',
+    'toast.shortWait': 'هيرجع بعد <b>{t}</b>.',
+    'toast.wrong': 'في حاجة ضربت — جرّب تاني.',
+    'toast.unreachable': 'السيرفر مش رادّ — جرّب كمان شوية.',
+    'toast.shopDown': 'محل البوية مش رادّ — جرّب تاني.',
+    'ps.popular': 'الأكثر طلبًا', 'ps.save': 'وفّر {pct}%',
+    'hs.sub.pending': 'مستنية', 'hs.sub.approved': 'على الحيط',
+    'hs.sub.rejected': 'اترفضت', 'hs.sub.expired': 'انتهت',
+    'hs.pack.pending': 'بنراجعها', 'hs.pack.approved': 'البوية وصلت',
+    'hs.pack.rejected': 'الفلوس ما وصلتش', 'hs.pack.expired': 'انتهت',
+    'hs.type.free': 'مجاني', 'hs.type.paint': 'بوية', 'hs.type.brand': 'براند', 'hs.type.pack': 'باكيت بوية',
+    'hs.pay.awaiting_transfer': 'مستنيين تحويلك', 'hs.pay.submitted': 'بنراجع تحويلك',
+    'hs.pay.verified': 'الدفع اتأكد', 'hs.pay.rejected': 'الفلوس ما وصلتش',
+    'hs.pay.refund_due': 'الاسترداد في الطريق', 'hs.pay.refunded': 'اتردّت', 'hs.pay.expired': 'الطلب انتهى',
+    'hs.nextCycle': 'الشهر الجاي',
+    'hs.empty': 'لسه مبعتش حاجة. اختار لون، دوس على بكسلات، وهتلاقيها هنا.',
+    'toast.subRejected': 'دفعة من بكسلاتك اترفضت — افتح <b>بكسلاتي</b> تعرف السبب.',
+    'toast.subExpired': 'دفعة انتهت قبل ما تتراجع — بص على <b>بكسلاتي</b>.',
+    'toast.subApproved': 'بكسلاتك بقت على الحيط.',
+    'toast.payVerified': 'الدفع اتأكد — البوية وصلت.',
+    'toast.payRejected': 'ما لقيناش التحويل ده. افتح <b>بكسلاتي</b> وجرّب الرقم المرجعي تاني.',
+    'toast.payExpired': 'طلب انتهى قبل ما التحويل يوصل.',
+    'toast.payRefunded': 'فلوسك اتردّت.',
+    'brand.chip.pending': 'تحت المراجعة', 'brand.chip.approved': 'اتوافق عليه', 'brand.chip.rejected': 'ما اتوافقش',
+    'brand.note.pending': 'طلبك عند الفريق. بنقرا كل طلب بنفسنا — غالبًا نفس اليوم. هيوصلك إيميل أول ما يتوافق عليه.',
+    'brand.note.approved': 'تمام — تقدر تحجز مكان اللوجو على حيط الشهر الجاي.',
+    'brand.note.rejected': 'ما قدرناش نتأكد من البيزنس من البيانات دي. ردّ على الإيميل لو شايف إن في غلطة.',
+    'brand.titleBook': 'احجز مكان لوجو على حيط الشهر الجاي',
+    'brand.titlePending': 'طلب البراند لسه بيتراجع',
+    'brand.titleApply': 'البراندات بتحجز مكان — قدّم مرة واحدة واحجز أي شهر',
+    'au.titlePainter': 'حسابك', 'au.titleBrand': 'حساب براند',
+    'au.subStatus': 'طلب البراند بتاعك وصل لفين.',
+    'au.subPainter': 'خلّي بكسلاتك وبويتك وتاريخك معاك على أي موبايل. الشخبطة ببلاش في الحالتين.',
+    'au.subBrand': 'أماكن اللوجو للبيزنس الحقيقي، فحد بيقرا كل طلب بنفسه. دقيقتين وبتعملها مرة واحدة بس.',
+    'au.busy': 'ثواني…', 'au.checking': 'بنتأكد…', 'au.badCreds': 'الإيميل أو الباسورد غلط.',
+    'au.applyCta': 'قدّم كبراند', 'au.loginCta': 'ادخل', 'au.createCta': 'اعمل حسابي',
+    'au.apply': 'قدّم', 'au.create': 'حساب جديد', 'au.login': 'ادخل',
+    'au.registerNote': 'بكسلاتك وبويتك وتاريخك بيفضلوا زي ما هما — بس بنديهم إيميل وباسورد عشان تدخل من أي حتة.',
+    'au.email': 'الإيميل', 'au.pass': 'الباسورد', 'au.passPh': '١٠ حروف أو أكتر',
+    'au.bizname': 'اسم البيزنس', 'au.category': 'المجال', 'au.contact': 'اسم المسؤول',
+    'au.phone': 'التليفون', 'au.site': 'الموقع',
+    'au.siteHint': 'لازم موقع <b>أو</b> حساب سوشيال — دي طريقتنا نتأكد إنك حقيقي.',
+    'au.social': 'حسابات السوشيال', 'au.socialHint': 'واحد في كل سطر.',
+    'au.instapay': 'حساب إنستاباي', 'au.instapayHint': 'لو حجز اترفض، الفلوس بترجع هنا.',
+    'au.reg': 'سجل تجاري / رقم ضريبي', 'au.desc': 'البيزنس بيعمل إيه',
+    'au.descPh': 'بتبيع إيه، لمين، بقالك قد إيه، وفين.',
+    'au.applyFine': 'بنستخدم ده عشان نتأكد إن البيزنس حقيقي ونبعت إيصالات الحجز. مفيش حاجة منه بتطلع الحيط.',
+    'au.loginFine': 'الشخبطة كضيف مش محتاجة حساب أصلاً.',
+    'au.book': 'ابدأ حجز',
+    'toast.applied': '<b>الطلب اتبعت.</b> هنبعتلك إيميل أول ما يتراجع.',
+    'toast.welcomeBack': 'أهلاً بيك تاني يا <b>{name}</b> — بكسلاتك زي ما سيبتها.',
+    'toast.loggedOut': 'خرجت — بترسم كضيف تاني.',
+    'toast.registered': '<b>الحساب اتعمل.</b> بكسلاتك بقت بتمشي معاك في أي حتة تدخل منها.',
+    'nav.wall': 'الحيط', 'nav.alerts': 'الأخبار', 'nav.me': 'أنا', 'nav.more': 'كمان', 'nav.paint': 'شخبط',
+    'chip.guest': 'ضيف', 'chip.painter': 'داخل بحسابه', 'chip.brand': 'براند',
+    'me.title': 'أنا', 'me.history': 'بكسلاتي', 'me.yours': 'على الحيط',
+    'me.yoursTitle': 'نوّر بكسلاتك على الحيط',
+    'me.paint': 'بوية', 'me.buy': 'اشتري',
+    'me.guestNote': 'انت بترسم كضيف. اعمل حساب ببلاش عشان بكسلاتك وبويتك وتاريخك يفضلوا معاك على أي موبايل.',
+    'me.create': 'اعمل حساب', 'me.login': 'ادخل', 'me.signedin': 'داخل باسم',
+    'me.logout': 'اخرج', 'me.brandNote': 'ده حساب براند.', 'me.brandDoor': 'حساب البراند',
+    'mo.title': 'كمان', 'mo.brand': 'حجز براند', 'mo.brandSub': 'لوجو شركتك على حيط الشهر الجاي',
+    'mo.shop': 'محل البوية', 'mo.how': 'بيشتغل إزاي؟', 'mo.lang': 'اللغة · LANGUAGE',
+    'mo.taken': 'بكسلات متاخدة', 'mo.next': 'محجوز للشهر الجاي',
+    'mo.about': 'مليون بكسل، بيتمسحوا أول كل شهر.',
+    'al.title': 'الأخبار',
+    'al.sub': 'قرارات بكسلاتك وفلوسك وطلبك — الأجدد الأول.',
+    'al.empty': 'لسه مفيش حاجة. اشخبط حاجة والأخبار هتوصل هنا.',
+    'al.submission.approved': '{n} بكسل طلعوا الحيط',
+    'al.submission.rejected': 'دفعة {n} بكسل اترفضت',
+    'al.submission.expired': 'دفعة {n} بكسل انتهت',
+    'al.payment.verified': 'الدفع اتأكد', 'al.payment.rejected': 'الفلوس ما وصلتش',
+    'al.payment.refund_due': 'الاسترداد في الطريق', 'al.payment.refunded': 'الفلوس اتردّت',
+    'al.payment.expired': 'الطلب انتهى',
+    'al.brand.approved': 'البراند اتوافق عليه', 'al.brand.rejected': 'الطلب ما اتوافقش',
+    'time.now': 'دلوقتي', 'time.m': '{n} د', 'time.h': '{n} س', 'time.d': '{n} يوم',
+    'help.title': 'حيط البكسلات', 'help.sub': 'مليون بكسل. حيط واحد. بيتمسح كل شهر.',
+    'help.s1': 'اختار ولوّن',
+    'help.s1p': 'اختار لون ودوس على لحد <b>٢٠ بكسل فاضيين</b> تشوف رسمتك على الحيط.',
+    'help.s2': 'ابعتهم للمراجعة',
+    'help.s2p': 'الـ٢٠ بكسل <b>ببلاش</b>. حد بيبص على كل دفعة قبل ما تطلع — غالبًا دقايق. بتاعتك بتلمع لحد ما تتراجع.',
+    'help.s3': 'استنى نص ساعة',
+    'help.s3p': 'خلّصت الـ٢٠؟ <b>٢٠ جداد ببلاش</b> بينزلوا بعد <b>٣٠ دقيقة</b>. ارجع وكمّل.',
+    'help.s4': 'يوم ١ بيمسح كله',
+    'help.s4p': 'في <b>أول كل شهر</b> الحيط كله بيرجع أبيض والكل بيبدأ من الأول.',
+    'help.n1': 'حوّل على <b>الفرشة</b> تلوّن من غير ما تشيل صوابعك.',
+    'help.n2': 'مش قادر تستنى؟ اشتري <b>بوية</b> بـ<span class="px-rate">—</span> جنيه للبكسل — بتعدّيك الـ٢٠ المجانية فورًا.',
+    'help.n3': 'البراندات <b>بتحجز مكان اللوجو</b> بـ<span class="co-rate">—</span> جنيه للبكسل على حيط <b>الشهر الجاي</b>.',
+    'help.cta': 'يلا نشخبط',
+    'py.title': 'ادفع بإنستاباي', 'py.send': 'ابعت', 'py.to': 'ابعتها على',
+    'py.code': 'حط الكود ده في ملاحظة التحويل — ده اللي بنلاقي بيه دفعتك:',
+    'py.copy': 'انسخ', 'py.back': 'ارجع هنا وقولنا الرقم المرجعي من الإيصال.',
+    'py.open': 'افتح إنستاباي', 'py.scan': 'أو امسح',
+    'py.proof': 'بعتّها؟ قولنا الرقم المرجعي وحد هيأكدها، غالبًا خلال ساعة.',
+    'py.ref': 'الرقم المرجعي', 'py.refPh': 'من إيصال إنستاباي',
+    'py.from': 'الحساب اللي دفعت منه', 'py.fromHint': 'لو حصلت مشكلة، الفلوس بترجع هنا.',
+    'py.shot': 'سكرين شوت', 'py.shotHint': 'بتسرّع الموضوع. بنشيل بيانات الموقع قبل الحفظ.',
+    'py.sent': 'بعتّها', 'py.team': 'وصلت للفريق', 'py.gohistory': 'افتح بكسلاتي',
+    'hs.title': 'بكسلاتي',
+    'hs.sub': 'كل دفعة بعتّها، الأجدد الأول. حد بيبص على كل واحدة قبل ما تطلع الحيط — غالبًا دقايق.',
+    'hs.more': 'حمّل الأقدم',
+    'ps.title': 'محل البوية',
+    'ps.sub': 'البوية = بكسلات مدفوعة مقدّمًا بـ<b><span class="px-rate">—</span> جنيه للواحدة</b>. بتعدّيك الـ٢٠ المجانية من غير انتظار.',
+    'ps.fine': 'الدفع بإنستاباي وحد بيأكده — غالبًا خلال ساعة. البوية ما بتنتهيش. لو دفعة اترفضت، البوية بترجعلك فورًا.',
+    'zoom.in': 'قرّب (+)', 'zoom.out': 'بعّد (−)', 'zoom.fit': 'الحيط كله (0)',
+    'tool.pan': 'تحريك — اسحب تتنقل، دوس تحط بكسل (V)',
+    'tool.brush': 'فرشة — دوس واسحب تلوّن (B)',
+    'place.hint': 'اختار مكانك على حيط الشهر الجاي · <span class="ok">الأخضر = فاضي</span> · <span class="bad">الأحمر = محجوز</span>',
+    'place.find': 'دوّر على مكان فاضي',
+    'cp.title': 'حجز براند',
+    'cp.sub': 'احجز مكان للوجو بـ<b><span class="co-rate">—</span> جنيه للبكسل</b>. الحجز مدفوع مقدّمًا <b>للشهر الجاي</b> — اللوجو بيطلع لحظة ما الحيط يتمسح والمكان بيبقى ملكك الشهر كله.',
+    'cp.approved': 'براند موافق عليه', 'cp.name': 'اسم الشركة', 'cp.size': 'الحجم (بكسل)',
+    'cp.budget': 'على قد ميزانيتك',
+    'cp.budgetHint': 'اسحب وحدد هتدفع قد إيه — الدقة بس اللي بتتغير، وعلى نسبة اللوجو نفسها.',
+    'cp.logo': 'صورة اللوجو', 'cp.sample': 'مثال', 'cp.png': 'الأفضل PNG.',
+    'cp.pngHint': 'صورة PNG شفافة بتدي أنضف نتيجة.',
+    'cp.cta': 'لينك الزيارة', 'cp.ctaHint': 'أي حد يدوس على اللوجو بيفتح اللينك ده.',
+    'cp.ctalabel': 'كلمة الزرار', 'cp.source': 'الأصل', 'cp.drag': 'اسحب للقص',
+    'cp.autocrop': 'قص تلقائي', 'cp.reset': 'رجّع', 'cp.ratio': 'النسبة',
+    'cp.removebg': 'شيل الخلفية', 'cp.exp': 'تجريبي', 'cp.tolerance': 'الحساسية',
+    'cp.tolHint': 'بيشيل لون الخلفية من الحواف وأي أبيض جوة اللوجو — الحيط أبيض، فالبكسل الأبيض مش هيبان.',
+    'cp.preview': 'شكلها بالبكسل', 'cp.paintable': 'بكسل هيتلوّن',
+    'cp.empty': 'اختار صورة اللوجو تشوف شكلها على الحيط.',
+    'cp.pick': 'اختار مكانك',
+    'cf.title': 'أكّد الحجز', 'cf.company': 'الشركة', 'cf.pixels': 'البكسلات',
+    'cf.golive': 'بيطلع يوم', 'cf.skipped': 'اتشال (محجوز)', 'cf.link': 'اللينك',
+    'cf.hold': 'مكانك محجوز ٤٨ ساعة لحد ما التحويل يوصل.',
+    'cf.fine': 'اللوجو بيتراجع زي أي بكسل. لو اترفض، الفلوس بترجع لحساب إنستاباي اللي دفعت منه.',
+    'cf.cta': 'احجز وادفع'
+  }
+};
+
+let lang = 'en';
+let lastPrices = null;
+
+function t(key, vars, fallback) {
+  let s = (L[lang] && L[lang][key]) ?? L.en[key] ?? fallback ?? key;
+  if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, v);
+  return s;
+}
+
+function sweepI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+}
+
+function setLang(next) {
+  lang = next === 'ar' ? 'ar' : 'en';
+  try { localStorage.setItem('s37.lang', lang); } catch (e) { /* private mode */ }
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  $('langToggleLabel').textContent = lang === 'ar' ? 'EN' : 'ع';
+  $('langNowLabel').textContent = lang === 'ar' ? 'العربية' : 'EN';
+  sweepI18n();
+  /* everything the dictionaries feed at render time, re-fed */
+  updateAll(); renderAuth(); renderMe(); renderAlerts();
+  applyPrices();
+  if (history.rows.length || history.open) renderHistory();
+  const shot = $('pyShotName'), file = $('cpFileName');
+  if (!shot.classList.contains('has')) shot.textContent = t('common.nofile');
+  if (!file.classList.contains('has')) file.textContent = t('common.nofile');
+}
+$('langToggle').onclick = () => setLang(lang === 'ar' ? 'en' : 'ar');
+$('langToggleMore').onclick = () => setLang(lang === 'ar' ? 'en' : 'ar');
+
+/* ── the five doors ───────────────────────────────────────────── */
+
+const NAV_SHEETS = { navAlerts: 'modalAlerts', navMe: 'modalMe', navMore: 'modalMore' };
+
+function syncNavSel() {
+  let open = null;
+  for (const [nav, sheet] of Object.entries(NAV_SHEETS)) if (!$(sheet).hidden) open = nav;
+  for (const id of ['navWall', 'navAlerts', 'navMe', 'navMore']) {
+    $(id).classList.toggle('sel', open ? id === open : id === 'navWall');
+  }
+  $('navWall').toggleAttribute('aria-current', !open);
+}
+function closeNavSheets() {
+  for (const sheet of Object.values(NAV_SHEETS)) closeModal(sheet);
+  syncNavSel();
+}
+
+$('navWall').onclick = () => {
+  document.querySelectorAll('.overlay:not([hidden])').forEach(ov => { ov.hidden = true; });
+  history.open = false;
+  syncNavSel();
+};
+$('navAlerts').onclick = () => {
+  if (!$('modalAlerts').hidden) return closeNavSheets();
+  closeNavSheets();
+  openModal('modalAlerts');
+  loadAlerts(true);
+  syncNavSel();
+};
+$('navMe').onclick = () => {
+  if (!$('modalMe').hidden) return closeNavSheets();
+  closeNavSheets();
+  renderMe();
+  openModal('modalMe');
+  syncNavSel();
+};
+$('navMore').onclick = () => {
+  if (!$('modalMore').hidden) return closeNavSheets();
+  closeNavSheets();
+  openModal('modalMore');
+  syncNavSel();
+};
+/* backdrop taps, the X and ESC all hide the sheet without telling the nav —
+   watching `hidden` keeps the lit door honest however the sheet went away */
+for (const sheet of Object.values(NAV_SHEETS)) {
+  new MutationObserver(syncNavSel)
+    .observe($(sheet), { attributes: true, attributeFilter: ['hidden'] });
+}
+
+/* the raised brush: paint mode on/off — the dock follows */
+$('navPaint').onclick = () => {
+  const off = document.body.classList.toggle('no-paint');
+  $('navPaint').setAttribute('aria-pressed', String(!off));
+  if (!off) closeNavSheets();
+};
+
+/* ── me ───────────────────────────────────────────────────────── */
+
+function renderMe() {
+  const el = $('meHandle');
+  if (!el) return;
+  el.textContent = myHandle || me.handle || '—';
+  const chip = $('meChip');
+  const kind = isBrand() ? 'brand' : (me.registered ? 'painter' : 'guest');
+  chip.textContent = t('chip.' + kind);
+  chip.className = 'status-chip ' + (isBrand() ? (me.brandStatus || '') : (me.registered ? 'approved' : ''));
+  $('meGuest').hidden = kind !== 'guest';
+  $('meRegistered').hidden = kind !== 'painter';
+  $('meBrand').hidden = kind !== 'brand';
+  $('meEmail').textContent = me.email || '—';
+}
+
+$('btnOpenRegister').onclick = () => openAuth('register', 'painter');
+$('btnOpenLogin').onclick = () => openAuth('login', 'painter');
+$('btnLogoutMe').onclick = logout;
+$('btnBrandDoor').onclick = () => openAuth(null, 'brand');
+$('yoursStat').addEventListener('click', () => closeModal('modalMe'));
+$('moreShop').onclick = () => { closeModal('modalMore'); openModal('modalPaint'); };
+
+/* create-account submit — the guest keeps everything, gains a password */
+$('paneRegister').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('btnRegister');
+  for (const id of ['errRgEmail', 'errRgPass', 'errRegister']) $(id).hidden = true;
+  $('rgEmail').classList.remove('bad'); $('rgPass').classList.remove('bad');
+  btn.disabled = true; btn.textContent = t('au.busy');
+  try {
+    const r = await apiPost('/api/auth/register',
+      { email: $('rgEmail').value, password: $('rgPass').value });
+    if (!r.ok) {
+      const f = r.data.fields || {};
+      if (f.email) { showErr('errRgEmail', f.email); $('rgEmail').classList.add('bad'); }
+      if (f.password) { showErr('errRgPass', f.password); $('rgPass').classList.add('bad'); }
+      if (r.data.message && !f.email && !f.password) showErr('errRegister', r.data.message);
+      return;
+    }
+    $('rgPass').value = '';
+    setMe(r.data);
+    if (r.data.allowance) applyAllowance(r.data.allowance);
+    closeModal('modalAuth'); closeModal('modalMe');
+    toast(`${ic('check')} ${t('toast.registered')}`, { dur: 5200 });
+  } catch (err) {
+    showErr('errRegister', t('toast.unreachable'));
+  } finally {
+    btn.disabled = false; btn.textContent = t('au.createCta');
+  }
+});
+
+/* ── the bell ─────────────────────────────────────────────────── */
+
+const alerts = { rows: [], unseen: 0, seenAt: 0 };
+
+function renderAlertBadge() {
+  const b = $('navAlertBadge');
+  b.hidden = alerts.unseen <= 0;
+  b.textContent = alerts.unseen > 99 ? '99+' : String(alerts.unseen);
+}
+/* a live decision arrived over SSE — the door lights up before any refetch */
+function bumpAlerts() {
+  alerts.unseen++;
+  renderAlertBadge();
+}
+
+const AL_ICON = {
+  'submission.approved': ['check', 'good'], 'submission.rejected': ['cross', 'bad'],
+  'submission.expired': ['timer', 'warn'],
+  'payment.verified': ['check', 'good'], 'payment.rejected': ['cross', 'bad'],
+  'payment.refund_due': ['refund', 'warn'], 'payment.refunded': ['refund', 'good'],
+  'payment.expired': ['timer', 'warn'],
+  'brand.approved': ['check', 'good'], 'brand.rejected': ['cross', 'bad']
+};
+
+function relTime(ts) {
+  const s = Math.max(0, (serverNow() - ts) / 1000);
+  if (s < 90) return t('time.now');
+  if (s < 3600) return t('time.m', { n: Math.round(s / 60) });
+  if (s < 86400) return t('time.h', { n: Math.round(s / 3600) });
+  return t('time.d', { n: Math.round(s / 86400) });
+}
+
+function renderAlerts() {
+  const list = $('alertList');
+  if (!list) return;
+  list.textContent = '';
+  for (const row of alerts.rows) {
+    const kind = `${row.src === 'submission' ? 'submission' : row.src}.${row.status}`;
+    const [icon, mood] = AL_ICON[kind] || ['warn', 'warn'];
+    const el = document.createElement('div');
+    el.className = 'al-row' + (row.t > alerts.seenAt ? ' unseen' : '');
+
+    const ico = document.createElement('span');
+    ico.className = `al-icon ${mood}`;
+    ico.innerHTML = ic(icon);
+    el.appendChild(ico);
+
+    const body = document.createElement('div');
+    body.className = 'al-body';
+    const title = document.createElement('b');
+    title.textContent = t(`al.${kind}`, { n: fmt(row.n || 0) }, row.status);
+    body.appendChild(title);
+    const bits = [];
+    if (row.src === 'payment') {
+      if (row.detail) bits.push(row.detail);
+      if (row.amount) bits.push(`${fmt(Math.round(row.amount / 100))} EGP`);
+    } else if (row.detail) bits.push(row.detail);
+    if (bits.length) {
+      const p = document.createElement('p');
+      p.textContent = bits.join(' · ');
+      body.appendChild(p);
+    }
+    el.appendChild(body);
+
+    const when = document.createElement('span');
+    when.className = 'al-time';
+    when.textContent = relTime(row.t);
+    el.appendChild(when);
+    list.appendChild(el);
+  }
+  const empty = $('alertEmpty');
+  empty.hidden = alerts.rows.length > 0;
+  if (!empty.hidden) empty.textContent = t('al.empty');
+}
+
+async function loadAlerts(markSeen) {
+  try {
+    const d = await apiJson('/api/me/notifications?limit=40');
+    alerts.rows = d.rows; alerts.unseen = d.unseen; alerts.seenAt = d.seenAt;
+    renderAlerts(); renderAlertBadge();
+    if (markSeen && d.unseen > 0) {
+      await apiPost('/api/me/notifications/seen');
+      alerts.unseen = 0;
+      renderAlertBadge();
+    }
+  } catch (e) {
+    /* an empty sheet with no explanation is a void, not an empty state */
+    const empty = $('alertEmpty');
+    if (empty && alerts.rows.length === 0) {
+      empty.hidden = false;
+      empty.textContent = t('al.error');
+    }
+  }
+}
+
+/* ── boot the shell ───────────────────────────────────────────── */
+
+(function initShell() {
+  let saved = 'en';
+  try { saved = localStorage.getItem('s37.lang') || 'en'; } catch (e) { /* private mode */ }
+  if (saved === 'ar') setLang('ar');
+  else { $('langToggleLabel').textContent = 'ع'; $('langNowLabel').textContent = 'EN'; }
+  syncNavSel();
+  renderMe();
 })();

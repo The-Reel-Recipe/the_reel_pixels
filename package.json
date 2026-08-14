@@ -25,6 +25,7 @@
     "pngjs": "^7.0.0"
   },
   "devDependencies": {
-    "pixelarticons": "^2.3.0"
+    "pixelarticons": "^2.3.0",
+    "playwright-core": "^1.62.1"
   }
 }

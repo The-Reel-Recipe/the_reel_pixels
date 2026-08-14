@@ -78,7 +78,16 @@ const MAP = {
   reset: 'reload',              // the wall wiped and started again
   celebrate: 'party-popper',    // it worked
   'arrow-right': 'arrow-right', // next step
-  chevron: 'chevron-down'       // the colour picker opens downwards
+  chevron: 'chevron-down',      // the colour picker opens downwards
+
+  /* the glass shell (mobile-first remake) */
+  home: 'home',                 // the wall itself — the nav's front door
+  bell: 'bell',                 // notifications
+  more: 'more-horizontal',      // everything that is not a front door
+  globe: 'languages',           // Arabic <-> English
+  login: 'login',
+  logout: 'logout',
+  mail: 'mail'                  // the account an email turns a guest into
 };
 
 /* ── Reading the library ──────────────────────────────────────── */

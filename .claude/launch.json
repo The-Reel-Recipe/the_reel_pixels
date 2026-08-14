@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "pixelwall",
+      "name": "s37",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js", "5174"],
       "port": 5174

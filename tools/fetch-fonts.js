@@ -34,7 +34,8 @@ const OUT = path.join(ROOT, 'assets', 'fonts');
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const CSS_URL = 'https://fonts.googleapis.com/css2' +
-  '?family=Press+Start+2P&family=Figtree:wght@300;400;500;600;700&display=swap';
+  '?family=Press+Start+2P&family=Figtree:wght@300;400;500;600;700' +
+  '&family=Cairo:wght@400;600;700;800;900&display=swap';
 
 const OFL = 'https://raw.githubusercontent.com/googlefonts/' +
   'PressStart2P/main/OFL.txt';
