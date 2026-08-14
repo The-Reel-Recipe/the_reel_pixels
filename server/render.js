@@ -127,27 +127,34 @@ function contextPanel(mine, bbox, live) {
   }
   s.box(0, 0, s.w, s.h, BG, 1);            // an edge, so the panel reads as one
 
-  /* The ring: a thin black·white·black band on every cell touching the new
-     pixels from outside, drawn after the fill so it always wins. Fixed at a
-     few panel pixels regardless of `scale`, rather than the full cell — a
-     ring as thick as the zoom factor swallows exactly the pixels it exists
-     to point at on a heavily zoomed-in crop. Distance is measured from the
-     shared edge (the min of the two axes on a diagonal neighbour, which is
-     what gives corners a mitred look instead of a square notch). */
+  /* The ring: a thin black·white·black band along every edge where the new
+     pixels meet something that isn't itself, drawn after the fill so it
+     always wins. Fixed at a few panel pixels regardless of `scale`, rather
+     than the full cell — a ring as thick as the zoom factor swallows
+     exactly the pixels it exists to point at on a heavily zoomed-in crop.
+
+     Orthogonal edges only, each stroked on its own single axis, and where
+     two edges land on the same neighbouring cell (the inside of a notch)
+     the second stroke simply overwrites the first rather than blending
+     with it. Blending by distance-to-nearest-edge was the tidier idea,
+     but on a concave shape a cell can be close to two edges at once, and
+     banding *that* distance draws nested L-shaped contours around the
+     corner — small spirals, not a line. A flat overwrite gives up a mitred
+     corner for one that's always unambiguously a straight, readable
+     stroke. */
+  const DIRS4 = [[-1, 0], [1, 0], [0, -1], [0, 1]];
   const bandPx = Math.max(1, Math.floor(scale / (RING_STRIPES.length * 2)));
   const ringDepth = bandPx * RING_STRIPES.length;
   for (const idx of mine.keys()) {
     const x = idx % W, y = Math.floor(idx / W);
-    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    for (const [dx, dy] of DIRS4) {
       const nx = x + dx, ny = y + dy;
       if (nx < rx0 || ny < ry0 || nx > rx1 || ny > ry1) continue;
       if (mine.has(ny * W + nx)) continue;
       const bx = (nx - rx0) * scale, by = (ny - ry0) * scale;
       for (let oy = 0; oy < scale; oy++) {
         for (let ox = 0; ox < scale; ox++) {
-          const distX = dx === 0 ? Infinity : (dx < 0 ? scale - 1 - ox : ox);
-          const distY = dy === 0 ? Infinity : (dy < 0 ? scale - 1 - oy : oy);
-          const dist = Math.min(distX, distY);
+          const dist = dx !== 0 ? (dx < 0 ? scale - 1 - ox : ox) : (dy < 0 ? scale - 1 - oy : oy);
           if (dist < ringDepth) s.put(bx + ox, by + oy, RING_STRIPES[Math.floor(dist / bandPx)]);
         }
       }
