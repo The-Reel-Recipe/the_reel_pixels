@@ -279,6 +279,29 @@ test('the sixth new identity from an address in a day is refused', async () => {
   assert.equal(r.json.placed, 2);
 });
 
+test('a fresh incognito tab inherits the clock, not a fresh allowance', async () => {
+  const ip = '198.51.100.45';
+  const a = visitor(ip);
+  const full = await claim(a, freeRange(cfg.CAP));
+  assert.equal(full.json.free, 0, 'the first visitor is tapped out');
+  assert.ok(full.json.refillIn > 0, 'and is waiting on the clock');
+
+  const b = visitor(ip);                    // a new cookie from the same address
+  const bAllowance = await json(b, 'GET', '/api/allowance');
+  assert.equal(bAllowance.json.free, 0, 'clearing cookies must not buy a fresh 20');
+  assert.ok(bAllowance.json.refillIn > 0, 'it inherits the wait, not just the zero');
+
+  const attempt = await claim(b, freeRange(1));
+  assert.equal(attempt.json.placed, 0, 'nothing free left to give away');
+
+  /* once the shared clock has genuinely elapsed, a new mint is not punished
+     forever for a stranger's spending */
+  dbm.db.prepare('UPDATE ip_allowances SET refill_at = 1 WHERE ip = ?').run(ip);
+  const c = visitor(ip);
+  const cAllowance = await json(c, 'GET', '/api/allowance');
+  assert.equal(cAllowance.json.free, 20, 'the clock elapsed — a new visitor gets the real thing');
+});
+
 test('the 41st claim from an address in a day is refused', async () => {
   const ip = '198.51.100.50';
   const me = visitor(ip);

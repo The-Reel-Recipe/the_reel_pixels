@@ -647,7 +647,7 @@ async function handler(req, res) {
       const capped = identity.takeClaim(ses.ip, row, now);
       if (capped) return sendJson(res, 429, capped);
       const { a } = wall.decodeEnvelope(await readBody(req, 1 << 20));
-      const r = wall.claimPixels(row, a, now);
+      const r = wall.claimPixels(row, a, now, ses.ip);
       /* Nothing is on the wall yet — this is where it gets queued for a
          moderator, or, with no bot configured, approves itself shortly. */
       submissions.afterCreate(r.sid);

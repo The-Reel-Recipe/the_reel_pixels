@@ -314,8 +314,10 @@ function publish(evt, count) {
 /* ── Mutations ────────────────────────────────────────────────── */
 
 /* One transaction: the submission, its cells, the allowance it spent and
-   the journal entry all commit together or none of them do (§4.2, §4.6). */
-function claimTx(e, want, now) {
+   the journal entry all commit together or none of them do (§4.2, §4.6).
+   `ip` only feeds the shared mint-time clock (identity.js §3) — it never
+   changes what this caller can spend right now. */
+function claimTx(e, want, now, ip) {
   const freeQuota = Math.max(0, Math.min(want.length, S.CAP - e.used));
   const paidQuota = Math.max(0, Math.min(e.paint, want.length - freeQuota));
   const take = want.slice(0, freeQuota + paidQuota);
@@ -341,6 +343,7 @@ function claimTx(e, want, now) {
   };
   if (after.used >= S.CAP && !after.refillAt) after.refillAt = now + S.REFILL;
   identity.writeAllowance(after);
+  if (usedFree && ip) identity.syncIpAllowance(ip, after.used, after.refillAt);
 
   logEvent(`user:${e.id}`, 'claim',
     { sid, px: placed.length, free: usedFree, paint: usedPaint, lost: take.length - placed.length }, now);
@@ -353,12 +356,12 @@ function claimTx(e, want, now) {
    keeps the `occupied` count honest. */
 const heldLive = idx => wall.live.has(idx) || wall.pending.live.has(idx);
 
-function claimPixels(e, entries, now) {
+function claimPixels(e, entries, now, ip) {
   const want = entries.filter(([idx]) => validIdx(idx) && !heldLive(idx));
   let occupied = entries.length - want.length;
   const wanted = Math.min(want.length, Math.max(0, S.CAP - e.used) + e.paint);
 
-  const r = want.length ? tx(claimTx, e, want, now) : null;
+  const r = want.length ? tx(claimTx, e, want, now, ip) : null;
   if (!r) {
     return {
       sid: 0, placed: 0, placedIdx: [], usedFree: 0, usedPaint: 0,

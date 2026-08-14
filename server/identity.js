@@ -85,12 +85,14 @@ const insProfile = db.prepare(
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`);
 const selProfile = db.prepare('SELECT status FROM brand_profiles WHERE user_id = ?');
 const setHandle = db.prepare('UPDATE users SET handle = ? WHERE id = ?');
-const insAllowance = db.prepare('INSERT INTO allowances (user_id) VALUES (?)');
+const insAllowance = db.prepare(
+  'INSERT INTO allowances (user_id, used, refill_at) VALUES (?, ?, ?)');
 const setAllowance = db.prepare(
   'UPDATE allowances SET used = ?, refill_at = ?, paint = ? WHERE user_id = ?');
 const bumpPaint = db.prepare('UPDATE allowances SET paint = paint + ? WHERE user_id = ?');
 const readAllowance = db.prepare('SELECT used, refill_at, paint FROM allowances WHERE user_id = ?');
 const clearAllowances = db.prepare('UPDATE allowances SET used = 0, refill_at = 0');
+const clearIpAllowances = db.prepare('DELETE FROM ip_allowances');
 const seenStmt = db.prepare('UPDATE users SET last_seen = ? WHERE id = ?');
 
 /* The prototype's IP → user map (002). Prepared only while the table is
@@ -136,6 +138,28 @@ function takeIp(ip, what, cap, now) {
   return true;
 }
 const take = (ip, what, cap, now) => tx(takeIp, ip, what, cap, now);
+
+/* ── The shared clock a fresh mint inherits (§3, incognito) ──────
+   ip_guests caps how many identities an IP can mint per day, but each
+   one used to start its own 20-free/30-min clock at zero — so clearing
+   cookies bought a fresh allowance instantly, up to that daily cap.
+   This is read only at mint time (mintTx) and written only after a
+   claim spends free pixels (wall.js's claimTx, via syncIpAllowance):
+   an identity that already exists is never throttled by what another
+   identity from the same IP just spent. */
+const selIpAllowance = db.prepare('SELECT used, refill_at FROM ip_allowances WHERE ip = ?');
+const upsertIpAllowance = db.prepare(
+  `INSERT INTO ip_allowances (ip, used, refill_at) VALUES (?, ?, ?)
+     ON CONFLICT (ip) DO UPDATE SET used = excluded.used, refill_at = excluded.refill_at`);
+
+function ipAllowance(ip, now) {
+  const row = selIpAllowance.get(ip);
+  if (!row || (row.refill_at && now >= row.refill_at)) return { used: 0, refillAt: 0 };
+  return { used: row.used, refillAt: row.refill_at };
+}
+function syncIpAllowance(ip, used, refillAt) {
+  upsertIpAllowance.run(ip, used, refillAt);
+}
 
 /* The 429 bodies. Friendly, and specific enough that support can tell
    which cap somebody hit without asking them to read a log. */
@@ -312,7 +336,8 @@ function mintTx(ip, now) {
 
   const id = Number(insGuest.run(now, now).lastInsertRowid);
   setHandle.run(handleFor('u' + id), id);              // the name needs the id
-  insAllowance.run(id);
+  const seed = ipAllowance(ip, now);
+  insAllowance.run(id, seed.used, seed.refillAt);
   logEvent(`user:${id}`, 'guest-mint', { ip }, now);
   return { id };
 }
@@ -468,7 +493,7 @@ function signupTx(v, now) {
     v.business_name, v.email, hashPassword(v.password), now, now).lastInsertRowid);
   insProfile.run(id, v.business_name, v.category, v.description, v.website || null,
     JSON.stringify(v.socials), v.contact_name, v.phone, v.reg_number || null, v.instapay_handle);
-  insAllowance.run(id);
+  insAllowance.run(id, 0, 0);           // brands are exempt from the IP clock (§3)
   logEvent(`user:${id}`, 'brand-signup',
     { email: v.email, name: v.business_name, category: v.category }, now);
   return { id };
@@ -588,6 +613,7 @@ function me(e, now) {
    reset transaction, so again: no transaction of its own. */
 function resetAllowances() {
   clearAllowances.run();
+  clearIpAllowances.run();
   for (const e of cache.values()) { e.used = 0; e.refillAt = 0; }
 }
 
@@ -634,6 +660,7 @@ module.exports = {
   ipv6Prefix, callerKey, handleFor,
   cache, rowFor, allowanceOf, writeAllowance, touch, refill,
   creditPaint, creditPaintRaw, forget, resetAllowances,
+  ipAllowance, syncIpAllowance,
   /* cookies + sessions */
   COOKIE, cookieValue, sessionCookie, clearCookie, verifyCookie, readCookie, resolve,
   /* caps */
