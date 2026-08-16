@@ -1267,8 +1267,22 @@ html[lang="ar"] .auth-tab { font-size: 13px; }
   border: 1px dashed var(--border-2);
   letter-spacing: 0.08em;
 }
-.py-go { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
-.py-open { flex: 1; }
+/* On a phone the button is the whole story — you cannot scan your own
+   screen — so it gets the full width and the QR sits under it for the
+   person who is reading this on a laptop with their banking app in hand.
+   Side by side only once there is room for both. */
+.py-go {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+}
+.py-open { width: 100%; }
+@media (min-width: 560px) {
+  .py-go { flex-direction: row; align-items: center; gap: 16px; }
+  .py-open { flex: 1; width: auto; }
+}
 .py-qr { text-align: center; }
 .py-qr img { border-radius: var(--r); background: #fff; padding: 4px; }
 .py-qr figcaption { color: var(--dim); font-size: 11px; margin-top: 4px; }
