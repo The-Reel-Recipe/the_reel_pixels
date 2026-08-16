@@ -87,6 +87,9 @@ const MAP = {
   globe: 'languages',           // Arabic <-> English
   login: 'login',
   logout: 'logout',
+  /* renaming yourself. The brush was doing this job and reading as "paint",
+     which is the one thing the button does not do. */
+  pencil: 'pencil',
   mail: 'mail'                  // the account an email turns a guest into
 };
 
