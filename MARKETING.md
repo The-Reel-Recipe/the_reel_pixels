@@ -8,7 +8,7 @@ the source and the live database. The Gaps and Open decisions sections are
 where the guessing is allowed.** Nothing in here is a claim you may make
 publicly unless it appears under §1–§6; §7 lists what you must not say.
 
-Live: <https://s37-production-582e.up.railway.app>
+Live: <https://project-s37.up.railway.app>
 
 ---
 
@@ -215,7 +215,7 @@ design system if anything else needs to look like the product.
    is no page that explains, prices, and asks for the sale.
 4. **No email capture** anywhere, and no way to tell a painter "the wall
    wipes tomorrow" once they've closed the tab.
-5. **Free Railway subdomain**, not a real domain. `s37-production-582e.up.railway.app`
+5. **Free Railway subdomain**, not a real domain. `project-s37.up.railway.app`
    is not memorable, not typeable on a poster, and reads as unfinished.
 
 ---

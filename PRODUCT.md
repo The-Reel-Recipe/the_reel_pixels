@@ -45,7 +45,7 @@ r/place-style collective painting crossed with million-dollar-homepage monetizat
 
 ## Evidence on Hand
 
-- Live production app: https://s37-production-582e.up.railway.app (Railway, GitHub autodeploy from `production`).
+- Live production app: https://project-s37.up.railway.app (Railway, GitHub autodeploy from `production`).
 - Real InstaPay destination: `mohaby@instapay` / https://ipn.eg/S/mohaby/instapay/0Nif30 (+ QR at assets/instapay-qr.png).
 - assets/: pixel fonts (self-hosted), pixelarticons set, S37 logos, seed wall art.
 - No testimonials, press, or usage numbers exist yet — do not fabricate any.
