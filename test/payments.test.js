@@ -179,7 +179,14 @@ test('a paint order credits nothing until a person confirms it', async () => {
   assert.equal(order.json.amountEgp, cfg.PACKS[100]);
   assert.equal(order.json.url, 'https://ipn.eg/S/example/instapay/TEST');
   assert.equal(order.json.handle, 'example@instapay');
-  assert.equal(order.json.qr, null, 'no QR file in the repo yet, and the link works without one');
+  /* The QR is optional by design: shipped when assets/instapay-qr.png is
+     there, link-only when it is not. Asserted against the file rather than
+     against a fixed answer, so adding or removing the image is never a
+     failing test — the old assertion pinned its absence and broke the day
+     the real one arrived. */
+  const hasQr = fs.existsSync(path.join(__dirname, '..', 'assets', 'instapay-qr.png'));
+  assert.equal(order.json.qr, hasQr ? 'assets/instapay-qr.png' : null,
+    'the checkout offers the QR exactly when there is one to offer');
   assert.equal(paintOf(uid), 0, 'nothing credited on ordering');
   assert.equal(payOf(order.json.paymentId).status, 'awaiting_transfer');
 
