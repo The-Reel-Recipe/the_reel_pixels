@@ -404,7 +404,10 @@ test('signing up lands pending, signs you in, and takes the email', async () => 
 
   const set = r.setCookie.join('');
   assert.match(set, /^uid=b\d+\./, 'a brand session is marked in the cookie');
-  assert.match(set, /Max-Age=2592000/, 'a login lasts 30 days, not a year');
+  /* Shorter than a guest's year, but longer than the cycle it sells into:
+     at 30 days a brand that books every month met the login screen on the
+     visit where they came to spend. It rolls on every request besides. */
+  assert.match(set, /Max-Age=15552000/, 'a brand login outlasts a booking cycle');
 
   const stored = dbm.db.prepare(
     `SELECT u.kind, u.pass_hash, b.status, b.description, b.socials, b.instapay_handle, b.website

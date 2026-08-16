@@ -712,6 +712,10 @@ async function handler(req, res) {
     /* Buying paint is an order, not a purchase: nothing is credited until a
        teammate has seen the money arrive in their own InstaPay app. */
     if (urlPath === '/api/paint/order' && req.method === 'POST') {
+      /* the shop is for accounts: paint outlives a browser only if there is
+         something to log back in to (§3) */
+      const gate = identity.paintGate(row);
+      if (gate) return sendJson(res, 403, gate);
       const { pack } = JSON.parse((await readBody(req, 4096)).toString('utf8'));
       if (!S.PACKS[pack]) return sendJson(res, 400, { error: 'unknown pack' });
       const order = db.tx(() => payments.createOrder(row.id, 'paint_pack', { pack: Number(pack) }, now));

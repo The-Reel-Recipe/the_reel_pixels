@@ -154,11 +154,23 @@ test('the order code is short, unambiguous and unique', () => {
   assert.ok(seen.size > 490, 'and not the same one over and over');
 });
 
+/* Paint is only sold to accounts (§3): a browser cookie is not somewhere
+   money can live, and a cleared one would strand a real transfer. Every
+   buyer below signs up first — which is the flow the shop now enforces. */
+let buyerSeq = 0;
+async function buyer(ip) {
+  const who = visitor(ip);
+  await req(who, 'GET', '/api/wall');
+  const r = await json(who, 'POST', '/api/auth/register',
+    { email: `buyer${++buyerSeq}@painter.example`, password: 'a-long-enough-password' });
+  assert.equal(r.code, 200, 'the buyer has an account to keep paint on');
+  return who;
+}
+
 /* ── buying paint ─────────────────────────────────────────────── */
 
 test('a paint order credits nothing until a person confirms it', async () => {
-  const me = visitor('203.0.113.100');
-  await req(me, 'GET', '/api/wall');
+  const me = await buyer('203.0.113.100');
   const uid = uidOf(me);
 
   const order = await json(me, 'POST', '/api/paint/order', { pack: 100 });
@@ -191,8 +203,7 @@ test('a paint order credits nothing until a person confirms it', async () => {
 });
 
 test('a paint pack shows up in MY PIXELS, where the checkout said it would', async () => {
-  const me = visitor('203.0.113.130');
-  await req(me, 'GET', '/api/wall');
+  const me = await buyer('203.0.113.130');
   const order = await json(me, 'POST', '/api/paint/order', { pack: 500 });
   await json(me, 'POST', `/api/payments/${order.json.paymentId}/proof`,
     { instapay_ref: '5044556677', payer_handle: 'me@instapay' });
@@ -217,8 +228,7 @@ test('a paint pack shows up in MY PIXELS, where the checkout said it would', asy
 });
 
 test('a reference has to look like one', async () => {
-  const me = visitor('203.0.113.101');
-  await req(me, 'GET', '/api/wall');
+  const me = await buyer('203.0.113.101');
   const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
   const id = order.json.paymentId;
 
@@ -235,8 +245,7 @@ test('a reference has to look like one', async () => {
 });
 
 test('somebody else cannot pay off, or look at, your order', async () => {
-  const me = visitor('203.0.113.102'), nosy = visitor('203.0.113.103');
-  await req(me, 'GET', '/api/wall');
+  const me = await buyer('203.0.113.102'), nosy = visitor('203.0.113.103');
   await req(nosy, 'GET', '/api/wall');
   const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
 
@@ -247,8 +256,7 @@ test('somebody else cannot pay off, or look at, your order', async () => {
 });
 
 test('an unpaid order expires and cannot then be paid', async () => {
-  const me = visitor('203.0.113.104');
-  await req(me, 'GET', '/api/wall');
+  const me = await buyer('203.0.113.104');
   const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
   const id = order.json.paymentId;
 
@@ -261,8 +269,7 @@ test('an unpaid order expires and cannot then be paid', async () => {
 });
 
 test('a double-tapped button is one decision', async () => {
-  const me = visitor('203.0.113.105');
-  await req(me, 'GET', '/api/wall');
+  const me = await buyer('203.0.113.105');
   const uid = uidOf(me);
   const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
   await json(me, 'POST', `/api/payments/${order.json.paymentId}/proof`,
@@ -489,8 +496,7 @@ test('an oversize upload is refused before it is written', () => {
 });
 
 test('a screenshot lands on the payment through the route', async () => {
-  const me = visitor('203.0.113.120');
-  await req(me, 'GET', '/api/wall');
+  const me = await buyer('203.0.113.120');
   const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
   const id = order.json.paymentId;
 

@@ -254,6 +254,9 @@ function verifyCookie(value, now) {
   if (!u) return null;
   if (!equal(sig, sign(`${head}.${expText}`, u.token_epoch))) return null;
   if (brand !== (u.kind === 'brand')) return null;
+  /* the caller needs to know how much life is left, to decide whether to
+     hand back a fresh one — see resolve() */
+  u.cookieExp = exp;
   return u;
 }
 
@@ -361,7 +364,19 @@ function mintTx(ip, now) {
 function resolve(req, now, opts) {
   const ip = callerKey(req);
   const u = verifyCookie(readCookie(req), now);
-  if (u) return { ip, e: entryOf(u, now) };
+  if (u) {
+    const e = entryOf(u, now);
+    /* Rolling session: a cookie past halfway through its life is renewed on
+       the spot. Without this the clock starts at signup and never restarts,
+       so somebody who uses the wall every week is still logged out on a
+       fixed date for no reason they can see — and their paint, which is
+       theirs, goes quiet with the session that reached it. */
+    const life = e.kind === 'brand' ? cfg.BRAND_TTL : cfg.GUEST_TTL;
+    if (u.cookieExp && (u.cookieExp - now) < life / 2) {
+      return { ip, e, cookie: sessionCookie(e, now) };
+    }
+    return { ip, e };
+  }
   if (opts && opts.mint === false) return { ip, e: null };
 
   const minted = mintTx(ip, now);
@@ -638,6 +653,20 @@ const GATE = {
   rejected: 'This brand account was not approved. Reply to the team if you think that is wrong.'
 };
 
+/* Paint is money, and money needs somewhere to live that survives a
+   cleared cookie. A guest identity is one browser: buy paint on it and the
+   balance is one "clear browsing data" away from being gone, with a real
+   InstaPay transfer behind it. So the shop is for accounts — the upgrade
+   costs an email and a password and keeps every pixel already painted. */
+const PAINT_GATE = {
+  error: 'account-required',
+  message: 'Paint is kept on your account, so making one is the first step — ' +
+    'it takes a moment and everything you have painted stays exactly as it is.'
+};
+function paintGate(e) {
+  return e && e.email ? null : PAINT_GATE;
+}
+
 /* null when the caller may book; otherwise the 403 body, with a reason
    code the client renders as a screen rather than a toast. */
 function bookGate(e) {
@@ -722,5 +751,5 @@ module.exports = {
   dayKey, ipCounts, takeIp: take, takeClaim, CAPPED,
   /* accounts */
   hashPassword, verifyPassword, validateSignup, signup, login, register,
-  brandStatus, decideBrand, bookGate, meta, me
+  brandStatus, decideBrand, bookGate, paintGate, meta, me
 };

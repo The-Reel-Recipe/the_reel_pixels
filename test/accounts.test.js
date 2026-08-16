@@ -44,6 +44,8 @@ const dbm = require('../server/db.js');
 const wall = require('../server/wall.js');
 const submissions = require('../server/submissions.js');
 const payments = require('../server/payments.js');
+const identity = require('../server/identity.js');
+const cfg = require('../server/config.js');
 
 /* ── envelope + request helpers (identity.test.js's, verbatim) ── */
 
@@ -244,6 +246,67 @@ test('a brand still signs in through the same door', async () => {
   assert.match(String(who.jar.get('uid')), /^b\d/, 'a brand cookie, marked as one');
 });
 
+/* ── paint needs somewhere to live ────────────────────────────── */
+
+test('the paint shop is for accounts, and the door says so', async () => {
+  const guest = visitor('203.0.113.230');
+  await json(guest, 'GET', '/api/me');
+
+  const refused = await json(guest, 'POST', '/api/paint/order', { pack: 25 });
+  assert.equal(refused.code, 403, 'a cookie is not somewhere money can live');
+  assert.equal(refused.json.error, 'account-required');
+  assert.ok(refused.json.message, 'and it says what to do about it');
+
+  await json(guest, 'POST', '/api/auth/register',
+    { email: 'shopper@painter.example', password: 'a-long-enough-password' });
+  const allowed = await json(guest, 'POST', '/api/paint/order', { pack: 25 });
+  assert.equal(allowed.code, 200, 'the same person, one email later');
+  assert.match(allowed.json.code, /^S37-/);
+});
+
+test('paint follows the account, not the browser it was bought in', async () => {
+  const phone = visitor('203.0.113.231');
+  await json(phone, 'GET', '/api/me');
+  await json(phone, 'POST', '/api/auth/register',
+    { email: 'carries@painter.example', password: 'a-long-enough-password' });
+
+  const order = await json(phone, 'POST', '/api/paint/order', { pack: 100 });
+  await json(phone, 'POST', `/api/payments/${order.json.paymentId}/proof`,
+    { instapay_ref: '5011234567', payer_handle: 'me@instapay' });
+  payments.verify(order.json.paymentId, 'tg:1 (sara)');
+  const paid = await json(phone, 'GET', '/api/me');
+  assert.equal(paid.json.allowance.paint, 100, 'verified paint lands on the account');
+
+  /* a different device, a cleared jar — the balance is reached by logging in */
+  const laptop = visitor('203.0.113.232');
+  const back = await json(laptop, 'POST', '/api/auth/login',
+    { email: 'carries@painter.example', password: 'a-long-enough-password' });
+  assert.equal(back.code, 200);
+  assert.equal(back.json.allowance.paint, 100, 'the paint came with them');
+});
+
+test('a session in use renews itself instead of expiring under someone', async () => {
+  const me = visitor('203.0.113.233');
+  const first = await json(me, 'GET', '/api/me');
+  assert.ok(first.setCookie.length, 'minting sets one');
+
+  /* a fresh cookie has its whole life ahead of it — nothing to renew */
+  const soon = await json(me, 'GET', '/api/me');
+  assert.deepEqual(soon.setCookie, [], 'and it is not reissued on every request');
+
+  /* wind it past halfway by handing back a cookie that expires sooner than
+     half a life from now — what a visitor returning after months carries */
+  const id = uidOf(me);
+  const half = Date.now() + (cfg.GUEST_TTL / 2) - 60000;
+  const stale = identity.cookieValue(id, 'guest', 0, half - cfg.GUEST_TTL + 1000);
+  me.jar.set('uid', stale.value);
+
+  const renewed = await json(me, 'GET', '/api/me');
+  assert.ok(renewed.setCookie.length, 'a cookie past halfway is handed back fresh');
+  assert.match(renewed.setCookie.join(''), /Max-Age=/);
+  assert.equal(uidOf(me), id, 'still the same person, just a longer lease');
+});
+
 /* ── the bell ─────────────────────────────────────────────────── */
 
 test('decisions land in the bell, and opening it quiets the badge', async () => {
@@ -273,6 +336,9 @@ test('decisions land in the bell, and opening it quiets the badge', async () => 
 test('money news lands in the bell too', async () => {
   const me = visitor('203.0.113.220');
   await json(me, 'GET', '/api/me');
+  /* paint is sold to accounts only, so the bell's payer has one */
+  await json(me, 'POST', '/api/auth/register',
+    { email: 'bell@painter.example', password: 'a-long-enough-password' });
 
   const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
   assert.equal(order.code, 200);

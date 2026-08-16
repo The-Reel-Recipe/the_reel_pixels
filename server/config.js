@@ -176,10 +176,15 @@ module.exports = Object.freeze({
   RATE_READ: count('RATE_READ', env.RATE_READ, 240),
   RATE_WRITE: count('RATE_WRITE', env.RATE_WRITE, 30),
   RATE_AUTH: count('RATE_AUTH', env.RATE_AUTH, 5),
-  /* a guest cookie is the only copy of who somebody is, so it outlives
-     the wall it painted; a brand session is a login and expires like one */
+  /* A guest cookie is the only copy of who somebody is, so it outlives the
+     wall it painted. Both are rolling — identity.resolve renews a cookie
+     once it is past halfway — so these are "gone this long after your last
+     visit", not "gone this long after you signed up". The brand figure was
+     30 days, which is exactly the wrong number for a product whose cycle is
+     a month: a brand that books every cycle would meet the login screen
+     every cycle, on the visit where they were coming to spend money. */
   GUEST_TTL: 365 * 24 * 60 * 60 * 1000,
-  BRAND_TTL: 30 * 24 * 60 * 60 * 1000,
+  BRAND_TTL: 180 * 24 * 60 * 60 * 1000,
   /* Secure would make the cookie invisible over plain http, which is
      every local dev session — on by default only where TLS is certain */
   COOKIE_SECURE: flag(env.COOKIE_SECURE, PROD),

@@ -525,7 +525,7 @@ function capHit() {
   const msg = freeLeft() > 0
     ? t('toast.capAll', { n: fmt(allowance()) })
     : t('toast.capWait', { n: CAP, t: mmss(refillLeft()) });
-  toast(msg, { cls: 'warn', action: { label: t('act.buyPaint'), fn: () => openModal('modalPaint') } });
+  toast(msg, { cls: 'warn', action: { label: t('act.buyPaint'), fn: openPaintShop } });
 }
 
 /* ── UI updates ── */
@@ -809,7 +809,7 @@ $('btnPay').onclick = () => {
       if (d.short > 0) {
         toast(t('toast.short', { n: fmt(d.short) }) +
           (waitingOnRefill() ? ' ' + t('toast.shortWait', { t: mmss(refillLeft()) }) : ''),
-          { cls: 'warn', action: { label: t('act.buyPaint'), fn: () => openModal('modalPaint') } });
+          { cls: 'warn', action: { label: t('act.buyPaint'), fn: openPaintShop } });
       }
       setTimeout(() => closeModal('modalCheckout'), 1700);
     } catch (err) {
@@ -826,7 +826,13 @@ $('btnPay').onclick = () => {
 $('btnClear').onclick = () => { clearSel(); };
 
 /* ── Paint shop ── */
-$('btnPaintShop').onclick = () => openModal('modalPaint');
+function openPaintShop() {
+  const locked = !hasAccount();
+  $('psGate').hidden = !locked;
+  $('packs').classList.toggle('locked', locked);
+  openModal('modalPaint');
+}
+$('btnPaintShop').onclick = openPaintShop;
 /* Every price on the page, written from the wall snapshot.
 
    None of it is in the markup: the admin panel can change a rate without a
@@ -868,6 +874,9 @@ function applyPrices(prices) {
 }
 
 async function buyPack(btn, amount) {
+  /* the server refuses this too — this is so the answer is a door rather
+     than an error at the end of a tap */
+  if (!hasAccount()) { closeModal('modalPaint'); return openAuth('register', 'painter'); }
   btn.disabled = true;
   try {
     const order = await apiJson('/api/paint/order', { pack: amount });
@@ -1186,6 +1195,9 @@ const BRAND_STATUS_IC = { pending: 'loader', approved: 'check', rejected: 'cross
 
 const isBrand = () => me.kind === 'brand';
 const canBook = () => isBrand() && me.brandStatus === 'approved';
+/* an email is what makes an identity recoverable, and paint is only sold to
+   identities that can be recovered — a brand has one by definition */
+const hasAccount = () => !!me.email;
 
 function setMe(d) {
   if (d && typeof d === 'object') {
@@ -1199,6 +1211,8 @@ function setMe(d) {
   }
   renderAuth();
   renderMe();
+  /* if the shop is open behind the account door, its gate is now stale */
+  if (!$('modalPaint').hidden) openPaintShop();
 }
 
 /* Asks the server who we are. The wall snapshot already says, so this is
@@ -2440,6 +2454,7 @@ const L = {
     'toast.wrong': 'Something went wrong — please try again.',
     'toast.unreachable': 'Could not reach the server — try again in a moment.',
     'toast.shopDown': 'The paint shop is unreachable — try again.',
+    'ps.gate': 'Paint lives on your account, not on this browser — so making one is the first step. It takes a moment, and every pixel you have already painted stays exactly where it is.',
     'ps.popular': 'POPULAR', 'ps.save': 'SAVE {pct}%',
     'hs.sub.pending': 'WAITING', 'hs.sub.approved': 'ON THE WALL',
     'hs.sub.rejected': 'TURNED DOWN', 'hs.sub.expired': 'EXPIRED',
@@ -2601,6 +2616,7 @@ const L = {
     'toast.wrong': 'في حاجة ضربت — جرّب تاني.',
     'toast.unreachable': 'السيرفر مش رادّ — جرّب كمان شوية.',
     'toast.shopDown': 'محل البوية مش رادّ — جرّب تاني.',
+    'ps.gate': 'البوية بتتحفظ على حسابك مش على المتصفح ده — فأول خطوة إنك تعمل حساب. دقيقة واحدة، وكل بكسل رسمته بيفضل زي ما هو.',
     'ps.popular': 'الأكثر طلبًا', 'ps.save': 'وفّر {pct}%',
     'hs.sub.pending': 'مستنية', 'hs.sub.approved': 'على الحيط',
     'hs.sub.rejected': 'اترفضت', 'hs.sub.expired': 'انتهت',
@@ -2841,7 +2857,9 @@ $('btnOpenLogin').onclick = () => openAuth('login', 'painter');
 $('btnLogoutMe').onclick = logout;
 $('btnBrandDoor').onclick = () => openAuth(null, 'brand');
 $('yoursStat').addEventListener('click', () => closeModal('modalMe'));
-$('moreShop').onclick = () => { closeModal('modalMore'); openModal('modalPaint'); };
+$('psGateGo').onclick = () => { closeModal('modalPaint'); openAuth('register', 'painter'); };
+$('psGateLogin').onclick = () => { closeModal('modalPaint'); openAuth('login', 'painter'); };
+$('moreShop').onclick = () => { closeModal('modalMore'); openPaintShop(); };
 $('brandFab').onclick = () => $('btnCompany').click();
 
 /* create-account submit — the guest keeps everything, gains a password */

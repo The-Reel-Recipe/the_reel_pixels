@@ -344,6 +344,11 @@ finish review, the verdict, and DESIGN.md.
            snapshot. Nothing is hard-coded: the admin panel can change a
            price without a deploy, and a page that shipped last week's
            figure would be quoting a price it will not honour. -->
+      <div class="ps-gate" id="psGate" hidden>
+        <p data-i18n="ps.gate">Paint lives on your account, not on this browser — so making one is the first step. It takes a moment, and every pixel you have already painted stays exactly where it is.</p>
+        <button class="btn-claim" id="psGateGo"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg> <span data-i18n="me.create">CREATE ACCOUNT</span></button>
+        <button class="btn-ghost" id="psGateLogin"><svg class="ic" aria-hidden="true"><use href="#i-login"/></svg> <span data-i18n="me.login">LOG IN</span></button>
+      </div>
       <div class="packs" id="packs"></div>
       <p class="fine" data-i18n="ps.fine">Paid by InstaPay and confirmed by a person &mdash; usually within the hour. Paint never expires. If a batch is turned down, the paint comes straight back.</p>
     </div>

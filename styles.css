@@ -1176,7 +1176,23 @@ html[lang="ar"] .auth-tab { font-size: 13px; }
 
 /* ── paint shop ───────────────────────────────────────────────── */
 
+/* the shop stays browsable without an account — the prices are the pitch —
+   but the packs go quiet behind this until there is somewhere to keep them */
+.ps-gate {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: var(--r-lg);
+  background: rgba(255, 77, 157, 0.08);
+  border: 1px solid rgba(255, 77, 157, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ps-gate p { color: var(--dim); font-size: 13px; }
+.ps-gate .btn-claim { width: 100%; }
 .packs { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 16px; }
+/* locked packs still show their price, they just do not pretend to be buyable */
+.packs.locked .pack { opacity: 0.5; }
 .pack {
   position: relative;
   display: flex;
