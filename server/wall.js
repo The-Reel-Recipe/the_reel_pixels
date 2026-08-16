@@ -70,6 +70,25 @@ function ownerId(name, type) {
   }
   return id;
 }
+/* A painter renamed themselves. The owners table is names, not ids, so the
+   entry is patched in place — cheaper than rebuilding a cache of a million
+   cells to change one string, and it lands for everyone who loads the wall
+   from here on. Deliberately not broadcast: a display name is not worth
+   making every open tab refetch the whole wall. */
+function renameOwner(from, to) {
+  if (!from || from === to) return false;
+  let touched = false;
+  for (const o of wall.owners) {
+    if (o.t === 'u' && o.n === from) { o.n = to; touched = true; }
+  }
+  if (touched) {
+    wall.ownerIds.delete(from + '\0u');
+    wall.ownerIds.set(to + '\0u', wall.owners.findIndex(o => o.t === 'u' && o.n === to));
+    dirty();
+  }
+  return touched;
+}
+
 const validIdx = i => Number.isInteger(i) && i >= 0 && i < W * H;
 const pack = m => { const out = new Array(m.size); let i = 0; for (const [idx, p] of m) out[i++] = [idx, p.c, p.o]; return out; };
 
@@ -577,7 +596,7 @@ function reseed(now = Date.now()) {
 }
 
 module.exports = {
-  wall, cycleStart, cycleEnd, monthKey, validIdx, ownerId,
+  wall, cycleStart, cycleEnd, monthKey, validIdx, ownerId, renameOwner,
   ENTRY, encodeEnvelope, encodeLists, encodeHead, decodeEnvelope,
   snapshotFor, pendingFor, dirty,
   load, rebuildCache, setSink, broadcast, notify, publish,

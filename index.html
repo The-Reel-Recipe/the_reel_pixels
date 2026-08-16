@@ -376,7 +376,22 @@ finish review, the verdict, and DESIGN.md.
           <b id="meHandle">&mdash;</b>
           <span class="status-chip" id="meChip">GUEST</span>
         </div>
+        <button class="me-rename" id="btnRename" hidden title="Change your name" data-i18n-title="me.renameTitle" aria-label="Change your name">
+          <svg class="ic" aria-hidden="true"><use href="#i-brush"/></svg>
+        </button>
       </div>
+      <form class="me-rename-form" id="renameForm" hidden novalidate>
+        <label class="fld">
+          <span class="lbl" data-i18n="me.nameLabel">YOUR NAME ON THE WALL</span>
+          <input type="text" id="rnName" maxlength="24" autocomplete="nickname" spellcheck="false">
+          <span class="cp-hint" data-i18n="me.nameHint">This is what anyone who taps your pixels sees.</span>
+          <span class="fld-err" id="errRnName" hidden></span>
+        </label>
+        <div class="rn-actions">
+          <button type="button" class="btn-mini" id="rnCancel" data-i18n="me.cancel">CANCEL</button>
+          <button type="submit" class="btn-claim" id="rnSave" data-i18n="me.save">SAVE</button>
+        </div>
+      </form>
       <div class="me-rows">
         <button class="me-row" id="btnHistory">
           <svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>

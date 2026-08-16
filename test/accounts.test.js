@@ -246,6 +246,70 @@ test('a brand still signs in through the same door', async () => {
   assert.match(String(who.jar.get('uid')), /^b\d/, 'a brand cookie, marked as one');
 });
 
+/* ── the name on your pixels ──────────────────────────────────── */
+
+test('a painter with an account can rename themselves', async () => {
+  const me = visitor('203.0.113.240');
+  await json(me, 'GET', '/api/me');
+  await json(me, 'POST', '/api/auth/register',
+    { email: 'named@painter.example', password: 'a-long-enough-password' });
+
+  const r = await json(me, 'POST', '/api/me/name', { name: 'Mona Fahmy' });
+  assert.equal(r.code, 200);
+  assert.equal(r.json.handle, 'Mona Fahmy');
+
+  /* and it is the name the wall hands out, not just the one on their screen */
+  const again = await json(me, 'GET', '/api/me');
+  assert.equal(again.json.handle, 'Mona Fahmy');
+  assert.equal(again.json.allowance.handle, 'Mona Fahmy');
+});
+
+test('a name nobody stands behind is refused', async () => {
+  const guest = visitor('203.0.113.241');
+  await json(guest, 'GET', '/api/me');
+  const r = await json(guest, 'POST', '/api/me/name', { name: 'Anonymous' });
+  assert.equal(r.code, 403, 'the name is public, so it needs an account behind it');
+  assert.equal(r.json.error, 'account-required');
+});
+
+test('a name cannot carry markup onto somebody else\'s screen', async () => {
+  const me = visitor('203.0.113.242');
+  await json(me, 'GET', '/api/me');
+  await json(me, 'POST', '/api/auth/register',
+    { email: 'strict@painter.example', password: 'a-long-enough-password' });
+
+  /* the tooltip that shows this to strangers is built with innerHTML */
+  for (const bad of ['<img src=x onerror=alert(1)>', 'a<b>c', 'me & you', 'x"y', 'a\'; DROP--']) {
+    const r = await json(me, 'POST', '/api/me/name', { name: bad });
+    assert.equal(r.code, 400, `"${bad}" should not be a name`);
+    assert.ok(r.json.fields.name);
+  }
+  /* …while ordinary names, Arabic included, go through */
+  for (const ok of ['Mona', 'مونا فهمي', "O'Brien", 'pixel_kid-7']) {
+    const r = await json(me, 'POST', '/api/me/name', { name: ok });
+    assert.equal(r.code, 200, `"${ok}" should be a name`);
+  }
+
+  const tooShort = await json(me, 'POST', '/api/me/name', { name: 'a' });
+  assert.equal(tooShort.code, 400);
+  const tooLong = await json(me, 'POST', '/api/me/name', { name: 'x'.repeat(25) });
+  assert.equal(tooLong.code, 400);
+});
+
+test('a painter cannot paint under a brand\'s name', async () => {
+  const shop = visitor('203.0.113.243');
+  await json(shop, 'POST', '/api/auth/signup', application({ business_name: 'Nile Soda Co.' }));
+
+  const me = visitor('203.0.113.244');
+  await json(me, 'GET', '/api/me');
+  await json(me, 'POST', '/api/auth/register',
+    { email: 'copycat@painter.example', password: 'a-long-enough-password' });
+
+  const r = await json(me, 'POST', '/api/me/name', { name: 'nile soda co.' });
+  assert.equal(r.code, 409, 'case does not make it a different name');
+  assert.equal(r.json.error, 'name-taken');
+});
+
 /* ── paint needs somewhere to live ────────────────────────────── */
 
 test('the paint shop is for accounts, and the door says so', async () => {

@@ -200,6 +200,9 @@ const brandOf = p => (p && p.t === 'c') ? brands.get(p.o) : null;
 
 /* ── DOM ── */
 const $ = id => document.getElementById(id);
+/* anything that reaches innerHTML and did not come from this file */
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 /* One of the drawn icons (tools/make-icons.js), as markup. The symbols are
    inlined at the top of index.html, so this is a reference rather than a
@@ -2181,7 +2184,11 @@ function showTooltip(cell, e, pinned) {
   tooltipCell = i;
   const mine = p.o === myHandle && p.t === 'u';
   const icon = ic(booked ? 'lock' : p.t === 'c' ? 'brand' : mine ? 'star' : 'person');
-  const who = mine ? '<span class="tt-you">YOU</span>' : p.o;
+  /* Owner names are somebody else's text now that painters can rename
+     themselves, and this line is built with innerHTML. The server's
+     whitelist already refuses anything markup-shaped; this is the belt
+     to that pair of braces, and it costs nothing. */
+  const who = mine ? '<span class="tt-you">YOU</span>' : esc(p.o);
   const b = booked ? null : brandOf(p);
   const cta = b ? `<span class="tt-cta">${b.cta} ${ic('arrow-right')}</span>` : '';
   const when = booked
@@ -2501,6 +2508,7 @@ const L = {
     'au.book': 'START A PRE-ORDER',
     'toast.applied': '<b>Application sent.</b> We will email you as soon as it is reviewed.',
     'toast.welcomeBack': 'Welcome back, <b>{name}</b> — your pixels are right where you left them.',
+    'toast.renamed': 'You are <b>{name}</b> on the wall now.',
     'toast.loggedOut': 'Logged out — you are painting as a guest again.',
     'toast.registered': '<b>Account created.</b> Your pixels now follow you anywhere you sign in.',
     'nav.wall': 'WALL', 'nav.alerts': 'ALERTS', 'nav.me': 'ME', 'nav.more': 'MORE', 'nav.paint': 'Paint',
@@ -2510,7 +2518,9 @@ const L = {
     'me.paint': 'PAINT', 'me.buy': 'BUY',
     'me.guestNote': 'You are painting as a guest. Make a free account to keep your pixels, paint and history on any device.',
     'me.create': 'CREATE ACCOUNT', 'me.login': 'LOG IN', 'me.signedin': 'Signed in as',
-    'me.logout': 'LOG OUT', 'me.brandNote': 'This is a brand account.', 'me.brandDoor': 'BRAND ACCOUNT',
+    'me.logout': 'LOG OUT', 'me.renameTitle': 'Change your name',
+    'me.nameLabel': 'YOUR NAME ON THE WALL', 'me.nameHint': 'This is what anyone who taps your pixels sees.',
+    'me.cancel': 'CANCEL', 'me.save': 'SAVE', 'me.brandNote': 'This is a brand account.', 'me.brandDoor': 'BRAND ACCOUNT',
     'mo.title': 'MORE', 'mo.brand': 'BRAND PRE-ORDER', 'fab.brand': 'BRAND', 'mo.brandSub': "Your logo on next month's wall",
     'mo.shop': 'PAINT SHOP', 'mo.how': 'HOW IT WORKS', 'mo.lang': 'اللغة · LANGUAGE',
     'mo.taken': 'PIXELS TAKEN', 'mo.next': 'BOOKED NEXT CYCLE',
@@ -2663,6 +2673,7 @@ const L = {
     'au.book': 'ابدأ حجز',
     'toast.applied': '<b>الطلب اتبعت.</b> هنبعتلك إيميل أول ما يتراجع.',
     'toast.welcomeBack': 'أهلاً بيك تاني يا <b>{name}</b> — بكسلاتك زي ما سيبتها.',
+    'toast.renamed': 'بقيت <b>{name}</b> على الحيط.',
     'toast.loggedOut': 'خرجت — بترسم كضيف تاني.',
     'toast.registered': '<b>الحساب اتعمل.</b> بكسلاتك بقت بتمشي معاك في أي حتة تدخل منها.',
     'nav.wall': 'الحيط', 'nav.alerts': 'الأخبار', 'nav.me': 'أنا', 'nav.more': 'كمان', 'nav.paint': 'شخبط',
@@ -2672,7 +2683,9 @@ const L = {
     'me.paint': 'بوية', 'me.buy': 'اشتري',
     'me.guestNote': 'انت بترسم كضيف. اعمل حساب ببلاش عشان بكسلاتك وبويتك وتاريخك يفضلوا معاك على أي موبايل.',
     'me.create': 'اعمل حساب', 'me.login': 'ادخل', 'me.signedin': 'داخل باسم',
-    'me.logout': 'اخرج', 'me.brandNote': 'ده حساب براند.', 'me.brandDoor': 'حساب البراند',
+    'me.logout': 'اخرج', 'me.renameTitle': 'غيّر اسمك',
+    'me.nameLabel': 'اسمك على الحيط', 'me.nameHint': 'ده اللي بيشوفه أي حد يدوس على بكسلاتك.',
+    'me.cancel': 'إلغاء', 'me.save': 'احفظ', 'me.brandNote': 'ده حساب براند.', 'me.brandDoor': 'حساب البراند',
     'mo.title': 'كمان', 'mo.brand': 'حجز براند', 'fab.brand': 'براند', 'mo.brandSub': 'لوجو شركتك على حيط الشهر الجاي',
     'mo.shop': 'محل البوية', 'mo.how': 'بيشتغل إزاي؟', 'mo.lang': 'اللغة · LANGUAGE',
     'mo.taken': 'بكسلات متاخدة', 'mo.next': 'محجوز للشهر الجاي',
@@ -2850,8 +2863,50 @@ function renderMe() {
   $('meRegistered').hidden = kind === 'guest';     // both kinds have an email
   $('meBrand').hidden = kind !== 'brand';
   $('meSignOut').hidden = kind === 'guest';        // …and both need a way out
+  $('btnRename').hidden = $('renameForm').hidden === false || kind !== 'painter';
+  if (kind !== 'painter') $('renameForm').hidden = true;
   $('meEmail').textContent = me.email || '—';
 }
+
+/* Renaming is for painters with an account: a name with nobody behind it
+   is what the server refuses, and a brand shows what it was approved as. */
+function openRename(open) {
+  $('renameForm').hidden = !open;
+  $('btnRename').hidden = open || !(hasAccount() && !isBrand());
+  if (open) {
+    $('rnName').value = myHandle || me.handle || '';
+    clearErr('errRnName');
+    $('rnName').focus();
+    $('rnName').select();
+  }
+}
+$('btnRename').onclick = () => openRename(true);
+$('rnCancel').onclick = () => openRename(false);
+$('renameForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('rnSave');
+  clearErr('errRnName');
+  btn.disabled = true; btn.textContent = t('au.busy');
+  try {
+    const r = await apiPost('/api/me/name', { name: $('rnName').value });
+    if (!r.ok) {
+      const said = (r.data.fields && r.data.fields.name) || r.data.message;
+      showErr('errRnName', said || t('toast.wrong'));
+      return;
+    }
+    /* before setMe, which re-renders off myHandle — the wall's own idea of
+       who you are, and the one the card prefers */
+    myHandle = r.data.handle;
+    setMe(r.data);
+    openRename(false);
+    updateAll();
+    toast(`${ic('check')} ${t('toast.renamed', { name: esc(r.data.handle) })}`);
+  } catch (err) {
+    showErr('errRnName', t('toast.unreachable'));
+  } finally {
+    btn.disabled = false; btn.textContent = t('me.save');
+  }
+});
 
 $('btnOpenRegister').onclick = () => openAuth('register', 'painter');
 $('btnOpenLogin').onclick = () => openAuth('login', 'painter');

@@ -127,6 +127,7 @@ const LIMITS = {
 
 function limitFor(urlPath) {
   if (urlPath.startsWith('/api/auth/') || urlPath === '/api/admin/login' ||
+      urlPath === '/api/me/name' ||
       urlPath === '/api/paint/order' || urlPath.startsWith('/api/payments/')) return 'auth';
   if (urlPath === '/api/claim' || urlPath === '/api/book') return 'write';
   return 'read';
@@ -630,6 +631,17 @@ async function handler(req, res) {
         limit: q.get('limit'), offset: q.get('offset')
       }));
     }
+    /* The name on your pixels. Rate-limited as auth rather than as a write:
+       it is free text that other people read, so the cheap thing to make
+       expensive is trying a hundred of them. */
+    if (urlPath === '/api/me/name' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req, 1024)).toString('utf8'));
+      const r = identity.rename(row, body, now);
+      if (r.error) return sendJson(res, r.status, { error: r.error, fields: r.fields, message: r.message });
+      if (r.was) wall.renameOwner(r.was, r.e.handle);
+      return sendJson(res, 200, identity.me(r.e, now));
+    }
+
     if (urlPath === '/api/me/notifications/seen' && req.method === 'POST') {
       return sendJson(res, 200, notifications.markSeen(row.id, now));
     }

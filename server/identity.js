@@ -653,6 +653,60 @@ const GATE = {
   rejected: 'This brand account was not approved. Reply to the team if you think that is wrong.'
 };
 
+/* ── Display name ─────────────────────────────────────────────────
+   The handle is not private: it is what the wall shows anyone who taps
+   your pixels. That makes a rename the one piece of free text a visitor
+   can put in front of other visitors, and this product moderates
+   everything else before it is public — so it is fenced three ways.
+
+   Accounts only, because a name with no email behind it is a name with
+   nobody behind it. A strict character whitelist, so nothing that could
+   be read as markup ever reaches another person's page — the tooltip
+   builds with innerHTML, and a rule about escaping downstream is a rule
+   somebody eventually forgets. And no borrowing a brand's name, because
+   a shop's customers should not have to tell two of them apart. */
+const NAME_RE = /^[\p{L}\p{N} ._'-]+$/u;
+const NAME_MIN = 2, NAME_MAX = 24;
+const brandNamed = db.prepare(
+  "SELECT 1 FROM users WHERE kind = 'brand' AND lower(handle) = lower(?)");
+const setHandleFor = db.prepare('UPDATE users SET handle = ? WHERE id = ?');
+
+function rename(e, body, now) {
+  if (!e || !e.email) {
+    return { status: 403, error: 'account-required', message: PAINT_GATE.message };
+  }
+  if (e.kind === 'brand') {
+    return {
+      status: 403, error: 'brand-name-fixed',
+      message: 'A brand shows the business name it was approved under. Reply to the team if it needs changing.'
+    };
+  }
+  /* collapse runs of whitespace so " a   b " and "a b" are one name, and
+     a wall of spaces is not a name at all */
+  const name = text((body && body.name) || '').replace(/\s+/g, ' ');
+  if (name.length < NAME_MIN || name.length > NAME_MAX) {
+    return { status: 400, error: 'invalid',
+      fields: { name: `A name is between ${NAME_MIN} and ${NAME_MAX} characters.` } };
+  }
+  if (!NAME_RE.test(name)) {
+    return { status: 400, error: 'invalid',
+      fields: { name: 'Letters, numbers, spaces and . _ - \' only.' } };
+  }
+  if (brandNamed.get(name)) {
+    return { status: 409, error: 'name-taken',
+      fields: { name: 'A brand already paints under that name.' } };
+  }
+
+  const was = e.handle;
+  if (name === was) return { e, unchanged: true };
+  tx(() => {
+    setHandleFor.run(name, e.id);
+    logEvent(`user:${e.id}`, 'rename', { from: was, to: name }, now);
+  });
+  e.handle = name;
+  return { e, was };
+}
+
 /* Paint is money, and money needs somewhere to live that survives a
    cleared cookie. A guest identity is one browser: buy paint on it and the
    balance is one "clear browsing data" away from being gone, with a real
@@ -751,5 +805,5 @@ module.exports = {
   dayKey, ipCounts, takeIp: take, takeClaim, CAPPED,
   /* accounts */
   hashPassword, verifyPassword, validateSignup, signup, login, register,
-  brandStatus, decideBrand, bookGate, paintGate, meta, me
+  brandStatus, decideBrand, bookGate, paintGate, rename, meta, me
 };
