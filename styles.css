@@ -189,8 +189,11 @@ a { color: var(--accent); }
 .coords {
   position: absolute;
   inset-inline-start: calc(12px + var(--sal));
-  /* clear of the two-row dock (≈106px tall, floating at 84px) */
+  /* clear of the two-row dock (≈106px tall, floating at 84px) — and see
+     body.no-paint below, where the dock is away and this drops to meet
+     the nav rather than hovering over the gap it left */
   bottom: calc(206px + var(--sab));
+  transition: bottom 0.34s var(--expo);
   font-family: var(--fp); font-weight: var(--fp-w);
   font-size: 8px;
   color: var(--dim);
@@ -371,6 +374,11 @@ body.no-paint .paint-dock {
   opacity: 0;
   pointer-events: none;
 }
+/* With the dock away, the two chips that were sitting above it drop to the
+   nav instead of hovering in the space it used to fill. They are positioned
+   off the dock's height, so without this they mark out a hole. */
+body.no-paint .coords,
+body.no-paint .brand-fab { bottom: calc(86px + var(--sab)); }
 
 .dock-row { display: flex; align-items: center; gap: 8px; }
 
@@ -680,6 +688,7 @@ html[lang="ar"] .nav-item span { font-size: 10px; letter-spacing: 0; }
   font-size: 8px;
   letter-spacing: 0.05em;
   border-color: rgba(255, 77, 157, 0.45);
+  transition: bottom 0.34s var(--expo), transform 0.16s var(--expo);
 }
 html[lang="ar"] .brand-fab { font-size: 12.5px; }
 .brand-fab .ic { color: var(--pink); }
