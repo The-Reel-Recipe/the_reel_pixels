@@ -2847,8 +2847,9 @@ function renderMe() {
   chip.textContent = t('chip.' + kind);
   chip.className = 'status-chip ' + (isBrand() ? (me.brandStatus || '') : (me.registered ? 'approved' : ''));
   $('meGuest').hidden = kind !== 'guest';
-  $('meRegistered').hidden = kind !== 'painter';
+  $('meRegistered').hidden = kind === 'guest';     // both kinds have an email
   $('meBrand').hidden = kind !== 'brand';
+  $('meSignOut').hidden = kind === 'guest';        // …and both need a way out
   $('meEmail').textContent = me.email || '—';
 }
 

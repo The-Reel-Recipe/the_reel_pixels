@@ -403,13 +403,16 @@ finish review, the verdict, and DESIGN.md.
         <button class="btn-claim" id="btnOpenRegister"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg> <span data-i18n="me.create">CREATE ACCOUNT</span></button>
         <button class="btn-ghost" id="btnOpenLogin"><svg class="ic" aria-hidden="true"><use href="#i-login"/></svg> <span data-i18n="me.login">LOG IN</span></button>
       </div>
+      <!-- the "signed in as" line covers both kinds: a brand has an email too -->
       <div class="me-account" id="meRegistered" hidden>
         <p class="me-note"><span data-i18n="me.signedin">Signed in as</span> <b id="meEmail">&mdash;</b></p>
-        <button class="btn-ghost" id="btnLogoutMe"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> <span data-i18n="me.logout">LOG OUT</span></button>
       </div>
       <div class="me-account" id="meBrand" hidden>
-        <p class="me-note" data-i18n="me.brandNote">This is a brand account.</p>
         <button class="btn-claim" id="btnBrandDoor"><svg class="ic" aria-hidden="true"><use href="#i-brand"/></svg> <span data-i18n="me.brandDoor">BRAND ACCOUNT</span></button>
+      </div>
+      <!-- one way out, for whichever kind of account is signed in -->
+      <div class="me-account" id="meSignOut" hidden>
+        <button class="btn-ghost" id="btnLogoutMe"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg> <span data-i18n="me.logout">LOG OUT</span></button>
       </div>
     </div>
   </div>
