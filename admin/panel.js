@@ -706,6 +706,71 @@ RENDER.config = async main => {
       input.remove();
     }
     const mid = el('div');
+    /* Packs get a real editor rather than a JSON string in a text box: they
+       are pairs of numbers, and the price each one lands on is the thing
+       being decided, so it is shown. */
+    if (row.key === 'pack_offers') {
+      const rate = (d.rows.find(x => x.key === 'price_paint') || {}).value || 1;
+      const rows = Object.entries(row.value).map(([a, off]) => ({ a: Number(a), off: Number(off) }));
+      const list = el('div');
+      const draw = () => {
+        list.innerHTML = '';
+        rows.forEach((p, i) => {
+          const line = el('div', 'pack-line');
+          const amt = el('input'); amt.type = 'number'; amt.min = '1'; amt.value = String(p.a);
+          const off = el('input'); off.type = 'number'; off.min = '0'; off.max = '90'; off.value = String(p.off);
+          const out = el('span', 'why');
+          const price = () => Math.max(1, Math.round(p.a * rate * (1 - p.off / 100)));
+          const say = () => { out.textContent = `= ${price()} EGP  (${(price() / p.a).toFixed(2)}/px)`; };
+          amt.oninput = () => { p.a = Number(amt.value) || 0; say(); };
+          off.oninput = () => { p.off = Number(off.value) || 0; say(); };
+          say();
+          const drop = el('button', null, '×');
+          drop.title = 'Remove this pack';
+          drop.onclick = () => { rows.splice(i, 1); draw(); };
+          line.append(el('span', 'why', 'paint'), amt, el('span', 'why', '% off'), off, out, drop);
+          list.append(line);
+        });
+        const add = el('button', null, '+ PACK');
+        add.onclick = () => { rows.push({ a: 100, off: 10 }); draw(); };
+        list.append(add);
+      };
+      draw();
+      mid.append(list);
+      mid.append(el('div', 'why', row.overridden
+        ? `changed by ${row.updatedBy} · ${when(row.updatedAt)}`
+        : 'using the built-in default'));
+      /* the SAVE below reads this back out */
+      input.value = '';
+      input.dataset.packs = '1';
+      input.readOnly = true;
+      input.style.display = 'none';
+      input.collect = () => {
+        const obj = {};
+        for (const p of rows) obj[p.a] = p.off;
+        return obj;
+      };
+      mid.append(input);
+      r.append(mid);
+      const act = el('div', 'row');
+      const save = el('button', 'go', 'SAVE');
+      save.onclick = async () => {
+        try { await post('/api/admin/config', { key: row.key, value: input.collect() }, 'PUT'); toast('Saved.'); show('config'); }
+        catch (e) { oops(e); }
+      };
+      act.append(save);
+      if (row.overridden) {
+        const rst = el('button', null, 'RESET');
+        rst.onclick = async () => {
+          try { await post('/api/admin/config', { key: row.key, reset: true }, 'PUT'); toast('Back to default.'); show('config'); }
+          catch (e) { oops(e); }
+        };
+        act.append(rst);
+      }
+      r.append(act);
+      card.append(r);
+      continue;
+    }
     if (typeof row.value === 'boolean') {
       const t = el('button', row.value ? 'go' : '', row.value ? 'ON' : 'OFF');
       t.onclick = async () => {

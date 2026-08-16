@@ -150,3 +150,8 @@ tbody tr:hover { background: var(--surface); }
   .cfg-row { grid-template-columns: 1fr; }
   th { position: static; }
 }
+
+/* the pack editor — an amount, a discount, and the price they land on */
+.pack-line { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.pack-line input { width: 90px; }
+.pack-line .why { white-space: nowrap; }

@@ -219,6 +219,24 @@ test('logging in from a new phone resumes the identity', async () => {
     'the pixels claimed on the phone are visible from the laptop');
 });
 
+test('the wall snapshot keeps you signed in', async () => {
+  /* Logging in reloads the wall, so whatever the snapshot says about the
+     caller is the last word. It used to say less than the login did —
+     kind and handle but no email — which signed the account straight back
+     out: a welcome toast, then a profile offering to create an account,
+     and no way to buy paint. */
+  const me = visitor('203.0.113.250');
+  await json(me, 'GET', '/api/me');
+  await json(me, 'POST', '/api/auth/register',
+    { email: 'sticks@painter.example', password: 'a-long-enough-password' });
+
+  const snap = await req(me, 'GET', '/api/wall');
+  const len = snap.body.readUInt32LE(0);
+  const meta = JSON.parse(snap.body.toString('utf8', 4, 4 + len));
+  assert.equal(meta.me.email, 'sticks@painter.example', 'the snapshot knows the account');
+  assert.equal(meta.me.registered, true, 'and says so in the bit the client reads');
+});
+
 test('wrong password and unknown email are the same quiet no', async () => {
   const who = visitor('203.0.113.217');
   const wrong = await json(who, 'POST', '/api/auth/login',

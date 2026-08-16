@@ -731,16 +731,24 @@ function bookGate(e) {
 }
 
 /* what the snapshot's meta.me carries, and the spine of /api/me */
+/* Every answer that says who the caller is says the same things — the wall
+   snapshot included. It used to carry only kind/handle/brandStatus, so
+   logging in and then loading the wall (which login does, to pick up whose
+   pixels are whose) overwrote the just-signed-in account with a version
+   that had no email on it: the welcome toast was right, and by the time
+   you opened your profile you were a guest again who could not buy paint. */
 function meta(e) {
-  return { kind: e.kind, handle: e.handle, brandStatus: brandStatus(e) };
-}
-function me(e, now) {
-  const out = meta(e);
+  const out = { kind: e.kind, handle: e.handle, brandStatus: brandStatus(e) };
   if (e.email) out.email = e.email;
   /* a guest with an email is a painter account — same identity, reachable
      from other devices. The client renders "create account" vs "signed in"
      off this bit rather than sniffing for the email field. */
   if (e.kind === 'guest') out.registered = !!e.email;
+  return out;
+}
+/* the same identity, plus what they have left to paint with */
+function me(e, now) {
+  const out = meta(e);
   out.allowance = allowanceOf(e, now);
   return out;
 }

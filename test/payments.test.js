@@ -50,6 +50,7 @@ const submissions = require('../server/submissions.js');
 const identity = require('../server/identity.js');
 const uploads = require('../server/uploads.js');
 const cfg = require('../server/config.js');
+const { S } = require('../server/settings.js');
 
 /* ── helpers ──────────────────────────────────────────────────── */
 
@@ -176,7 +177,7 @@ test('a paint order credits nothing until a person confirms it', async () => {
   const order = await json(me, 'POST', '/api/paint/order', { pack: 100 });
   assert.equal(order.code, 200);
   assert.match(order.json.code, /^S37-/);
-  assert.equal(order.json.amountEgp, cfg.PACKS[100]);
+  assert.equal(order.json.amountEgp, S.PACKS[100]);
   assert.equal(order.json.url, 'https://ipn.eg/S/example/instapay/TEST');
   assert.equal(order.json.handle, 'example@instapay');
   /* The QR is optional by design: shipped when assets/instapay-qr.png is

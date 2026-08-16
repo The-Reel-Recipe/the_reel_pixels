@@ -431,9 +431,35 @@ test('a price change is live in the next snapshot, with no restart', async () =>
   assert.equal(await price(), base);
 });
 
+test('packs follow the paint price instead of restating it', async () => {
+  /* A pack is an amount and a discount; the EGP is worked out. Written as
+     prices they were a third copy of the rate, and moving the rate left
+     every pack quoting the old one. */
+  /* one jar for all three reads: a fresh one mints an identity, and this
+     file's IP only gets five a day */
+  const seat = new Map();
+  const packs = async () => {
+    const r = await req('GET', '/api/wall', null, { jar: seat });
+    const meta = JSON.parse(r.body.toString('utf8', 4, 4 + r.body.readUInt32LE(0)));
+    return meta.prices.packs;
+  };
+  const rate = settings.S.PRICE_PAINT;
+  const before = await packs();
+  assert.equal(before[100], Math.round(100 * rate * 0.8), '100 paint at 20% off');
+
+  await json('PUT', '/api/admin/config', { key: 'price_paint', value: rate * 2 }, AS_PANEL);
+  const after = await packs();
+  assert.equal(after[100], before[100] * 2, 'double the rate, double every pack');
+  assert.equal(settings.S.PACK_OFFERS[100], 20, 'and the discount is untouched');
+
+  await json('PUT', '/api/admin/config', { key: 'price_paint', reset: true }, AS_PANEL);
+  assert.deepEqual(await packs(), before);
+});
+
 test('a setting that makes no sense is refused', async () => {
-  for (const [key, value] of [['cap', -5], ['price_paint', 0], ['packs', 'not json'],
-    ['maintenance', 'perhaps'], ['nonsense_key', 1]]) {
+  for (const [key, value] of [['cap', -5], ['price_paint', 0],
+    ['maintenance', 'perhaps'], ['nonsense_key', 1],
+    ['pack_offers', 'not json'], ['pack_offers', { 100: 95 }]]) {
     const r = await json('PUT', '/api/admin/config', { key, value }, AS_PANEL);
     assert.equal(r.code, 400, `${key}=${value} was accepted`);
   }

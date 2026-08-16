@@ -162,7 +162,12 @@ module.exports = Object.freeze({
   CAP: 50,                                          // free pixels per caller
   REFILL: 60 * 60 * 1000,                           // …back this long after the last one goes
   PRICE_PAINT: 2, PRICE_COMPANY: 5,
-  PACKS: { 25: 45, 100: 160, 500: 700 },            // paint amount -> EGP
+  /* Packs are an amount and a discount, not a price. Written as prices they
+     were a third copy of PRICE_PAINT: move the rate and every pack silently
+     kept quoting the old one, with the client's SAVE badge — which divides
+     price by amount × rate — reporting a discount nobody chose. The EGP is
+     derived (settings.js), so a pack is "how much, and how much off". */
+  PACK_OFFERS: { 25: 10, 100: 20, 500: 30 },        // paint amount -> % off
   IDLE_DROP: 24 * 60 * 60 * 1000,
   DELTA_MAX: 2000,                                  // bigger changes tell clients to refetch
 

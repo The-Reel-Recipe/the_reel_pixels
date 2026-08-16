@@ -35,8 +35,12 @@ const bool = v => {
   if (v === 'false' || v === '0' || v === 0) return false;
   throw new Error('must be true or false');
 };
-/* packs are { paintAmount: priceEgp }, and both halves have to be sane */
-const packs = v => {
+/* packs are { paintAmount: percentOff }, and both halves have to be sane.
+   The key is renamed from `packs` deliberately: a stored row from the old
+   shape held EGP, and 45 read as a discount is a plausible-looking 45% off
+   rather than an error. An unknown key is ignored, so the rename is what
+   makes an old value fall back to the default instead of being believed. */
+const packOffers = v => {
   const obj = typeof v === 'string' ? JSON.parse(v) : v;
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error('must be an object');
   const out = {};
@@ -44,15 +48,19 @@ const packs = v => {
   if (!keys.length || keys.length > 8) throw new Error('needs between 1 and 8 packs');
   for (const k of keys) {
     const amount = int(1, 1000000)(k);
-    out[amount] = int(1, 10000000)(obj[k]);
+    out[amount] = int(0, 90)(obj[k]);          // a pack is never more than 90% off
   }
   return out;
 };
 
+/* What a pack costs: the amount at the going rate, less its discount.
+   Rounded to whole EGP — nobody transfers piasters by hand. */
+const priceOf = (amount, off, rate) => Math.max(1, Math.round(amount * rate * (1 - off / 100)));
+
 const SPEC = {
   price_paint:   { of: int(1, 100000), why: 'EGP per pixel of paint' },
   price_company: { of: int(1, 100000), why: 'EGP per pixel of brand logo' },
-  packs:         { of: packs, why: 'paint amount → EGP' },
+  pack_offers:   { of: packOffers, why: 'paint amount → % off the going rate' },
   cap:           { of: int(0, 100000), why: 'free pixels per person per batch' },
   refill_ms:     { of: int(0, 30 * 24 * 3600 * 1000), why: 'how long until the free batch comes back' },
   ip_guest_cap:  { of: int(0, 100000), why: 'new identities per IP per day' },
@@ -67,7 +75,7 @@ const SPEC = {
 const DEFAULTS = {
   price_paint: cfg.PRICE_PAINT,
   price_company: cfg.PRICE_COMPANY,
-  packs: cfg.PACKS,
+  pack_offers: cfg.PACK_OFFERS,
   cap: cfg.CAP,
   refill_ms: cfg.REFILL,
   ip_guest_cap: cfg.IP_GUEST_CAP,
@@ -152,7 +160,16 @@ function reset(k, actor, now = Date.now()) {
 const S = {
   get PRICE_PAINT() { return values.price_paint; },
   get PRICE_COMPANY() { return values.price_company; },
-  get PACKS() { return values.packs; },
+  /* what the panel edits */
+  get PACK_OFFERS() { return values.pack_offers; },
+  /* …and what everything else reads: amount -> EGP, at today's rate */
+  get PACKS() {
+    const out = {};
+    for (const [amount, off] of Object.entries(values.pack_offers)) {
+      out[amount] = priceOf(Number(amount), off, values.price_paint);
+    }
+    return out;
+  },
   get CAP() { return values.cap; },
   get REFILL() { return values.refill_ms; },
   get IP_GUEST_CAP() { return values.ip_guest_cap; },

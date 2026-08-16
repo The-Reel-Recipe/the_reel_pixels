@@ -554,7 +554,10 @@ test('booking is gated on an approved brand account', async () => {
   const snapshot = await req(brand, 'GET', '/api/wall');
   const metaLen = snapshot.body.readUInt32LE(0);
   const meta = JSON.parse(snapshot.body.toString('utf8', 4, 4 + metaLen));
-  assert.deepEqual(meta.me, { kind: 'brand', handle: 'Nile Soda Co.', brandStatus: 'approved' });
+  /* the email belongs here too: the page reloads the wall right after a
+     login, and a snapshot that omitted it signed the account back out */
+  assert.deepEqual(meta.me,
+    { kind: 'brand', handle: 'Nile Soda Co.', brandStatus: 'approved', email: form.email });
 });
 
 test('brands are exempt from the per-IP claim cap', () => {
