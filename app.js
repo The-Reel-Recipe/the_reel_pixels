@@ -24,7 +24,12 @@ const W = 1000, H = 1000;
    only what the page would use if it somehow rendered before its first
    /api/wall, which it does not. */
 let PRICE_COMPANY = 5;
-const CAP = 20;                       // free pixels per person, per batch
+/* The server owns this — the panel can move it without a deploy, so a
+   second copy compiled into the page is a number that goes stale. Every
+   allowance payload carries `cap`; this is only what to say before the
+   first one lands. */
+let CAP = 50;                         // free pixels per person, per batch
+let refillMs = 60 * 60 * 1000;        // …and how long until they come back
 const DAY = 86400000;
 const LS_KEY = 's37.help';            // the one thing still ours to remember
 
@@ -155,6 +160,12 @@ async function apiPost(path, body) {
 
 function applyAllowance(d) {
   api.skew = d.now - Date.now();
+  /* whatever the server is running today — and when that is not what the
+     page was built with, the prose quoting it is rewritten once */
+  const moved = (d.cap > 0 && d.cap !== CAP) || (d.refillMs > 0 && d.refillMs !== refillMs);
+  if (d.cap > 0) CAP = d.cap;
+  if (d.refillMs > 0) refillMs = d.refillMs;
+  if (moved && typeof refreshCopy === 'function') refreshCopy();
   freeUsed = Math.max(0, CAP - d.free);
   refillAt = d.refillAt || 0;
   paint = d.paint || 0;
@@ -2437,7 +2448,7 @@ const L = {
     'act.buyPaint': 'BUY PAINT', 'act.myPixels': 'MY PIXELS',
     'cycle.next': 'NEXT RESET {d}',
     'free.waiting': 'Free pixels used up — <b class="accent">{t}</b> until your next {n}.',
-    'free.left': '<b class="accent">{left}</b> free pixels left — a fresh {n} lands 30 min after you run out.',
+    'free.left': '<b class="accent">{left}</b> free pixels left — a fresh {n} lands {w} after you run out.',
     'dock.tap': 'TAP TO PAINT',
     'dock.claimFree': 'SEND {n} · FREE',
     'dock.claimPaint': 'SEND {n} PX · {paid} PAINT',
@@ -2535,18 +2546,19 @@ const L = {
     'al.payment.refund_due': 'Refund on the way', 'al.payment.refunded': 'Refund sent',
     'al.payment.expired': 'Order expired',
     'al.brand.approved': 'Your brand is approved', 'al.brand.rejected': 'Application not approved',
+    'time.anHour': 'an hour', 'time.hours': '{n} hours', 'time.minutes': '{n} minutes',
     'time.now': 'now', 'time.m': '{n}m', 'time.h': '{n}h', 'time.d': '{n}d',
     'help.title': 'THE PIXEL WALL', 'help.sub': '1,000,000 pixels. One wall. Wiped clean every month.',
     'help.s1': 'PICK & PAINT',
-    'help.s1p': 'Choose a colour and tap up to <b>20 empty pixels</b> to preview your art on the wall.',
+    'help.s1p': 'Choose a colour and tap up to <b>{n} empty pixels</b> to preview your art on the wall.',
     'help.s2': 'SEND THEM FOR REVIEW',
-    'help.s2p': 'Your 20 pixels cost <b>nothing</b>. A person checks every batch before it goes up — usually minutes. Yours shimmer until then.',
-    'help.s3': 'WAIT 30 MINUTES',
-    'help.s3p': 'Used all 20? A fresh <b>20 free pixels</b> land <b>30 minutes</b> later. Come back and keep going.',
+    'help.s2p': 'Your {n} pixels cost <b>nothing</b>. A person checks every batch before it goes up — usually minutes. Yours shimmer until then.',
+    'help.s3': 'COME BACK IN {W}',
+    'help.s3p': 'Used all {n}? A fresh <b>{n} free pixels</b> land <b>{w}</b> later. Come back and keep going.',
     'help.s4': 'THE 1st WIPES IT',
     'help.s4p': 'On the <b>1st of every month</b> the whole wall resets to white and everyone starts over.',
     'help.n1': 'Switch to <b>BRUSH</b> to paint continuously while holding down.',
-    'help.n2': 'No patience? Buy <b>PAINT</b> at <span class="px-rate">—</span> EGP/PX — it paints past the free 20 right now.',
+    'help.n2': 'No patience? Buy <b>PAINT</b> at <span class="px-rate">—</span> EGP/PX — it paints past the free {n} right now.',
     'help.n3': 'Brands <b>pre-order logo space</b> at <span class="co-rate">—</span> EGP/PX for the <b>next</b> cycle.',
     'help.cta': 'START PAINTING',
     'py.title': 'PAY WITH INSTAPAY', 'py.send': 'SEND', 'py.to': 'Send it to',
@@ -2562,7 +2574,7 @@ const L = {
     'hs.sub': 'Every batch you have sent, newest first. A person checks each one before it goes on the wall — usually within minutes.',
     'hs.more': 'LOAD OLDER',
     'ps.title': 'PAINT SHOP',
-    'ps.sub': 'Paint = prepaid pixels at <b><span class="px-rate">—</span> EGP/PX</b>. It takes you straight past the 20 free ones with no 30-minute wait.',
+    'ps.sub': 'Paint = prepaid pixels at <b><span class="px-rate">—</span> EGP/PX</b>. It takes you straight past the {n} free ones — no waiting.',
     'ps.fine': 'Paid by InstaPay and confirmed by a person — usually within the hour. Paint never expires. If a batch is turned down, the paint comes straight back.',
     'zoom.in': 'Zoom in (+)', 'zoom.out': 'Zoom out (−)', 'zoom.fit': 'Fit whole wall (0)',
     'tool.pan': 'Move — drag to pan, tap to place one pixel (V)',
@@ -2602,7 +2614,7 @@ const L = {
     'act.buyPaint': 'اشتري بوية', 'act.myPixels': 'بكسلاتي',
     'cycle.next': 'المسح الجاي {d}',
     'free.waiting': 'خلّصت المجاني — فاضل <b class="accent">{t}</b> على الـ{n} الجداد.',
-    'free.left': 'فاضلك <b class="accent">{left}</b> بكسل ببلاش — بيرجعوا {n} بعد ما تخلصهم بنص ساعة.',
+    'free.left': 'فاضلك <b class="accent">{left}</b> بكسل ببلاش — بيرجعوا {n} بعد {w} من ما تخلصهم.',
     'dock.tap': 'دوس وشخبط',
     'dock.claimFree': 'ابعت {n} · ببلاش',
     'dock.claimPaint': 'ابعت {n} بكسل · {paid} بوية',
@@ -2700,18 +2712,19 @@ const L = {
     'al.payment.refund_due': 'الاسترداد في الطريق', 'al.payment.refunded': 'الفلوس اتردّت',
     'al.payment.expired': 'الطلب انتهى',
     'al.brand.approved': 'البراند اتوافق عليه', 'al.brand.rejected': 'الطلب ما اتوافقش',
+    'time.anHour': 'ساعة', 'time.hours': '{n} ساعات', 'time.minutes': '{n} دقيقة',
     'time.now': 'دلوقتي', 'time.m': '{n} د', 'time.h': '{n} س', 'time.d': '{n} يوم',
     'help.title': 'حيط البكسلات', 'help.sub': 'مليون بكسل. حيط واحد. بيتمسح كل شهر.',
     'help.s1': 'اختار ولوّن',
-    'help.s1p': 'اختار لون ودوس على لحد <b>٢٠ بكسل فاضيين</b> تشوف رسمتك على الحيط.',
+    'help.s1p': 'اختار لون ودوس على لحد <b>{n} بكسل فاضيين</b> تشوف رسمتك على الحيط.',
     'help.s2': 'ابعتهم للمراجعة',
-    'help.s2p': 'الـ٢٠ بكسل <b>ببلاش</b>. حد بيبص على كل دفعة قبل ما تطلع — غالبًا دقايق. بتاعتك بتلمع لحد ما تتراجع.',
-    'help.s3': 'استنى نص ساعة',
-    'help.s3p': 'خلّصت الـ٢٠؟ <b>٢٠ جداد ببلاش</b> بينزلوا بعد <b>٣٠ دقيقة</b>. ارجع وكمّل.',
+    'help.s2p': 'الـ{n} بكسل <b>ببلاش</b>. حد بيبص على كل دفعة قبل ما تطلع — غالبًا دقايق. بتاعتك بتلمع لحد ما تتراجع.',
+    'help.s3': 'ارجع بعد {w}',
+    'help.s3p': 'خلّصت الـ{n}؟ <b>{n} جداد ببلاش</b> بينزلوا بعد <b>{w}</b>. ارجع وكمّل.',
     'help.s4': 'يوم ١ بيمسح كله',
     'help.s4p': 'في <b>أول كل شهر</b> الحيط كله بيرجع أبيض والكل بيبدأ من الأول.',
     'help.n1': 'حوّل على <b>الفرشة</b> تلوّن من غير ما تشيل صوابعك.',
-    'help.n2': 'مش قادر تستنى؟ اشتري <b>بوية</b> بـ<span class="px-rate">—</span> جنيه للبكسل — بتعدّيك الـ٢٠ المجانية فورًا.',
+    'help.n2': 'مش قادر تستنى؟ اشتري <b>بوية</b> بـ<span class="px-rate">—</span> جنيه/بكسل — بتعدّيك الـ{n} المجانية فورًا.',
     'help.n3': 'البراندات <b>بتحجز مكان اللوجو</b> بـ<span class="co-rate">—</span> جنيه للبكسل على حيط <b>الشهر الجاي</b>.',
     'help.cta': 'يلا نشخبط',
     'py.title': 'ادفع بإنستاباي', 'py.send': 'ابعت', 'py.to': 'ابعتها على',
@@ -2727,7 +2740,7 @@ const L = {
     'hs.sub': 'كل دفعة بعتّها، الأجدد الأول. حد بيبص على كل واحدة قبل ما تطلع الحيط — غالبًا دقايق.',
     'hs.more': 'حمّل الأقدم',
     'ps.title': 'محل البوية',
-    'ps.sub': 'البوية = بكسلات مدفوعة مقدّمًا بـ<b><span class="px-rate">—</span> جنيه للواحدة</b>. بتعدّيك الـ٢٠ المجانية من غير انتظار.',
+    'ps.sub': 'البوية = بكسلات مدفوعة مقدّمًا بـ<b><span class="px-rate">—</span> جنيه/بكسل</b>. بتعدّيك الـ{n} المجانية من غير انتظار.',
     'ps.fine': 'الدفع بإنستاباي وحد بيأكده — غالبًا خلال ساعة. البوية ما بتنتهيش. لو دفعة اترفضت، البوية بترجعلك فورًا.',
     'zoom.in': 'قرّب (+)', 'zoom.out': 'بعّد (−)', 'zoom.fit': 'الحيط كله (0)',
     'tool.pan': 'تحريك — اسحب تتنقل، دوس تحط بكسل (V)',
@@ -2767,12 +2780,33 @@ function t(key, vars, fallback) {
   return s;
 }
 
-function sweepI18n() {
-  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
-  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
-  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
-  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+/* The free allowance is not a constant — the panel moves it without a
+   deploy — so the prose that quotes it is filled from the same numbers the
+   counter uses rather than written out twice. Handed to every swept string;
+   a string that mentions none of them is untouched. */
+function refillWords() {
+  const mins = Math.round(refillMs / 60000);
+  if (mins % 60 === 0) {
+    const hours = mins / 60;
+    return hours === 1 ? t('time.anHour') : t('time.hours', { n: hours });
+  }
+  return t('time.minutes', { n: mins });
 }
+function copyVars() {
+  const w = refillWords();
+  return { n: CAP, w, W: w.toUpperCase() };
+}
+
+function sweepI18n() {
+  const v = copyVars();
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n, v); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.dataset.i18nHtml, v); });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = t(el.dataset.i18nPh, v); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle, v); });
+}
+/* Re-running the sweep rebuilds the spans applyPrices writes into, so the
+   two always travel together. */
+function refreshCopy() { sweepI18n(); applyPrices(); }
 
 function setLang(next) {
   lang = next === 'ar' ? 'ar' : 'en';
@@ -2781,10 +2815,9 @@ function setLang(next) {
   document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   $('langToggleLabel').textContent = lang === 'ar' ? 'EN' : 'ع';
   $('langNowLabel').textContent = lang === 'ar' ? 'العربية' : 'EN';
-  sweepI18n();
   /* everything the dictionaries feed at render time, re-fed */
+  refreshCopy();
   updateAll(); renderAuth(); renderMe(); renderAlerts();
-  applyPrices();
   if (history.rows.length || history.open) renderHistory();
   const shot = $('pyShotName'), file = $('cpFileName');
   if (!shot.classList.contains('has')) shot.textContent = t('common.nofile');
@@ -3048,7 +3081,14 @@ async function loadAlerts(markSeen) {
   let saved = 'en';
   try { saved = localStorage.getItem('s37.lang') || 'en'; } catch (e) { /* private mode */ }
   if (saved === 'ar') setLang('ar');
-  else { $('langToggleLabel').textContent = 'ع'; $('langNowLabel').textContent = 'EN'; }
+  else {
+    $('langToggleLabel').textContent = 'ع';
+    $('langNowLabel').textContent = 'EN';
+    /* English used to skip the sweep entirely and live off the markup,
+       which is how the page ended up quoting numbers the server had
+       moved on from. It sweeps either way now. */
+    refreshCopy();
+  }
   syncNavSel();
   renderMe();
 })();

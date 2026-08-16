@@ -7,7 +7,7 @@
        or user-scalable=no — pinch-zooming the page stays available. -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>S37 — Shakhbat 3al 7eet</title>
-  <meta name="description" content="S37 — shakhbat 3al 7eet. A 1,000,000 pixel wall: 20 free pixels every 30 minutes, wiped clean on the 1st of every month. Brands pre-order their logo spot for the next cycle.">
+  <meta name="description" content="S37 — shakhbat 3al 7eet. A 1,000,000 pixel wall: 50 free pixels every hour, wiped clean on the 1st of every month. Brands pre-order their logo spot for the next cycle.">
   <meta name="theme-color" content="#150A10">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -199,14 +199,14 @@ finish review, the verdict, and DESIGN.md.
       <h2 id="helpTitle" data-i18n="help.title">THE PIXEL WALL</h2>
       <p class="modal-sub" data-i18n="help.sub">1,000,000 pixels. One wall. Wiped clean every month.</p>
       <div class="steps">
-        <div class="step"><span class="step-n">1</span><div><b data-i18n="help.s1">PICK &amp; PAINT</b><p data-i18n-html="help.s1p">Choose a colour and tap up to <b>20 empty pixels</b> to preview your art on the wall.</p></div></div>
-        <div class="step"><span class="step-n">2</span><div><b data-i18n="help.s2">SEND THEM FOR REVIEW</b><p data-i18n-html="help.s2p">Your 20 pixels cost <b>nothing</b>. A person checks every batch before it goes up &mdash; usually minutes. Yours shimmer until then.</p></div></div>
-        <div class="step"><span class="step-n">3</span><div><b data-i18n="help.s3">WAIT 30 MINUTES</b><p data-i18n-html="help.s3p">Used all 20? A fresh <b>20 free pixels</b> land <b>30 minutes</b> later. Come back and keep going.</p></div></div>
+        <div class="step"><span class="step-n">1</span><div><b data-i18n="help.s1">PICK &amp; PAINT</b><p data-i18n-html="help.s1p">Choose a colour and tap up to <b>50 empty pixels</b> to preview your art on the wall.</p></div></div>
+        <div class="step"><span class="step-n">2</span><div><b data-i18n="help.s2">SEND THEM FOR REVIEW</b><p data-i18n-html="help.s2p">Your 50 pixels cost <b>nothing</b>. A person checks every batch before it goes up &mdash; usually minutes. Yours shimmer until then.</p></div></div>
+        <div class="step"><span class="step-n">3</span><div><b data-i18n="help.s3">COME BACK IN AN HOUR</b><p data-i18n-html="help.s3p">Used all 50? A fresh <b>50 free pixels</b> land <b>an hour</b> later. Come back and keep going.</p></div></div>
         <div class="step"><span class="step-n">4</span><div><b data-i18n="help.s4">THE 1st WIPES IT</b><p data-i18n-html="help.s4p">On the <b>1st of every month</b> the whole wall resets to white and everyone starts over.</p></div></div>
       </div>
       <div class="help-notes">
         <p><svg class="ic" aria-hidden="true"><use href="#i-brush"/></svg> <span data-i18n-html="help.n1">Switch to <b>BRUSH</b> to paint continuously while holding down.</span></p>
-        <p><svg class="ic" aria-hidden="true"><use href="#i-paint"/></svg> <span data-i18n-html="help.n2">No patience? Buy <b>PAINT</b> at <span class="px-rate">&mdash;</span> EGP/PX — it paints past the free 20 right now.</span></p>
+        <p><svg class="ic" aria-hidden="true"><use href="#i-paint"/></svg> <span data-i18n-html="help.n2">No patience? Buy <b>PAINT</b> at <span class="px-rate">&mdash;</span> EGP/PX — it paints past the free 50 right now.</span></p>
         <p><svg class="ic" aria-hidden="true"><use href="#i-brand"/></svg> <span data-i18n-html="help.n3">Brands <b>pre-order logo space</b> at <span class="co-rate">&mdash;</span> EGP/PX for the <b>next</b> cycle.</span></p>
       </div>
       <button class="btn-claim modal-cta" data-close data-i18n="help.cta">START PAINTING</button>
@@ -339,7 +339,7 @@ finish review, the verdict, and DESIGN.md.
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="psTitle">
       <button class="modal-x" data-close aria-label="Close">&times;</button>
       <h2 id="psTitle"><svg class="ic" aria-hidden="true"><use href="#i-paint"/></svg> <span data-i18n="ps.title">PAINT SHOP</span></h2>
-      <p class="modal-sub" data-i18n-html="ps.sub">Paint = prepaid pixels at <b><span class="px-rate">&mdash;</span> EGP/PX</b>. It takes you straight past the 20 free ones with no 30-minute wait.</p>
+      <p class="modal-sub" data-i18n-html="ps.sub">Paint = prepaid pixels at <b><span class="px-rate">&mdash;</span> EGP/PX</b>. It takes you straight past the 50 free ones — no waiting.</p>
       <!-- Every number in here is written by applyPrices() from the wall
            snapshot. Nothing is hard-coded: the admin panel can change a
            price without a deploy, and a page that shipped last week's
@@ -469,7 +469,7 @@ finish review, the verdict, and DESIGN.md.
         <div class="mo-stat"><label data-i18n="mo.taken">PIXELS TAKEN</label><b id="statTaken" class="accent">0</b></div>
         <div class="mo-stat"><label data-i18n="mo.next">BOOKED NEXT CYCLE</label><b id="statNext">0</b></div>
       </div>
-      <p class="fine" id="freeLine" data-i18n-dyn>20 free pixels &mdash; a fresh 20 lands 30 min after you run out.</p>
+      <p class="fine" id="freeLine" data-i18n-dyn>50 free pixels &mdash; a fresh 50 lands an hour after you run out.</p>
       <p class="fine more-about"><b>S37</b> &middot; <span lang="ar" dir="rtl">شخبط على الحيط</span> &middot; <span data-i18n="mo.about">1,000,000 pixels, wiped clean on the 1st of every month.</span></p>
     </div>
   </div>

@@ -39,6 +39,7 @@ const app = require('../server.js');
 const dbm = require('../server/db.js');
 const admin = require('../server/admin.js');
 const settings = require('../server/settings.js');
+const cfg = require('../server/config.js');
 const submissions = require('../server/submissions.js');
 const payments = require('../server/payments.js');
 const identity = require('../server/identity.js');
@@ -436,7 +437,7 @@ test('a setting that makes no sense is refused', async () => {
     const r = await json('PUT', '/api/admin/config', { key, value }, AS_PANEL);
     assert.equal(r.code, 400, `${key}=${value} was accepted`);
   }
-  assert.equal(settings.S.CAP, 20, 'and nothing moved');
+  assert.equal(settings.S.CAP, cfg.CAP, 'and nothing moved');
 });
 
 test('maintenance mode closes the wall to writes and leaves reads alone', async () => {

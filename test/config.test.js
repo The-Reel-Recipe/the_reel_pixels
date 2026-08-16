@@ -28,7 +28,7 @@ function boot(env) {
 
 test('dev fills safe defaults and says so', () => {
   assert.equal(cfg.PORT, 5174);
-  assert.equal(cfg.CAP, 20);
+  assert.equal(cfg.CAP, 50);
   assert.equal(cfg.TG_MODE, 'off');
   assert.ok(cfg.SESSION_SECRET, 'always has a value');
   assert.ok(cfg.warnings.some(w => w.includes('SESSION_SECRET')), 'warns about the dev default');

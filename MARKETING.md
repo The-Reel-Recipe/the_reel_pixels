@@ -20,10 +20,10 @@ and that is **wiped clean on the 1st of every month**.
 
 Three things happen on it:
 
-1. **People paint.** 20 free pixels each, no account, no app. A person
+1. **People paint.** 50 free pixels each, no account, no app. A person
    reviews every batch before it goes public.
 2. **People buy paint** when the free pixels run out and they don't want to
-   wait 30 minutes.
+   wait an hour.
 3. **Brands pre-order a block of the *next* month's wall** for their logo,
    which goes up the moment the wall resets and owns that spot all month.
 
@@ -36,8 +36,8 @@ The money comes from 2 and 3. The reason anyone shows up is 1.
 | Thing | Value | Where it lives |
 |---|---|---|
 | Wall size | 1000 × 1000 = **1,000,000 pixels** | `config.js` `W`,`H` |
-| Free pixels per person | **20** | `CAP` |
-| Refill | a fresh 20, **30 minutes** after the last one is spent | `REFILL` |
+| Free pixels per person | **50** | `CAP` |
+| Refill | a fresh 50, **one hour** after the last one is spent | `REFILL` |
 | Reset | the **1st of every month**, whole wall to white | monthly cycle |
 | Moderation | **every** batch reviewed by a human before it is public | Telegram bot |
 | Account needed to paint | **none** | cookie identity |

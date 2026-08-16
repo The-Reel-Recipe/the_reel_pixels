@@ -152,7 +152,7 @@ test('registering adopts the guest you already are', async () => {
 
   assert.equal(uidOf(me), id, 'the id did not change');
   const after = await json(me, 'GET', '/api/me');
-  assert.equal(after.json.allowance.free, 17, 'the spent pixels stayed spent — adoption, not a reset');
+  assert.equal(after.json.allowance.free, cfg.CAP - 3, 'the spent pixels stayed spent — adoption, not a reset');
   assert.equal(after.json.handle, before.json.handle, 'the handle survives');
 });
 

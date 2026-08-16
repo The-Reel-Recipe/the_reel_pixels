@@ -29,7 +29,7 @@ r/place-style collective painting crossed with million-dollar-homepage monetizat
 
 ## Capabilities and Constraints
 
-- 20 free pixels per visitor; refill 30 minutes after they run out. Per-IP daily caps against identity farming; fresh identities inherit the address's spent allowance clock.
+- 50 free pixels per visitor; refill one hour after they run out. Per-IP daily caps against identity farming; fresh identities inherit the address's spent allowance clock.
 - Paint packs: prepaid pixel balance bought via InstaPay, credited when a moderator verifies the transfer. Rejected submissions refund the paint spent.
 - Brand bookings: 5 EGP/pixel on the *next* layer; two gates — payment verified, then content approved. Unpaid holds expire in 48h.
 - Backend: single Node process, SQLite, no framework; frontend: vanilla JS + one big canvas. All existing HTTP/API contracts and canvas logic must keep working through any UI change.

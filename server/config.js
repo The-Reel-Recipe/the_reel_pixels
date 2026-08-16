@@ -154,8 +154,13 @@ module.exports = Object.freeze({
      so those percentages are computed from these numbers rather than
      written anywhere — change a pack and the badge follows. */
   W: 1000, H: 1000,
-  CAP: 20,                                          // free pixels per caller
-  REFILL: 30 * 60 * 1000,                           // …back this long after the last one goes
+  /* Confirmed by Mohab, 2026-08-16: fifty at a time, back every hour. The
+     first number is what a visitor can actually draw with — twenty is a
+     scribble, fifty is a small thing you meant — and the second is what
+     makes paint worth buying. Both are runtime-overridable from the panel
+     (settings.js), so these are the answers a fresh install starts with. */
+  CAP: 50,                                          // free pixels per caller
+  REFILL: 60 * 60 * 1000,                           // …back this long after the last one goes
   PRICE_PAINT: 2, PRICE_COMPANY: 5,
   PACKS: { 25: 45, 100: 160, 500: 700 },            // paint amount -> EGP
   IDLE_DROP: 24 * 60 * 60 * 1000,

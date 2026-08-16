@@ -164,7 +164,7 @@ test('a caller without a cookie is minted one, and keeps it', async () => {
   assert.equal(first.json.kind, 'guest');
   assert.match(first.json.handle, /^Pixel fan #\d{4}$/);
   assert.equal(first.json.brandStatus, null);
-  assert.equal(first.json.allowance.free, 20);
+  assert.equal(first.json.allowance.free, cfg.CAP);
 
   /* second request carries it — same person, no new identity */
   const again = await json(me, 'GET', '/api/me');
@@ -218,10 +218,10 @@ test('two cookies from one address are two people', async () => {
 
   const spent = await claim(a, freeRange(4));
   assert.equal(spent.json.placed, 4);
-  assert.equal(spent.json.free, 16);
+  assert.equal(spent.json.free, cfg.CAP - 4);
 
   const other = await json(b, 'GET', '/api/allowance');
-  assert.equal(other.json.free, 20, 'one visitor spent the other one\'s pixels');
+  assert.equal(other.json.free, cfg.CAP, 'one visitor spent the other one\'s pixels');
 });
 
 test('a returning prototype visitor is adopted, not replaced', async () => {
@@ -240,7 +240,7 @@ test('a returning prototype visitor is adopted, not replaced', async () => {
 
   assert.equal(uidOf(me), old, 'a new identity was minted over the top of theirs');
   assert.equal(r.json.handle, 'Pixel fan #7777', 'their name changed under them');
-  assert.equal(r.json.allowance.free, 13, 'the 7 pixels they had spent came back');
+  assert.equal(r.json.allowance.free, cfg.CAP - 7, 'the 7 pixels they had spent came back');
   assert.equal(dbm.db.prepare('SELECT COUNT(*) n FROM legacy_keys WHERE key = ?').get(ip).n, 0,
     'the bridge row should be retired once it has been used');
   assert.equal(identity.ipCounts(ip, now).guests, before,
@@ -299,7 +299,7 @@ test('a fresh incognito tab inherits the clock, not a fresh allowance', async ()
   dbm.db.prepare('UPDATE ip_allowances SET refill_at = 1 WHERE ip = ?').run(ip);
   const c = visitor(ip);
   const cAllowance = await json(c, 'GET', '/api/allowance');
-  assert.equal(cAllowance.json.free, 20, 'the clock elapsed — a new visitor gets the real thing');
+  assert.equal(cAllowance.json.free, cfg.CAP, 'the clock elapsed — a new visitor gets the real thing');
 });
 
 test('the 41st claim from an address in a day is refused', async () => {
@@ -400,7 +400,7 @@ test('signing up lands pending, signs you in, and takes the email', async () => 
   assert.equal(r.json.handle, 'Nile Soda Co.');
   assert.equal(r.json.brandStatus, 'pending');
   assert.equal(r.json.email, form.email);
-  assert.equal(r.json.allowance.cap, 20, 'a brand paints like anyone else');
+  assert.equal(r.json.allowance.cap, cfg.CAP, 'a brand paints like anyone else');
 
   const set = r.setCookie.join('');
   assert.match(set, /^uid=b\d+\./, 'a brand session is marked in the cookie');

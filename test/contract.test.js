@@ -44,6 +44,7 @@ delete process.env.ALLOW_ORIGIN;
 
 const app = require('../server.js');
 const db = require('../server/db.js');
+const cfg = require('../server/config.js');
 const submissions = require('../server/submissions.js');
 
 /* What seed.bin holds — the numbers the whole test file hangs off. Read
@@ -203,10 +204,10 @@ test('GET /api/wall serves the seed as a decodable envelope', async () => {
   assert.equal(meta.me.kind, 'guest');
   assert.equal(meta.me.brandStatus, null);
   assert.match(meta.me.handle, /^Pixel fan #\d{4}$/);
-  assert.equal(meta.allowance.cap, 20);
-  assert.equal(meta.allowance.free, 20);
+  assert.equal(meta.allowance.cap, cfg.CAP);
+  assert.equal(meta.allowance.free, cfg.CAP);
   assert.equal(meta.allowance.paint, 0);
-  assert.equal(meta.allowance.refillMs, 30 * 60 * 1000);
+  assert.equal(meta.allowance.refillMs, cfg.REFILL);
   assert.equal(meta.allowance.handle, meta.me.handle);
   assert.equal(typeof meta.brands, 'object');
   assert.equal(typeof meta.nextBrands, 'object');
@@ -261,8 +262,8 @@ test('POST /api/claim paints, spends free pixels and shows up in the snapshot', 
   assert.equal(r.json.usedPaint, 0);
   assert.equal(r.json.occupied, 0);
   assert.equal(r.json.short, 0);
-  assert.equal(r.json.free, 17);
-  assert.equal(r.json.cap, 20);
+  assert.equal(r.json.free, cfg.CAP - 3);
+  assert.equal(r.json.cap, cfg.CAP);
   assert.equal(r.json.pending, true, 'a claim reserves, it does not paint');
   assert.ok(r.json.sid > 0, 'the claim comes back with its submission id');
 
@@ -280,7 +281,7 @@ test('POST /api/claim paints, spends free pixels and shows up in the snapshot', 
     encodeEnvelope({}, [want[0]]), 'application/octet-stream');
   assert.equal(again.json.placed, 0);
   assert.equal(again.json.occupied, 1);
-  assert.equal(again.json.free, 17, 'a refused claim costs nothing');
+  assert.equal(again.json.free, cfg.CAP - 3, 'a refused claim costs nothing');
 
   /* approved — now it is everybody's wall */
   assert.equal(submissions.approve(r.json.sid, 'tg:1 (test)').ok, true);
@@ -297,8 +298,8 @@ test('POST /api/claim paints, spends free pixels and shows up in the snapshot', 
 test('GET /api/allowance matches what the claim reported', async () => {
   const r = await getJson('GET', '/api/allowance');
   assert.equal(r.code, 200);
-  assert.equal(r.json.free, 17);
-  assert.equal(r.json.cap, 20);
+  assert.equal(r.json.free, cfg.CAP - 3);
+  assert.equal(r.json.cap, cfg.CAP);
   assert.equal(r.json.paint, 0);
   assert.match(r.json.handle, /^Pixel fan #\d{4}$/);
 });
@@ -314,7 +315,7 @@ test('a refilled allowance reads back through the API', async () => {
 
   const r = await getJson('GET', '/api/allowance');
   assert.equal(r.code, 200);
-  assert.equal(r.json.free, 20);
+  assert.equal(r.json.free, cfg.CAP);
   assert.equal(r.json.refillAt, 0);
   assert.equal(r.json.refillIn, 0);
 });
