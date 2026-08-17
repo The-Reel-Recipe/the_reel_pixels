@@ -92,9 +92,23 @@ function fill(text, lang, missing) {
       missing.add(perLang || answer === undefined ? `${key}  (${lang})` : key);
       return whole;
     }
-    return v;
+    return lang === 'ar' ? isolate(v) : v;
   });
 }
+
+/* Every value dropped into the Arabic text is wrapped in a first-strong
+   isolate, because the bidi algorithm reorders a Latin or numeric run
+   against the Arabic around it. Without this, "سارية اعتبارًا من 2026-08-17"
+   renders as "17-08-2026" — the same digits, a different date, on the page
+   that says when the contract came into force.
+
+   FSI rather than LRI: it takes its direction from the first strong
+   character inside, so an Arabic name and a Latin email and a bare date all
+   come out right through the same wrapper. No placeholder in these
+   documents is a markdown link target (checked), so nothing here can land
+   inside an href where the invisible characters would break it. */
+const FSI = String.fromCharCode(0x2068), PDI = String.fromCharCode(0x2069);
+const isolate = v => /[A-Za-z0-9]/.test(v) ? FSI + v + PDI : v;
 
 /* An omission leaves a line that reads wrong, and the worst version of it is
    a label with nothing after it — "Commercial register:" published under a
