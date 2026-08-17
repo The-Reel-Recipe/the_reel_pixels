@@ -331,5 +331,26 @@ module.exports = Object.freeze({
      their own banking app than follow a link can. Same destination. */
   INSTAPAY_HANDLE: (env.INSTAPAY_HANDLE || '').trim(),
   PUBLIC_URL: href('PUBLIC_URL', env.PUBLIC_URL, ''),
+
+  /* ── Brevo, for the codes that let somebody in ────────────────
+     Unset means no email at all, and everything that would send one
+     says so instead of pretending. Same shape as TG_MODE=off: a
+     missing integration is a configuration the product understands,
+     not a crash. */
+  BREVO_API_KEY: (env.BREVO_API_KEY || '').trim(),
+  BREVO_SENDER_EMAIL: (env.BREVO_SENDER_EMAIL || '').trim(),
+  BREVO_SENDER_NAME: (env.BREVO_SENDER_NAME || 'S37').trim(),
+
+  /* ── Google, for painters ─────────────────────────────────────
+     The client secret is only ever used server-side, in the token
+     exchange — it never reaches the browser. The id is public by
+     design and the page needs it, so it travels in the snapshot.
+
+     Both unset means the button is not rendered, the routes answer
+     404, and nothing in the app mentions Google. That is the same
+     rule the legal links follow: an affordance that cannot work is
+     worse than one that is absent. */
+  GOOGLE_CLIENT_ID: (env.GOOGLE_CLIENT_ID || '').trim(),
+  GOOGLE_CLIENT_SECRET: (env.GOOGLE_CLIENT_SECRET || '').trim(),
   ADMIN_IP_ALLOW: list(env.ADMIN_IP_ALLOW)
 });

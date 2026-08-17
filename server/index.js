@@ -24,6 +24,7 @@ const telegram = require('./telegram.js');
 const payments = require('./payments.js');
 const submissions = require('./submissions.js');
 const retention = require('./retention.js');
+const mail = require('./mail.js');
 const httpMod = require('./http.js');
 const { handler } = httpMod;
 
@@ -42,6 +43,9 @@ function boot() {
      makes them true rather than aspirational. Daily, and off outside
      production — see config.RETENTION_SWEEP. */
   retention.start();
+  /* Sign-in codes leave through here. No-op without BREVO_API_KEY, the
+     same way the Telegram worker is with TG_MODE=off. */
+  mail.startWorker();
   if (cfg.ON_VERCEL) console.log(`data dir    →  ${cfg.DATA_DIR} (per-instance; set DATA_DIR for durable storage)`);
 }
 boot();
@@ -72,6 +76,7 @@ function shutdown(sig, code = 0) {
   telegram.stopPolling();
   payments.stopSweeper();
   retention.stop();
+  mail.stopWorker();
   submissions.cancelPending();
 
   try { db.close(); } catch (err) { console.error('shutdown: db.close failed —', err.message); }

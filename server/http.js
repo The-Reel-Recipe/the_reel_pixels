@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const cfg = require('./config.js');
 const { S } = require('./settings.js');
 const identity = require('./identity.js');
@@ -16,6 +17,8 @@ const wall = require('./wall.js');
 const submissions = require('./submissions.js');
 const notifications = require('./notifications.js');
 const reports = require('./reports.js');
+const google = require('./google.js');
+const emailcode = require('./emailcode.js');
 const payments = require('./payments.js');
 const uploads = require('./uploads.js');
 const telegram = require('./telegram.js');
@@ -92,6 +95,34 @@ if (cfg.PROD && cfg.COOKIE_SECURE) {
 /* Only set when ALLOW_ORIGIN is configured — a statically hosted copy of the
    page (GitHub Pages, a CDN) pointing at this API needs it, nothing else
    does, and §11 says a single-origin deploy leaves it unset. */
+/* ── The cookie that survives the trip to Google ──────────────────
+   state and nonce live here for the ten minutes between sending
+   somebody to Google and getting them back. Not localStorage: any
+   script on the origin can read that, and these two are the whole of
+   what stops a callback being forged or a token being replayed.
+
+   SameSite=Lax rather than Strict, because the browser arrives back
+   from accounts.google.com and Strict would withhold the cookie on
+   exactly that navigation — the request it exists for. */
+const OAUTH_COOKIE = 's37_oauth';
+
+function oauthCookie(value, maxAgeMs) {
+  const bits = [`${OAUTH_COOKIE}=${value}`, 'Path=/api/auth', 'HttpOnly', 'SameSite=Lax',
+    `Max-Age=${Math.floor(maxAgeMs / 1000)}`];
+  if (cfg.COOKIE_SECURE) bits.push('Secure');
+  return bits.join('; ');
+}
+
+function readOauthCookie(req) {
+  const raw = req.headers.cookie;
+  if (!raw) return '';
+  for (const part of raw.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq > 0 && part.slice(0, eq).trim() === OAUTH_COOKIE) return part.slice(eq + 1).trim();
+  }
+  return '';
+}
+
 function corsHeaders(extra) {
   const h = Object.assign({ 'cache-control': 'no-store' }, SECURITY, extra);
   if (cfg.ALLOW_ORIGIN) {
@@ -616,7 +647,13 @@ async function handler(req, res) {
      identity to somebody who cleared cookies to log in would spend the
      very budget that exists to stop cookie-clearing (§3). */
   const ses = identity.resolve(req, now,
-    { mint: !/^\/api\/auth\/(signup|login|logout)$/.test(urlPath) });
+    /* Signing in must not mint. Handing a fresh identity to somebody who
+       cleared cookies to log in spends the very budget that exists to stop
+       cookie-clearing (§3) — and an emailed code is a login, so it joins
+       the list. Google's callback is the exception on purpose: it adopts
+       the guest they are browsing as, the way registering does, so the
+       pixels painted five minutes ago come with them. */
+    { mint: !/^\/api\/auth\/(signup|login|logout|code\/(request|verify))$/.test(urlPath) });
   if (ses.cookie) res.setHeader('set-cookie', ses.cookie);
   /* a daily cap is 429 "come back later"; a closed account is 403 "no" */
   if (ses.capped) return sendJson(res, ses.capped.status || 429, ses.capped);
@@ -751,6 +788,78 @@ async function handler(req, res) {
     if (urlPath === '/api/auth/logout' && req.method === 'POST') {
       res.setHeader('set-cookie', identity.clearCookie());
       return sendJson(res, 200, { ok: true });
+    }
+
+    /* ── Signing in with Google ──────────────────────────────────
+       Two routes and a short-lived cookie between them. The cookie
+       carries the state and the nonce because they must survive a
+       round trip through Google and must not be guessable by the
+       page — putting them in localStorage would hand them to any
+       script on the origin. */
+    if (urlPath === '/api/auth/google/start' && req.method === 'GET') {
+      if (!google.on()) return sendJson(res, 404, { error: 'not-configured' });
+      const { url, state, nonce } = google.begin();
+      res.setHeader('set-cookie', oauthCookie(`${state}.${nonce}`, 10 * 60 * 1000));
+      res.writeHead(302, { location: url });
+      return res.end();
+    }
+
+    if (urlPath === '/api/auth/google/callback' && req.method === 'GET') {
+      if (!google.on()) return sendJson(res, 404, { error: 'not-configured' });
+      const back = (why) => {
+        /* Always land back on the wall. An OAuth error rendered as JSON in
+           the address bar is a dead end for somebody who just wanted to
+           sign in; the page reads this and says something useful. */
+        res.setHeader('set-cookie', oauthCookie('', 0));
+        res.writeHead(302, { location: `/?signin=${encodeURIComponent(why)}` });
+        return res.end();
+      };
+
+      const held = readOauthCookie(req);
+      const code = q.get('code');
+      if (q.get('error')) return back('cancelled');
+      if (!code || !held) return back('expired');
+
+      const [state, nonce] = held.split('.');
+      /* constant-time, because the state is the only thing standing between
+         this route and anybody who can make the browser follow a link */
+      const given = q.get('state') || '';
+      const same = state.length === given.length &&
+        crypto.timingSafeEqual(Buffer.from(state), Buffer.from(given));
+      if (!same) return back('expired');
+
+      let who;
+      try { who = await google.identify(code, nonce, now); } catch (err) {
+        console.warn('google sign-in:', err.message);
+        return back('failed');
+      }
+
+      const r = identity.fromGoogle(row, who, now);
+      if (r.error) return back(r.error);
+      res.setHeader('set-cookie', [oauthCookie('', 0), r.cookie]);
+      res.writeHead(302, { location: r.created ? '/?signin=welcome' : '/?signin=ok' });
+      return res.end();
+    }
+
+    /* ── Signing in with an emailed code ─────────────────────────
+       Asking always answers the same way, whether or not the address
+       has an account — see the note in emailcode.js. */
+    if (urlPath === '/api/auth/code/request' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req, 1024)).toString('utf8'));
+      const r = emailcode.request(body.email, body.lang === 'ar' ? 'ar' : 'en', now);
+      if (r.error) return sendJson(res, r.status, r);
+      return sendJson(res, 200, r);
+    }
+
+    if (urlPath === '/api/auth/code/verify' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req, 1024)).toString('utf8'));
+      const checked = emailcode.verify(body.email, body.code, now);
+      if (checked.error) return sendJson(res, checked.status, checked);
+
+      const r = identity.fromEmailCode(checked.email, now);
+      if (r.error) return sendJson(res, r.status, r);
+      res.setHeader('set-cookie', r.cookie);
+      return sendJson(res, 200, identity.me(r.e, now));
     }
 
     /* Maintenance mode (§7.2). Reads keep working — the wall stays up and

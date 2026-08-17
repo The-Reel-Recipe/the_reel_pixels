@@ -598,6 +598,135 @@ function login(body, now) {
   return { e, cookie: sessionCookie(e, now) };
 }
 
+/* ── Signing in with Google (§3) ──────────────────────────────────
+   Three cases, and which one it is decides everything:
+
+   1. We have seen this Google account before — `sub` matches a row.
+      That is the same person, whatever their address is today; a
+      workspace admin can reassign an address, and `sub` never moves.
+
+   2. We have not, but the verified address matches an account that
+      already exists. Link them: they land on the account holding
+      their pixels and their paint, which is what somebody expects
+      and what stops a second account owning paint they paid for.
+
+   3. Neither. Adopt the guest they are browsing as, exactly the way
+      register() does — same id, same pixels, same history — so
+      signing in does not cost somebody the wall they were painting
+      a moment ago.
+
+   A banned or erased account is refused here rather than adopted,
+   because otherwise Google is a way around a ban. */
+
+const selByGoogle = db.prepare(
+  'SELECT id, kind, status, token_epoch FROM users WHERE google_sub = ?');
+const selByEmailAny2 = db.prepare(
+  'SELECT id, kind, status, token_epoch, google_sub FROM users WHERE email = ?');
+const linkGoogle = db.prepare('UPDATE users SET google_sub = ? WHERE id = ?');
+const adoptGoogle = db.prepare(
+  "UPDATE users SET email = ?, google_sub = ? WHERE id = ? AND kind = 'guest' AND email IS NULL");
+
+const GOOGLE_BLOCKED = {
+  status: 403, error: 'account-closed',
+  message: 'That account is closed. If you think that is wrong, get in touch.'
+};
+
+function fromGoogle(e, who, now = Date.now()) {
+  const email = String(who.email || '').trim().toLowerCase();
+  if (!email || !who.sub) return { status: 400, error: 'invalid' };
+
+  const seen = selByGoogle.get(who.sub);
+  if (seen) {
+    if (seen.status !== 'active') return GOOGLE_BLOCKED;
+    const row = rowFor(seen.id, now);
+    row.epoch = seen.token_epoch || 0;
+    touch(row, now);
+    logEvent(`user:${seen.id}`, 'google-login', { email }, now);
+    return { e: row, cookie: sessionCookie(row, now) };
+  }
+
+  const byEmail = selByEmailAny2.get(email);
+  if (byEmail) {
+    if (byEmail.status !== 'active') return GOOGLE_BLOCKED;
+    /* the address is on an account that has never signed in with Google —
+       this is the link, and it happens once */
+    tx(() => {
+      linkGoogle.run(who.sub, byEmail.id);
+      accept(byEmail.id, { capacity: true }, now);
+    });
+    const row = rowFor(byEmail.id, now);
+    row.epoch = byEmail.token_epoch || 0;
+    touch(row, now);
+    logEvent(`user:${byEmail.id}`, 'google-link', { email }, now);
+    return { e: row, cookie: sessionCookie(row, now), linked: true };
+  }
+
+  /* Nobody yet. Grow the guest they already are, so the pixels they have
+     painted in the last five minutes come with them. */
+  if (e.kind === 'brand') {
+    return { status: 409, error: 'already-registered',
+      message: 'This is a brand account — it signs in through the brand door.' };
+  }
+  if (e.email) {
+    return { status: 409, error: 'already-registered',
+      message: 'This browser is already signed in. Log out first to use a different account.' };
+  }
+
+  try {
+    const made = tx(() => {
+      if (emailTaken.get(email)) return { taken: true };
+      if (!adoptGoogle.run(email, who.sub, e.id).changes) return { taken: true };
+      /* Signing in with Google is the acceptance: the button says so, and
+         TERMS §4 wants it recorded rather than implied. */
+      accept(e.id, { capacity: true }, now);
+      logEvent(`user:${e.id}`, 'google-register', { email }, now);
+      return { ok: true };
+    });
+    if (made.taken) {
+      return { status: 409, error: 'email-taken',
+        message: 'That address already has an account. Log out and sign in with it.' };
+    }
+  } catch (err) {
+    if (String(err.code).startsWith('SQLITE_CONSTRAINT')) {
+      return { status: 409, error: 'email-taken',
+        message: 'That address already has an account. Log out and sign in with it.' };
+    }
+    throw err;
+  }
+
+  e.email = email;
+  return { e, cookie: sessionCookie(e, now), created: true };
+}
+
+/* ── Signing in with an emailed code ──────────────────────────────
+   Brands, and anyone whose address we can prove they hold. The code
+   itself is emailcode.js's problem; by the time this is called it has
+   already been checked, so this is only "who does that address mean".
+
+   No account is created here. A code proves somebody holds an
+   address; it does not say they applied to be a brand, and the brand
+   application is the thing that creates a brand. An address with
+   nothing behind it gets the same answer as a wrong code — see the
+   note in emailcode.js about not confirming who has an account. */
+
+const selByEmailForCode = db.prepare(
+  'SELECT id, kind, status, token_epoch FROM users WHERE email = ?');
+
+function fromEmailCode(email, now = Date.now()) {
+  const u = selByEmailForCode.get(String(email || '').trim().toLowerCase());
+  if (!u) {
+    return { status: 400, error: 'bad-code',
+      fields: { code: 'That code is wrong or has expired. Ask for a new one.' } };
+  }
+  if (u.status !== 'active') return GOOGLE_BLOCKED;
+
+  const row = rowFor(u.id, now);
+  row.epoch = u.token_epoch || 0;
+  touch(row, now);
+  logEvent(`user:${u.id}`, u.kind === 'brand' ? 'brand-login' : 'painter-login', { email, via: 'code' }, now);
+  return { e: row, cookie: sessionCookie(row, now) };
+}
+
 /* ── Painter accounts (§3, optional) ──────────────────────────────
    Registering doesn't create anyone: it attaches an email + password
    to the guest the caller already is, so the pixels, history, paint
@@ -949,5 +1078,7 @@ module.exports = {
   hashPassword, verifyPassword, validateSignup, signup, login, register,
   brandStatus, decideBrand, bookGate, paintGate, rename, meta, me,
   /* what they agreed to */
-  accept, acceptanceOf, buyGate
+  accept, acceptanceOf, buyGate,
+  /* the two doors that replace handing out passwords */
+  fromGoogle, fromEmailCode
 };
