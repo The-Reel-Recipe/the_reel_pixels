@@ -1155,6 +1155,42 @@ html[lang="ar"] .mo-stat label { font-size: 11px; }
 .mo-stat b { font-family: var(--fp); font-weight: var(--fp-w); font-size: 13px; font-variant-numeric: tabular-nums; }
 .more-about { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 16px; }
 
+/* The documents. Set as a quiet row rather than three more me-rows: they
+   are things to read once, not places to go, and giving them the same
+   weight as PAINT SHOP would say something untrue about how often anyone
+   needs them. Still a real 44px target each — small print people cannot
+   tap is its own kind of not-published. */
+.more-legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.more-legal a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--dim);
+  font-family: var(--fp);
+  font-weight: var(--fp-w);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--border);
+}
+html[lang="ar"] .more-legal a { font-size: 12px; letter-spacing: 0; }
+.more-legal a:hover, .more-legal a:focus-visible { color: var(--text); text-decoration-color: currentColor; }
+
+/* No border-top: it sits directly under .more-about, which has one. */
+.more-imprint { margin-top: 6px; font-size: 11px; opacity: 0.85; }
+
+/* Inline links inside the help notes pick up the accent rather than the
+   dim treatment above — there they are the point of the sentence. */
+.help-notes a { color: var(--accent); text-underline-offset: 2px; }
+
 /* ── auth ─────────────────────────────────────────────────────── */
 
 .auth-tabs {

@@ -209,6 +209,10 @@ finish review, the verdict, and DESIGN.md.
         <p><svg class="ic" aria-hidden="true"><use href="#i-brush"/></svg> <span data-i18n-html="help.n1">Switch to <b>BRUSH</b> to paint continuously while holding down.</span></p>
         <p><svg class="ic" aria-hidden="true"><use href="#i-paint"/></svg> <span data-i18n-html="help.n2">No patience? Buy <b>PAINT</b> at <span class="px-rate">&mdash;</span> EGP/PX — it paints past the free 50 right now.</span></p>
         <p><svg class="ic" aria-hidden="true"><use href="#i-brand"/></svg> <span data-i18n-html="help.n3">Brands <b>pre-order logo space</b> at <span class="co-rate">&mdash;</span> EGP/PX for the <b>next</b> cycle.</span></p>
+        <!-- Reachable from the explainer as well as from MORE. Somebody
+             deciding whether to pay is reading this sheet, not hunting
+             through a menu for the refund policy. -->
+        <p><svg class="ic" aria-hidden="true"><use href="#i-warn"/></svg> <span data-i18n-html="help.n4">Before you pay, read the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">refund policy</a> and the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">terms</a>.</span></p>
       </div>
       <button class="btn-claim modal-cta" data-close data-i18n="help.cta">START PAINTING</button>
     </div>
@@ -471,7 +475,24 @@ finish review, the verdict, and DESIGN.md.
         <div class="mo-stat"><label data-i18n="mo.next">BOOKED NEXT CYCLE</label><b id="statNext">0</b></div>
       </div>
       <p class="fine" id="freeLine" data-i18n-dyn>50 free pixels &mdash; a fresh 50 lands an hour after you run out.</p>
+
+      <!-- The documents. Real anchors, not buttons: somebody who wants to
+           read the refund policy before paying should be able to open it in
+           another tab, keep it, and send someone the link. app.js swaps the
+           href between the English and Arabic page whenever the language
+           changes — see LEGAL_PAGES. -->
+      <nav class="more-legal" aria-labelledby="moLegalTitle">
+        <h3 id="moLegalTitle" class="sr-only" data-i18n="mo.legal">THE SMALL PRINT</h3>
+        <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html" data-i18n="mo.terms">TERMS</a>
+        <a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.html" data-i18n="mo.privacy">PRIVACY</a>
+        <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html" data-i18n="mo.refunds">REFUNDS</a>
+      </nav>
       <p class="fine more-about"><b>S37</b> &middot; <span lang="ar" dir="rtl">شخبط على الحيط</span> &middot; <span data-i18n="mo.about">1,000,000 pixels, wiped clean on the 1st of every month.</span></p>
+      <!-- Who you are actually dealing with. Deliberately says where and
+           points at the document that names the person, rather than
+           restating an imprint that would then have two versions to keep
+           in step. TERMS §1 is the one that has to be right. -->
+      <p class="fine more-imprint"><span data-i18n="mo.imprint">Operated from Egypt by one person. Full contact and business details are in the Terms.</span></p>
     </div>
   </div>
 

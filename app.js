@@ -571,9 +571,12 @@ function updateClock() {
     $('statReset').textContent = countdown(end - serverNow());
     $('cycleNext').textContent = t('cycle.next', { d: shortDate(end) });
   }
+  /* copyVars carries n, w and W together — free.left quotes the refill
+     wait as well as the cap, and passing n alone left a literal "{w}"
+     on the sheet in both languages. */
   $('freeLine').innerHTML = waitingOnRefill()
-    ? t('free.waiting', { t: mmss(refillLeft()), n: CAP })
-    : t('free.left', { left: freeLeft(), n: CAP });
+    ? t('free.waiting', { ...copyVars(), t: mmss(refillLeft()) })
+    : t('free.left', { ...copyVars(), left: freeLeft() });
 }
 function updateSelUI() {
   const n = sel.size;
@@ -2536,6 +2539,9 @@ const L = {
     'mo.shop': 'PAINT SHOP', 'mo.how': 'HOW IT WORKS', 'mo.lang': 'اللغة · LANGUAGE',
     'mo.taken': 'PIXELS TAKEN', 'mo.next': 'BOOKED NEXT CYCLE',
     'mo.about': '1,000,000 pixels, wiped clean on the 1st of every month.',
+    'mo.legal': 'THE SMALL PRINT',
+    'mo.terms': 'TERMS', 'mo.privacy': 'PRIVACY', 'mo.refunds': 'REFUNDS',
+    'mo.imprint': 'Operated from Egypt by one person. Full contact and business details are in the Terms.',
     'al.title': 'ALERTS',
     'al.sub': 'Decisions on your pixels, your payments and your application — newest first.',
     'al.empty': 'Nothing yet. Paint something and the news lands here.',
@@ -2560,6 +2566,9 @@ const L = {
     'help.n1': 'Switch to <b>BRUSH</b> to paint continuously while holding down.',
     'help.n2': 'No patience? Buy <b>PAINT</b> at <span class="px-rate">—</span> EGP/PX — it paints past the free {n} right now.',
     'help.n3': 'Brands <b>pre-order logo space</b> at <span class="co-rate">—</span> EGP/PX for the <b>next</b> cycle.',
+    /* the hrefs here are placeholders — syncLegalLinks rewrites every
+       [data-legal] to the current language right after the sweep */
+    'help.n4': 'Before you pay, read the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">refund policy</a> and the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">terms</a>.',
     'help.cta': 'START PAINTING',
     'py.title': 'PAY WITH INSTAPAY', 'py.send': 'SEND', 'py.to': 'Send it to',
     'py.code': 'Put this in the transfer note — it is how we match your payment:',
@@ -2702,6 +2711,9 @@ const L = {
     'mo.shop': 'محل البوية', 'mo.how': 'بيشتغل إزاي؟', 'mo.lang': 'اللغة · LANGUAGE',
     'mo.taken': 'بكسلات متاخدة', 'mo.next': 'محجوز للشهر الجاي',
     'mo.about': 'مليون بكسل، بيتمسحوا أول كل شهر.',
+    'mo.legal': 'الشروط والسياسات',
+    'mo.terms': 'الشروط', 'mo.privacy': 'الخصوصية', 'mo.refunds': 'الاسترداد',
+    'mo.imprint': 'بيتشغّل من مصر بواسطة شخص واحد. كل بيانات التواصل والنشاط موجودة في الشروط.',
     'al.title': 'الأخبار',
     'al.sub': 'قرارات بكسلاتك وفلوسك وطلبك — الأجدد الأول.',
     'al.empty': 'لسه مفيش حاجة. اشخبط حاجة والأخبار هتوصل هنا.',
@@ -2726,6 +2738,7 @@ const L = {
     'help.n1': 'حوّل على <b>الفرشة</b> تلوّن من غير ما تشيل صوابعك.',
     'help.n2': 'مش قادر تستنى؟ اشتري <b>بوية</b> بـ<span class="px-rate">—</span> جنيه/بكسل — بتعدّيك الـ{n} المجانية فورًا.',
     'help.n3': 'البراندات <b>بتحجز مكان اللوجو</b> بـ<span class="co-rate">—</span> جنيه للبكسل على حيط <b>الشهر الجاي</b>.',
+    'help.n4': 'قبل ما تدفع، اقرا <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.ar.html">سياسة الاسترداد</a> و<a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.ar.html">الشروط</a>.',
     'help.cta': 'يلا نشخبط',
     'py.title': 'ادفع بإنستاباي', 'py.send': 'ابعت', 'py.to': 'ابعتها على',
     'py.code': 'حط الكود ده في ملاحظة التحويل — ده اللي بنلاقي بيه دفعتك:',
@@ -2805,8 +2818,27 @@ function sweepI18n() {
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle, v); });
 }
 /* Re-running the sweep rebuilds the spans applyPrices writes into, so the
-   two always travel together. */
-function refreshCopy() { sweepI18n(); applyPrices(); }
+   two always travel together. The legal hrefs ride along for the same
+   reason: boot reaches this on both language paths, and a link left
+   pointing at the English page after a switch to Arabic is the one
+   place a reader could be handed the version that does not bind. */
+function refreshCopy() { sweepI18n(); applyPrices(); syncLegalLinks(); }
+
+/* The six published pages, by document and language. Anything in the app
+   that points at one goes through here, so a reader in Arabic gets the
+   Arabic — which matters more than it looks: the Arabic is the operative
+   version by the documents' own terms, so it is the one somebody who reads
+   Arabic should be given, not a translation offered second. */
+const LEGAL_PAGES = {
+  terms: { en: 'assets/terms.html', ar: 'assets/terms.ar.html' },
+  privacy: { en: 'assets/privacy.html', ar: 'assets/privacy.ar.html' },
+  refunds: { en: 'assets/refunds.html', ar: 'assets/refunds.ar.html' }
+};
+const legalHref = doc => (LEGAL_PAGES[doc] || LEGAL_PAGES.terms)[lang] || LEGAL_PAGES[doc].en;
+
+function syncLegalLinks() {
+  document.querySelectorAll('[data-legal]').forEach(a => { a.href = legalHref(a.dataset.legal); });
+}
 
 function setLang(next) {
   lang = next === 'ar' ? 'ar' : 'en';
