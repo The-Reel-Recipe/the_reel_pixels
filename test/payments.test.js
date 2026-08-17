@@ -123,6 +123,10 @@ function brand(ip, name) {
     `INSERT INTO brand_profiles (user_id, business_name, category, description, contact_name,
        phone, instapay_handle, status) VALUES (?, ?, 'Drinks', 'x', 'Sara', '+20100', ?, 'approved')`
   ).run(id, name, 'payer@instapay');
+  /* signup records this in the same transaction as the account; this helper
+     builds the row directly, so it has to say so too — a brand that agreed
+     to nothing cannot book, which is the point of the gate */
+  identity.accept(id, { capacity: true }, now);
   const e = identity.rowFor(id, now);
   who.jar.set('uid', identity.cookieValue(id, 'brand', 0, now).value);
   return { who, id, e };
@@ -163,7 +167,8 @@ async function buyer(ip) {
   const who = visitor(ip);
   await req(who, 'GET', '/api/wall');
   const r = await json(who, 'POST', '/api/auth/register',
-    { email: `buyer${++buyerSeq}@painter.example`, password: 'a-long-enough-password' });
+    { email: `buyer${++buyerSeq}@painter.example`, password: 'a-long-enough-password',
+      accept: true });
   assert.equal(r.code, 200, 'the buyer has an account to keep paint on');
   return who;
 }

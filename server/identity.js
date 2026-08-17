@@ -526,6 +526,13 @@ function validateSignup(body) {
 
   if (v.reg_number.length > 64) f.reg_number = 'Registration number is capped at 64 characters.';
 
+  /* A brand books space and pays for it, so it accepts on the same line a
+     painter does — and its capacity statement carries more weight, since the
+     person filling this in is binding a business rather than themselves. */
+  if (b.accept !== true) {
+    f.accept = 'Please accept the terms, the privacy policy and the refund policy.';
+  }
+
   return { fields: Object.keys(f).length ? f : null, value: v };
 }
 
@@ -536,6 +543,7 @@ function signupTx(v, now) {
   insProfile.run(id, v.business_name, v.category, v.description, v.website || null,
     JSON.stringify(v.socials), v.contact_name, v.phone, v.reg_number || null, v.instapay_handle);
   insAllowance.run(id, 0, 0);           // brands are exempt from the IP clock (§3)
+  accept(id, { capacity: true }, now);  // in the same transaction as the account
   logEvent(`user:${id}`, 'brand-signup',
     { email: v.email, name: v.business_name, category: v.category }, now);
   return { id };
@@ -594,6 +602,12 @@ function register(e, body, now) {
   else if (email.length > 160 || !EMAIL_RE.test(email)) f.email = 'That does not look like an email address.';
   if (password.length < cfg.PASS_MIN) f.password = `Passwords need at least ${cfg.PASS_MIN} characters.`;
   else if (password.length > 200) f.password = 'That password is too long (200 characters max).';
+  /* One tick covers both statements because they are made in one sentence on
+     one line; splitting the record but not the sentence would be recording a
+     distinction the person was never shown. */
+  if (b.accept !== true) {
+    f.accept = 'Please accept the terms, the privacy policy and the refund policy.';
+  }
   if (Object.keys(f).length) return { status: 400, error: 'invalid', fields: f };
 
   if (e.kind === 'brand') {
@@ -611,6 +625,10 @@ function register(e, body, now) {
     const r = tx(() => {
       if (emailTaken.get(email)) return { taken: true };
       setCredentials.run(email, hashPassword(password), e.id);
+      /* in the same transaction as the credentials: an account that exists
+         without a record of what it agreed to is the state this whole
+         migration is meant to make unreachable */
+      accept(e.id, { capacity: true }, now);
       logEvent(`user:${e.id}`, 'painter-register', { email }, now);
       return { ok: true };
     });
@@ -742,13 +760,67 @@ function rename(e, body, now) {
    balance is one "clear browsing data" away from being gone, with a real
    InstaPay transfer behind it. So the shop is for accounts — the upgrade
    costs an email and a password and keeps every pixel already painted. */
+/* ── What they agreed to ──────────────────────────────────────────
+   TERMS §4 describes a tick and a recorded version, PRIVACY §11 an age
+   confirmation. Both are recorded here rather than trusted from the
+   request: a gate that reads the checkbox the client just sent is not a
+   gate, it is a suggestion. The stored row is what the buying routes
+   check, so an order placed by something that never rendered the form
+   is refused the same as one placed by somebody who unticked the box.
+
+   Written even when a value is already there. Re-accepting a newer
+   version has to move terms_version, and the timestamp of the most
+   recent acceptance is the one that matters; the older ones live in the
+   event journal, which is append-only and is where the history belongs. */
+
+const setAccept = db.prepare(
+  'UPDATE users SET terms_version = ?, terms_at = ? WHERE id = ?');
+const setCapacity = db.prepare(
+  'UPDATE users SET capacity_confirmed_at = ? WHERE id = ? AND capacity_confirmed_at IS NULL');
+const selAccept = db.prepare(
+  'SELECT terms_version, terms_at, capacity_confirmed_at FROM users WHERE id = ?');
+
+/* `capacity` is only ever set true, never cleared: it is a statement about
+   the person, and somebody does not stop being an adult. Withdrawing it is
+   closing the account, which is a different route. */
+function accept(userId, { capacity } = {}, now = Date.now()) {
+  const version = cfg.TERMS_VERSION;
+  setAccept.run(version, now, userId);
+  if (capacity) setCapacity.run(now, userId);
+  logEvent(`user:${userId}`, 'accept-terms', { version, capacity: !!capacity }, now);
+  return { version, at: now };
+}
+
+const acceptanceOf = userId => selAccept.get(userId) || {};
+
+const NEEDS_ACCEPT = {
+  error: 'terms-required',
+  message: 'Please read and accept the terms and the refund policy before paying. ' +
+    'They are linked from MORE.'
+};
+const NEEDS_CAPACITY = {
+  error: 'capacity-required',
+  message: 'Before buying, please confirm you are old enough to enter a contract ' +
+    'and are paying for yourself.'
+};
+
+/* null when the caller may buy; otherwise the 403 body. Checked in this
+   order because it is the order somebody fixes them in. */
+function buyGate(e) {
+  const a = acceptanceOf(e.id);
+  if (!a.terms_at || !a.terms_version) return NEEDS_ACCEPT;
+  if (!a.capacity_confirmed_at) return NEEDS_CAPACITY;
+  return null;
+}
+
 const PAINT_GATE = {
   error: 'account-required',
   message: 'Paint is kept on your account, so making one is the first step — ' +
     'it takes a moment and everything you have painted stays exactly as it is.'
 };
 function paintGate(e) {
-  return e && e.email ? null : PAINT_GATE;
+  if (!e || !e.email) return PAINT_GATE;
+  return buyGate(e);
 }
 
 /* null when the caller may book; otherwise the 403 body, with a reason
@@ -756,8 +828,9 @@ function paintGate(e) {
 function bookGate(e) {
   const status = brandStatus(e);
   const reason = status === 'approved' ? null : (status || 'not-brand');
-  if (!reason) return null;
-  return { error: 'brand-required', reason, message: GATE[reason] || GATE['not-brand'] };
+  if (reason) return { error: 'brand-required', reason, message: GATE[reason] || GATE['not-brand'] };
+  /* an approved brand still has to have agreed to something */
+  return buyGate(e);
 }
 
 /* what the snapshot's meta.me carries, and the spine of /api/me */
@@ -774,6 +847,14 @@ function meta(e) {
      from other devices. The client renders "create account" vs "signed in"
      off this bit rather than sniffing for the email field. */
   if (e.kind === 'guest') out.registered = !!e.email;
+  /* What they have agreed to, so the client knows whether to put the tick in
+     front of them again. The version is included because an account that
+     accepted 1.0 has to be asked again once 1.1 is published — "they agreed"
+     with no "to what" is the thing TERMS §4 exists to avoid. */
+  const a = acceptanceOf(e.id);
+  out.accepted = a.terms_at ? { version: a.terms_version, at: a.terms_at } : null;
+  out.capacity = !!a.capacity_confirmed_at;
+  out.termsVersion = cfg.TERMS_VERSION;
   return out;
 }
 /* the same identity, plus what they have left to paint with */
@@ -843,5 +924,7 @@ module.exports = {
   dayKey, ipCounts, takeIp: take, takeClaim, CAPPED,
   /* accounts */
   hashPassword, verifyPassword, validateSignup, signup, login, register,
-  brandStatus, decideBrand, bookGate, paintGate, rename, meta, me
+  brandStatus, decideBrand, bookGate, paintGate, rename, meta, me,
+  /* what they agreed to */
+  accept, acceptanceOf, buyGate
 };

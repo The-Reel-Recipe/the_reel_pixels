@@ -935,7 +935,7 @@ function openPay(order, what) {
   knownPayments.add(order.paymentId);
   const egp = fmt(order.amountEgp);
   $('pyAmount').textContent = `${egp} EGP`;
-  $('pyTo').textContent = order.handle || 'the InstaPay link below';
+  $('pyTo').textContent = order.handle || t('py.toLink');
   $('pyCode').textContent = order.code;
   $('pyLink').href = order.url || '#';
   $('pyLink').hidden = !order.url;
@@ -960,6 +960,10 @@ function openPay(order, what) {
 
   $('pyRef').value = ''; $('pyFrom').value = '';
   $('pyShotName').textContent = t('common.nofile');
+  /* cleared for every order: this is a statement about this purchase, and a
+     box left ticked from the last one is not one somebody made */
+  $('pyAccept').checked = false;
+  clearTick('pyAccept', 'errPyAccept');
   for (const id of ['errPyRef', 'errPyFrom', 'errPyShot', 'errPy']) $(id).hidden = true;
   $('pyForm').hidden = false; $('pySent').hidden = true;
   $('pySubmit').disabled = false; $('pySubmit').textContent = t('py.sent');
@@ -995,6 +999,9 @@ $('pyProof').onsubmit = async e => {
   e.preventDefault();
   if (pay.busy || !pay.order) return;
   for (const id of ['errPyRef', 'errPyFrom', 'errPy']) $(id).hidden = true;
+  /* before anything is sent: this is the request for immediate performance
+     that REFUNDS §6 turns on, so it has to precede the performance */
+  if (!markTick('pyAccept', 'errPyAccept')) return;
 
   pay.busy = true;
   const btn = $('pySubmit');
@@ -1335,6 +1342,34 @@ function clearSignupErrors() {
     $(id).classList.remove('bad');
   }
   $('errSignup').hidden = true;
+  clearTick('suAccept', 'errSuAccept');
+}
+
+/* ── The acceptance ticks ────────────────────────────────────────
+   Checked here as well as on the server, and the server is the one that
+   counts: identity.validateSignup and the buy gates read the stored
+   record, so a client that skips this changes nothing except how the
+   refusal is worded. What this is for is putting the reason on the thing
+   that caused it, rather than making somebody read a message at the foot
+   of a long form to find out which box they missed. */
+function tickWrap(id) {
+  const box = $(id);
+  return box && box.closest ? box.closest('.fld-tick') : null;
+}
+function clearTick(id, errId) {
+  const wrap = tickWrap(id);
+  if (wrap) wrap.classList.remove('bad');
+  clearErr(errId);
+}
+function markTick(id, errId) {
+  if ($(id).checked) { clearTick(id, errId); return true; }
+  const wrap = tickWrap(id);
+  if (wrap) {
+    wrap.classList.add('bad');
+    wrap.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  showErr(errId, t('au.acceptErr'));
+  return false;
 }
 /* The server is the only validator that counts, so its answer is what the
    form renders — field by field where it named one, at the foot where it
@@ -1374,6 +1409,8 @@ $('paneSignup').addEventListener('submit', async e => {
   const body = {};
   for (const [id, name] of Object.entries(SIGNUP_FIELDS)) body[name] = $(id).value;
   body.socials = $('suSocials').value.split('\n').map(s => s.trim()).filter(Boolean);
+  body.accept = $('suAccept').checked;
+  if (!markTick('suAccept', 'errSuAccept')) { btn.disabled = false; return; }
 
   btn.disabled = true; btn.textContent = t('au.busy');
   try {
@@ -1525,7 +1562,7 @@ function removeBackground(from, tol) {
 /* ── Source loading ── */
 function loadSource(img, label) {
   const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
-  if (!iw || !ih) { showErr('errFile', 'That image could not be read.'); return; }
+  if (!iw || !ih) { showErr('errFile', t('cp.errUnreadable')); return; }
   const s = Math.min(1, SRC_MAX / Math.max(iw, ih));
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(iw * s));
@@ -1828,24 +1865,24 @@ function validateCompany() {
   let ok = true;
 
   const nameEl = $('cpName'), name = nameEl.value.trim();
-  if (name && name.length < 2) { nameEl.classList.add('bad'); showErr('errName', 'Company name needs at least 2 characters.'); ok = false; }
+  if (name && name.length < 2) { nameEl.classList.add('bad'); showErr('errName', t('cp.errName')); ok = false; }
   else { nameEl.classList.remove('bad'); clearErr('errName'); }
 
   const w = +$('cpW').value, h = +$('cpH').value;
   const sizeBad = !(w >= MIN_PX && w <= MAX_PX && h >= MIN_PX && h <= MAX_PX);
   document.querySelectorAll('.stepper').forEach(s => s.classList.toggle('bad', sizeBad));
-  if (sizeBad) { showErr('errSize', `Width and height must be between ${MIN_PX} and ${MAX_PX} pixels.`); ok = false; }
+  if (sizeBad) { showErr('errSize', t('cp.errSize', { min: MIN_PX, max: MAX_PX })); ok = false; }
   else clearErr('errSize');
 
   const linkEl = $('cpLink'), raw = linkEl.value.trim();
   const url = safeUrl(raw);
   linkEl.classList.toggle('bad', !!raw && !url);
   linkEl.classList.toggle('ok', !!url);
-  if (raw && !url) { showErr('errLink', 'Enter a valid web address, e.g. nile-soda.com/promo'); ok = false; }
+  if (raw && !url) { showErr('errLink', t('cp.errLink')); ok = false; }
   else clearErr('errLink');
 
   if (!src.work) { ok = false; }
-  else if (cpCells && cpCells.length === 0) { showErr('errFile', 'Nothing left to paint — lower the tolerance or turn the remover off.'); ok = false; }
+  else if (cpCells && cpCells.length === 0) { showErr('errFile', t('cp.errEmpty')); ok = false; }
   else clearErr('errFile');
 
   $('btnPlaceLogo').disabled = !ok;
@@ -1865,14 +1902,14 @@ $('btnCompany').onclick = () => {
 $('cpPick').onclick = () => $('cpFile').click();
 $('cpFile').addEventListener('change', e => {
   const f = e.target.files[0]; if (!f) return;
-  if (!/^image\//.test(f.type)) { showErr('errFile', 'That file is not an image.'); return; }
+  if (!/^image\//.test(f.type)) { showErr('errFile', t('cp.errNotImage')); return; }
   $('cpFileName').textContent = f.name;
   $('cpFileName').classList.add('has');
   if (!/png|svg/i.test(f.type)) toast(`${ic('warn')} <b>PNG preferred</b> — this format has no transparency.`, { cls: 'warn', dur: 4200 });
   const url = URL.createObjectURL(f);
   const img = new Image();
   img.onload = () => { loadSource(img, f.name); URL.revokeObjectURL(url); };
-  img.onerror = () => { showErr('errFile', 'That image could not be loaded.'); URL.revokeObjectURL(url); };
+  img.onerror = () => { showErr('errFile', t('cp.errLoad')); URL.revokeObjectURL(url); };
   img.src = url;
 });
 $('cpSample').onclick = async () => {
@@ -1880,8 +1917,8 @@ $('cpSample').onclick = async () => {
     // never block on decode() — it can stall indefinitely in a hidden tab
     await Promise.race([logoImg.decode().catch(() => {}), new Promise(r => setTimeout(r, 1500))]);
   }
-  if (!logoImg.naturalWidth) { showErr('errFile', 'Sample logo is still loading — try again.'); return; }
-  $('cpFileName').textContent = 'logo-icon.png (sample)';
+  if (!logoImg.naturalWidth) { showErr('errFile', t('cp.errSample')); return; }
+  $('cpFileName').textContent = t('cp.sampleFile');
   $('cpFileName').classList.add('has');
   loadSource(logoImg, 'logo-icon.png');
 };
@@ -2548,6 +2585,12 @@ const L = {
     'au.descPh': 'What you sell, who you sell it to, how long you have been going, where you are based.',
     'au.applyFine': 'We use this to check the business is real and to reach you about a booking. Nothing here goes on the wall.',
     'au.loginFine': 'Painting as a guest needs no account at all.',
+    /* One sentence, one tick. The age statement and the acceptance are made
+       together because they are read together — recording a distinction
+       nobody was shown would be recording something that did not happen. */
+    'au.accept': 'I am 18 or older and entering this for myself, and I accept the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">Terms</a>, the <a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.html">Privacy Policy</a> and the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">Refund Policy</a>.',
+    'au.acceptBrand': 'I can enter into this on behalf of the business named above, and I accept the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">Terms</a>, the <a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.html">Privacy Policy</a> and the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">Refund Policy</a>.',
+    'au.acceptErr': 'Please tick this to carry on.',
     'au.book': 'START A PRE-ORDER',
     'toast.applied': '<b>Application sent.</b> Watch the bell — the decision appears there.',
     'toast.welcomeBack': 'Welcome back, <b>{name}</b> — your pixels are right where you left them.',
@@ -2615,10 +2658,13 @@ const L = {
     'py.openBrand': 'Your spot is held for {h} hours while the transfer comes through.',
     'py.openPaint': 'This order stays open for {h} hours.',
     'py.copied': 'COPIED', 'py.sending': 'SENDING…',
+    /* shown when INSTAPAY_HANDLE is unset, so the sentence still finishes */
+    'py.toLink': 'the InstaPay link below',
     'py.copyByHand': 'Copy it by hand: <b>{code}</b>',
     'py.checking': 'We are checking for your transfer. You will see it land in MY PIXELS.',
     'py.checkingWhat': 'We are checking for your transfer. {what} lands the moment it is confirmed, and MY PIXELS tracks it.',
     'py.whatPaint': '{n} paint', 'py.whatSpot': '{name}’s spot',
+    'py.accept': 'I want what I am paying for as soon as the transfer is confirmed, and I have read the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">refund policy</a>.',
     'py.errTooBig': 'That image is over 5 MB — a screenshot should be well under.',
     'py.errUnreadable': 'That image could not be read — carry on without it.',
     'py.errFailed': 'That did not go through — try again.',
@@ -2659,6 +2705,17 @@ const L = {
     'cp.pick': 'PICK YOUR SPOT',
     'cf.title': 'CONFIRM PRE-ORDER', 'cf.company': 'COMPANY', 'cf.pixels': 'PIXELS',
     'cf.golive': 'GOES LIVE', 'cf.skipped': 'SKIPPED (BOOKED)', 'cf.link': 'CTA LINK',
+    /* The brand form's validation, which used to be English-only in a page
+       somebody may be reading entirely in Arabic. */
+    'cp.errName': 'Company name needs at least 2 characters.',
+    'cp.errSize': 'Width and height must be between {min} and {max} pixels.',
+    'cp.errLink': 'Enter a valid web address, e.g. nile-soda.com/promo',
+    'cp.errEmpty': 'Nothing left to paint — lower the tolerance or turn the remover off.',
+    'cp.errNotImage': 'That file is not an image.',
+    'cp.errUnreadable': 'That image could not be read.',
+    'cp.errLoad': 'That image could not be loaded.',
+    'cp.errSample': 'Sample logo is still loading — try again.',
+    'cp.sampleFile': 'logo-icon.png (sample)',
     'cf.hold': 'Your spot is held for {h} hours while the transfer comes through. Your order screen shows the exact deadline.',
     'cf.fine': 'Your logo is reviewed like every other pixel. If it is turned down, the payment is refunded to the InstaPay handle you paid from.',
     'cf.cta': 'BOOK & PAY'
@@ -2742,6 +2799,9 @@ const L = {
     'au.descPh': 'بتبيع إيه، لمين، بقالك قد إيه، وفين.',
     'au.applyFine': 'بنستخدم ده عشان نتأكد إن البيزنس حقيقي ونقدر نوصلك بخصوص الحجز. مفيش حاجة منه بتطلع الحيط.',
     'au.loginFine': 'الشخبطة كضيف مش محتاجة حساب أصلاً.',
+    'au.accept': 'عندي ١٨ سنة أو أكتر وبتعاقد عن نفسي، ومُوافق على <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.ar.html">الشروط</a> و<a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.ar.html">سياسة الخصوصية</a> و<a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.ar.html">سياسة الاسترداد</a>.',
+    'au.acceptBrand': 'أقدر أتعاقد نيابةً عن النشاط المذكور فوق، ومُوافق على <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.ar.html">الشروط</a> و<a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.ar.html">سياسة الخصوصية</a> و<a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.ar.html">سياسة الاسترداد</a>.',
+    'au.acceptErr': 'علّم على ده عشان تكمّل.',
     'au.book': 'ابدأ حجز',
     'toast.applied': '<b>الطلب اتبعت.</b> تابع الجرس — القرار بينزل هناك.',
     'toast.welcomeBack': 'أهلاً بيك تاني يا <b>{name}</b> — بكسلاتك زي ما سيبتها.',
@@ -2805,10 +2865,12 @@ const L = {
     'py.openBrand': 'مكانك محجوز {h} ساعة لحد ما التحويل يوصل.',
     'py.openPaint': 'الطلب ده بيفضل مفتوح {h} ساعة.',
     'py.copied': 'اتنسخ', 'py.sending': 'بنبعت…',
+    'py.toLink': 'لينك إنستاباي اللي تحت',
     'py.copyByHand': 'انسخه بإيدك: <b>{code}</b>',
     'py.checking': 'بندوّر على تحويلك. هتشوفه بينزل في «بكسلاتي».',
     'py.checkingWhat': 'بندوّر على تحويلك. {what} بينزل أول ما يتأكد، و«بكسلاتي» بتتابعه.',
     'py.whatPaint': '{n} بوية', 'py.whatSpot': 'مكان {name}',
+    'py.accept': 'عايز اللي بدفع فيه أول ما التحويل يتأكد، وقرأت <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.ar.html">سياسة الاسترداد</a>.',
     'py.errTooBig': 'الصورة دي أكبر من ٥ ميجا — السكرين شوت المفروض أقل من كده بكتير.',
     'py.errUnreadable': 'مش قادرين نقرا الصورة دي — كمّل من غيرها.',
     'py.errFailed': 'ما نفعتش — جرّب تاني.',
@@ -2842,6 +2904,15 @@ const L = {
     'cp.pick': 'اختار مكانك',
     'cf.title': 'أكّد الحجز', 'cf.company': 'الشركة', 'cf.pixels': 'البكسلات',
     'cf.golive': 'بيطلع يوم', 'cf.skipped': 'اتشال (محجوز)', 'cf.link': 'اللينك',
+    'cp.errName': 'اسم الشركة لازم حرفين على الأقل.',
+    'cp.errSize': 'العرض والطول لازم يكونوا بين {min} و{max} بكسل.',
+    'cp.errLink': 'اكتب عنوان موقع صحيح، مثلًا nile-soda.com/promo',
+    'cp.errEmpty': 'مفيش حاجة متبقية للرسم — قلّل التساهل أو اقفل مزيل الخلفية.',
+    'cp.errNotImage': 'الملف ده مش صورة.',
+    'cp.errUnreadable': 'مش قادرين نقرا الصورة دي.',
+    'cp.errLoad': 'الصورة دي ما اتحمّلتش.',
+    'cp.errSample': 'اللوجو التجريبي لسه بيحمّل — جرّب تاني.',
+    'cp.sampleFile': 'logo-icon.png (تجريبي)',
     'cf.hold': 'مكانك محجوز {h} ساعة لحد ما التحويل يوصل. شاشة الطلب بتوريك الموعد النهائي بالظبط.',
     'cf.fine': 'اللوجو بيتراجع زي أي بكسل. لو اترفض، الفلوس بترجع لحساب إنستاباي اللي دفعت منه.',
     'cf.cta': 'احجز وادفع'
@@ -2900,20 +2971,35 @@ const LEGAL_PAGES = {
 };
 const legalHref = doc => (LEGAL_PAGES[doc] || LEGAL_PAGES.terms)[lang] || LEGAL_PAGES[doc].en;
 
+/* Whether the six pages are actually on disk — the server tells us in the
+   wall snapshot. A link to a policy that 404s is worse than no link: it
+   does not read as "not written yet", it reads as one somebody took down. */
+let legalLive = false;
+
 function syncLegalLinks() {
-  document.querySelectorAll('[data-legal]').forEach(a => { a.href = legalHref(a.dataset.legal); });
+  document.querySelectorAll('a[data-legal]').forEach(a => {
+    if (legalLive) { a.href = legalHref(a.dataset.legal); return; }
+    /* Unpublished: keep the words, drop the link. The acceptance ticks name
+       the documents inside the sentence somebody is agreeing to, and that
+       sentence cannot be edited away — so the anchor becomes plain text
+       rather than a promise of a page that is not there. The dictionary
+       re-inserts the anchor on every sweep, which is why this runs after
+       one rather than being a one-off at boot. */
+    a.replaceWith(document.createTextNode(a.textContent));
+  });
 }
 
-/* The server says whether the pages are on disk. A link to a policy that
-   404s is worse than no link — it reads as a policy somebody took down —
-   so until they are published these are hidden rather than broken. The
-   whole help note goes with them: what is left of that sentence once the
-   two links are gone is an instruction to read nothing. */
+/* The parts that are only links, and have no reason to exist without the
+   pages behind them. The whole help note goes rather than its anchors:
+   what is left of "before you pay, read the refund policy and the terms"
+   once both are unlinked is an instruction to read nothing. */
 function showLegalLinks(on) {
+  legalLive = !!on;
   const nav = document.querySelector('.more-legal');
-  if (nav) nav.hidden = !on;
+  if (nav) nav.hidden = !legalLive;
   const note = document.querySelector('[data-i18n-html="help.n4"]');
-  if (note && note.parentElement) note.parentElement.hidden = !on;
+  if (note && note.parentElement) note.parentElement.hidden = !legalLive;
+  syncLegalLinks();
 }
 
 function setLang(next) {
@@ -3065,17 +3151,21 @@ $('paneRegister').addEventListener('submit', async e => {
   const btn = $('btnRegister');
   for (const id of ['errRgEmail', 'errRgPass', 'errRegister']) $(id).hidden = true;
   $('rgEmail').classList.remove('bad'); $('rgPass').classList.remove('bad');
+  clearTick('rgAccept', 'errRgAccept');
+  if (!markTick('rgAccept', 'errRgAccept')) return;
   btn.disabled = true; btn.textContent = t('au.busy');
   try {
     const r = await apiPost('/api/auth/register',
-      { email: $('rgEmail').value, password: $('rgPass').value });
+      { email: $('rgEmail').value, password: $('rgPass').value, accept: true });
     if (!r.ok) {
       const f = r.data.fields || {};
       if (f.email) { showErr('errRgEmail', f.email); $('rgEmail').classList.add('bad'); }
       if (f.password) { showErr('errRgPass', f.password); $('rgPass').classList.add('bad'); }
+      if (f.accept) markTick('rgAccept', 'errRgAccept');
       if (r.data.message && !f.email && !f.password) showErr('errRegister', r.data.message);
       return;
     }
+    $('rgAccept').checked = false;
     $('rgPass').value = '';
     setMe(r.data);
     if (r.data.allowance) applyAllowance(r.data.allowance);

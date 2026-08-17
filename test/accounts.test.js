@@ -119,7 +119,10 @@ const application = over => Object.assign({
   website: 'nile-soda.example',
   contact_name: 'Sara Fahmy',
   phone: '+20 100 555 0134',
-  instapay_handle: 'nilesoda@instapay'
+  instapay_handle: 'nilesoda@instapay',
+  /* the form's required tick — server-side, an application without it is
+     an application that agreed to nothing (identity.validateSignup) */
+  accept: true
 }, over);
 
 test.before(async () => {
@@ -144,7 +147,7 @@ test('registering adopts the guest you already are', async () => {
   assert.equal(spent.json.placed, 3);
 
   const r = await json(me, 'POST', '/api/auth/register',
-    { email: 'mona@painter.example', password: 'paints-every-friday' });
+    { email: 'mona@painter.example', password: 'paints-every-friday', accept: true });
   assert.equal(r.code, 200);
   assert.equal(r.json.registered, true);
   assert.equal(r.json.email, 'mona@painter.example');
@@ -161,12 +164,12 @@ test('the rules are told inline, field by field', async () => {
   await json(me, 'GET', '/api/me');
 
   const badEmail = await json(me, 'POST', '/api/auth/register',
-    { email: 'not-an-email', password: 'long-enough-honestly' });
+    { email: 'not-an-email', password: 'long-enough-honestly', accept: true });
   assert.equal(badEmail.code, 400);
   assert.ok(badEmail.json.fields.email);
 
   const shortPass = await json(me, 'POST', '/api/auth/register',
-    { email: 'ok@painter.example', password: 'short' });
+    { email: 'ok@painter.example', password: 'short', accept: true });
   assert.equal(shortPass.code, 400);
   assert.ok(shortPass.json.fields.password);
 });
@@ -175,12 +178,12 @@ test('one email is one account, across painters and brands', async () => {
   const first = visitor('203.0.113.212');
   await json(first, 'GET', '/api/me');
   const r = await json(first, 'POST', '/api/auth/register',
-    { email: 'taken@painter.example', password: 'the-first-one-through' });
+    { email: 'taken@painter.example', password: 'the-first-one-through', accept: true });
   assert.equal(r.code, 200);
 
   /* the same session cannot register twice */
   const again = await json(first, 'POST', '/api/auth/register',
-    { email: 'other@painter.example', password: 'the-first-one-through' });
+    { email: 'other@painter.example', password: 'the-first-one-through', accept: true });
   assert.equal(again.code, 409);
   assert.equal(again.json.error, 'already-registered');
 
@@ -188,7 +191,7 @@ test('one email is one account, across painters and brands', async () => {
   const second = visitor('203.0.113.213');
   await json(second, 'GET', '/api/me');
   const stolen = await json(second, 'POST', '/api/auth/register',
-    { email: 'taken@painter.example', password: 'me-too-please-thanks' });
+    { email: 'taken@painter.example', password: 'me-too-please-thanks', accept: true });
   assert.equal(stolen.code, 409);
   assert.equal(stolen.json.error, 'email-taken');
 
@@ -205,11 +208,11 @@ test('logging in from a new phone resumes the identity', async () => {
   const id = uidOf(phone);
   const mark = await claim(phone, freeRange(2));
   await json(phone, 'POST', '/api/auth/register',
-    { email: 'omar@painter.example', password: 'same-wall-new-phone' });
+    { email: 'omar@painter.example', password: 'same-wall-new-phone', accept: true });
 
   const laptop = visitor('203.0.113.216');       // clean jar, different address
   const r = await json(laptop, 'POST', '/api/auth/login',
-    { email: 'omar@painter.example', password: 'same-wall-new-phone' });
+    { email: 'omar@painter.example', password: 'same-wall-new-phone', accept: true });
   assert.equal(r.code, 200);
   assert.equal(uidOf(laptop), id, 'the same person, not a stranger');
   assert.equal(r.json.registered, true);
@@ -228,7 +231,7 @@ test('the wall snapshot keeps you signed in', async () => {
   const me = visitor('203.0.113.250');
   await json(me, 'GET', '/api/me');
   await json(me, 'POST', '/api/auth/register',
-    { email: 'sticks@painter.example', password: 'a-long-enough-password' });
+    { email: 'sticks@painter.example', password: 'a-long-enough-password', accept: true });
 
   const snap = await req(me, 'GET', '/api/wall');
   const len = snap.body.readUInt32LE(0);
@@ -240,12 +243,12 @@ test('the wall snapshot keeps you signed in', async () => {
 test('wrong password and unknown email are the same quiet no', async () => {
   const who = visitor('203.0.113.217');
   const wrong = await json(who, 'POST', '/api/auth/login',
-    { email: 'omar@painter.example', password: 'guessing-badly-here' });
+    { email: 'omar@painter.example', password: 'guessing-badly-here', accept: true });
   assert.equal(wrong.code, 401);
   assert.equal(wrong.json.error, 'bad-credentials');
 
   const unknown = await json(who, 'POST', '/api/auth/login',
-    { email: 'nobody@painter.example', password: 'guessing-badly-here' });
+    { email: 'nobody@painter.example', password: 'guessing-badly-here', accept: true });
   assert.equal(unknown.code, 401);
   assert.equal(unknown.json.error, 'bad-credentials', 'and the form cannot tell who exists');
 });
@@ -258,7 +261,7 @@ test('a brand still signs in through the same door', async () => {
 
   who.jar.clear();
   const r = await json(who, 'POST', '/api/auth/login',
-    { email: 'door@brand.example', password: 'a-long-enough-password' });
+    { email: 'door@brand.example', password: 'a-long-enough-password', accept: true });
   assert.equal(r.code, 200);
   assert.equal(r.json.kind, 'brand');
   assert.match(String(who.jar.get('uid')), /^b\d/, 'a brand cookie, marked as one');
@@ -289,7 +292,7 @@ test('a painter with an account can rename themselves', async () => {
   const me = visitor('203.0.113.240');
   await json(me, 'GET', '/api/me');
   await json(me, 'POST', '/api/auth/register',
-    { email: 'named@painter.example', password: 'a-long-enough-password' });
+    { email: 'named@painter.example', password: 'a-long-enough-password', accept: true });
 
   const r = await json(me, 'POST', '/api/me/name', { name: 'Mona Fahmy' });
   assert.equal(r.code, 200);
@@ -313,7 +316,7 @@ test('a name cannot carry markup onto somebody else\'s screen', async () => {
   const me = visitor('203.0.113.242');
   await json(me, 'GET', '/api/me');
   await json(me, 'POST', '/api/auth/register',
-    { email: 'strict@painter.example', password: 'a-long-enough-password' });
+    { email: 'strict@painter.example', password: 'a-long-enough-password', accept: true });
 
   /* the tooltip that shows this to strangers is built with innerHTML */
   for (const bad of ['<img src=x onerror=alert(1)>', 'a<b>c', 'me & you', 'x"y', 'a\'; DROP--']) {
@@ -340,7 +343,7 @@ test('a painter cannot paint under a brand\'s name', async () => {
   const me = visitor('203.0.113.244');
   await json(me, 'GET', '/api/me');
   await json(me, 'POST', '/api/auth/register',
-    { email: 'copycat@painter.example', password: 'a-long-enough-password' });
+    { email: 'copycat@painter.example', password: 'a-long-enough-password', accept: true });
 
   const r = await json(me, 'POST', '/api/me/name', { name: 'nile soda co.' });
   assert.equal(r.code, 409, 'case does not make it a different name');
@@ -359,7 +362,7 @@ test('the paint shop is for accounts, and the door says so', async () => {
   assert.ok(refused.json.message, 'and it says what to do about it');
 
   await json(guest, 'POST', '/api/auth/register',
-    { email: 'shopper@painter.example', password: 'a-long-enough-password' });
+    { email: 'shopper@painter.example', password: 'a-long-enough-password', accept: true });
   const allowed = await json(guest, 'POST', '/api/paint/order', { pack: 25 });
   assert.equal(allowed.code, 200, 'the same person, one email later');
   assert.match(allowed.json.code, /^S37-/);
@@ -369,7 +372,7 @@ test('paint follows the account, not the browser it was bought in', async () => 
   const phone = visitor('203.0.113.231');
   await json(phone, 'GET', '/api/me');
   await json(phone, 'POST', '/api/auth/register',
-    { email: 'carries@painter.example', password: 'a-long-enough-password' });
+    { email: 'carries@painter.example', password: 'a-long-enough-password', accept: true });
 
   const order = await json(phone, 'POST', '/api/paint/order', { pack: 100 });
   await json(phone, 'POST', `/api/payments/${order.json.paymentId}/proof`,
@@ -381,7 +384,7 @@ test('paint follows the account, not the browser it was bought in', async () => 
   /* a different device, a cleared jar — the balance is reached by logging in */
   const laptop = visitor('203.0.113.232');
   const back = await json(laptop, 'POST', '/api/auth/login',
-    { email: 'carries@painter.example', password: 'a-long-enough-password' });
+    { email: 'carries@painter.example', password: 'a-long-enough-password', accept: true });
   assert.equal(back.code, 200);
   assert.equal(back.json.allowance.paint, 100, 'the paint came with them');
 });
@@ -439,7 +442,7 @@ test('money news lands in the bell too', async () => {
   await json(me, 'GET', '/api/me');
   /* paint is sold to accounts only, so the bell's payer has one */
   await json(me, 'POST', '/api/auth/register',
-    { email: 'bell@painter.example', password: 'a-long-enough-password' });
+    { email: 'bell@painter.example', password: 'a-long-enough-password', accept: true });
 
   const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
   assert.equal(order.code, 200);
@@ -453,4 +456,104 @@ test('money news lands in the bell too', async () => {
   assert.equal(row.status, 'verified');
   assert.ok(row.detail, 'the instapay code rides along so the row is recognizable');
   assert.ok(row.t > 0, 'stamped when it changed, not when it was created');
+});
+
+/* ── What they agreed to, and when (TERMS §4, PRIVACY §11) ─────── */
+
+test('an account cannot be made without accepting anything', async () => {
+  const me = visitor('203.0.113.230');
+  await json(me, 'GET', '/api/me');
+
+  const untick = await json(me, 'POST', '/api/auth/register',
+    { email: 'silent@painter.example', password: 'a-long-enough-password' });
+  assert.equal(untick.code, 400);
+  assert.equal(untick.json.error, 'invalid');
+  assert.ok(untick.json.fields.accept, 'the form is told which field is missing');
+
+  /* and a falsy-but-present value is not a tick either — this is the shape a
+     client sends when the box is rendered and left alone */
+  const unticked = await json(me, 'POST', '/api/auth/register',
+    { email: 'silent@painter.example', password: 'a-long-enough-password', accept: false });
+  assert.equal(unticked.code, 400);
+
+  assert.equal(dbm.db.prepare('SELECT id FROM users WHERE email = ?').get('silent@painter.example'),
+    undefined, 'nothing was created');
+});
+
+test('registering records the version, not just that they agreed', async () => {
+  const me = visitor('203.0.113.231');
+  await json(me, 'GET', '/api/me');
+  const r = await json(me, 'POST', '/api/auth/register',
+    { email: 'agreed@painter.example', password: 'a-long-enough-password', accept: true });
+  assert.equal(r.code, 200);
+
+  const row = dbm.db.prepare(
+    'SELECT terms_version, terms_at, capacity_confirmed_at FROM users WHERE email = ?')
+    .get('agreed@painter.example');
+  assert.equal(row.terms_version, cfg.TERMS_VERSION,
+    '"they agreed" is worth nothing without "to what"');
+  assert.ok(row.terms_at > 0);
+  assert.ok(row.capacity_confirmed_at > 0, 'the age statement is recorded, not just shown');
+});
+
+test('the order carries the version that applied to it, forever', async () => {
+  const me = visitor('203.0.113.232');
+  await json(me, 'GET', '/api/me');
+  await json(me, 'POST', '/api/auth/register',
+    { email: 'stamped@painter.example', password: 'a-long-enough-password', accept: true });
+
+  const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
+  assert.equal(order.code, 200);
+  const stamped = dbm.db.prepare('SELECT terms_version FROM payments WHERE id = ?')
+    .get(order.json.paymentId);
+  assert.equal(stamped.terms_version, cfg.TERMS_VERSION);
+
+  /* Re-accepting a newer wording moves the user's row. It must not move the
+     order's: "which terms applied to S37-XXXX" has one answer and it was
+     fixed the moment the order was placed. */
+  const uid = uidOf(me);
+  dbm.db.prepare("UPDATE users SET terms_version = '99.0' WHERE id = ?").run(uid);
+  const after = dbm.db.prepare('SELECT terms_version FROM payments WHERE id = ?')
+    .get(order.json.paymentId);
+  assert.equal(after.terms_version, cfg.TERMS_VERSION, 'the order kept its own version');
+});
+
+test('an account made before there was anything to accept cannot buy until it does', async () => {
+  const me = visitor('203.0.113.233');
+  await json(me, 'GET', '/api/me');
+  await json(me, 'POST', '/api/auth/register',
+    { email: 'grandfathered@painter.example', password: 'a-long-enough-password', accept: true });
+  const uid = uidOf(me);
+
+  /* exactly the state every existing account is in after migration 010 */
+  dbm.db.prepare(
+    'UPDATE users SET terms_version = NULL, terms_at = NULL, capacity_confirmed_at = NULL WHERE id = ?')
+    .run(uid);
+
+  const refused = await json(me, 'POST', '/api/paint/order', { pack: 25 });
+  assert.equal(refused.code, 403);
+  assert.equal(refused.json.error, 'terms-required',
+    'the gate reads the stored record, not whatever the client sent');
+
+  /* accepting the terms but not the capacity statement is still not enough */
+  const half = await json(me, 'POST', '/api/me/accept', { accept: true });
+  assert.equal(half.code, 200);
+  const stillNo = await json(me, 'POST', '/api/paint/order', { pack: 25 });
+  assert.equal(stillNo.code, 403);
+  assert.equal(stillNo.json.error, 'capacity-required');
+
+  const both = await json(me, 'POST', '/api/me/accept', { accept: true, capacity: true });
+  assert.equal(both.code, 200);
+  assert.equal(both.json.capacity, true);
+  const yes = await json(me, 'POST', '/api/paint/order', { pack: 25 });
+  assert.equal(yes.code, 200, 'and now it goes through');
+});
+
+test('a guest cannot leave a record of consent behind a cookie', async () => {
+  const me = visitor('203.0.113.234');
+  await json(me, 'GET', '/api/me');
+  const r = await json(me, 'POST', '/api/me/accept', { accept: true, capacity: true });
+  assert.equal(r.code, 403);
+  assert.equal(r.json.error, 'account-required',
+    'consent attached to something nobody can be reached through records nothing');
 });

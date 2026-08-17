@@ -133,6 +133,9 @@ const application = over => ({
   phone: '+20 100 555 0134',
   reg_number: 'CR-99112',
   instapay_handle: 'nilesoda@instapay',
+  /* the form's required tick — server-side, an application without it is
+     an application that agreed to nothing (identity.validateSignup) */
+  accept: true,
   ...over
 });
 
@@ -556,8 +559,17 @@ test('booking is gated on an approved brand account', async () => {
   const meta = JSON.parse(snapshot.body.toString('utf8', 4, 4 + metaLen));
   /* the email belongs here too: the page reloads the wall right after a
      login, and a snapshot that omitted it signed the account back out */
-  assert.deepEqual(meta.me,
-    { kind: 'brand', handle: 'Nile Soda Co.', brandStatus: 'approved', email: form.email });
+  assert.equal(meta.me.kind, 'brand');
+  assert.equal(meta.me.handle, 'Nile Soda Co.');
+  assert.equal(meta.me.brandStatus, 'approved');
+  assert.equal(meta.me.email, form.email);
+  /* and what they agreed to, so the page knows whether to ask again. The
+     version travels with it: an account that accepted 1.0 has to be asked
+     again once 1.1 is published, and a bare boolean cannot say that. */
+  assert.equal(meta.me.accepted.version, cfg.TERMS_VERSION);
+  assert.ok(meta.me.accepted.at > 0);
+  assert.equal(meta.me.capacity, true);
+  assert.equal(meta.me.termsVersion, cfg.TERMS_VERSION);
 });
 
 test('brands are exempt from the per-IP claim cap', () => {

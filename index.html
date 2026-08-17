@@ -312,6 +312,17 @@ finish review, the verdict, and DESIGN.md.
             <span class="cp-hint" data-i18n="py.shotHint">Speeds it up. We strip location data before storing it.</span>
             <span class="fld-err" id="errPyShot" hidden></span>
           </label>
+          <!-- The one REFUNDS §6 rests on. Egyptian consumer law lets a
+               buyer walk away from a distance contract; asking for
+               immediate performance and saying so is what closes that
+               window, and it only closes it if the buyer actually asked.
+               So it is a tick, at the moment of asking, in their language,
+               with the policy one tap away. -->
+          <label class="fld-tick" id="pyAcceptWrap">
+            <input type="checkbox" id="pyAccept">
+            <span data-i18n-html="py.accept">I want what I am paying for as soon as the transfer is confirmed, and I have read the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">refund policy</a>.</span>
+          </label>
+          <span class="fld-err" id="errPyAccept" hidden></span>
           <span class="fld-err" id="errPy" hidden></span>
           <button class="btn-claim modal-cta" id="pySubmit" type="submit" data-i18n="py.sent">I&rsquo;VE SENT IT</button>
         </form>
@@ -525,6 +536,17 @@ finish review, the verdict, and DESIGN.md.
           <input type="password" id="rgPass" maxlength="200" placeholder="10 characters or more" data-i18n-ph="au.passPh" autocomplete="new-password">
           <span class="fld-err" id="errRgPass" hidden></span>
         </label>
+        <!-- TERMS §4 and PRIVACY §11. One tick, one sentence: the age
+             statement and the acceptance are made together because they are
+             read together, and recording a distinction nobody was shown
+             would be recording something that did not happen. The three
+             links inside are rewritten to the current language by
+             syncLegalLinks, like every other [data-legal]. -->
+        <label class="fld-tick">
+          <input type="checkbox" id="rgAccept">
+          <span data-i18n-html="au.accept">I am 18 or older and entering this for myself, and I accept the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">Terms</a>, the <a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.html">Privacy Policy</a> and the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">Refund Policy</a>.</span>
+        </label>
+        <span class="fld-err" id="errRgAccept" hidden></span>
         <span class="fld-err" id="errRegister" hidden></span>
         <button class="btn-claim modal-cta" id="btnRegister" type="submit" data-i18n="au.createCta">CREATE MY ACCOUNT</button>
       </form>
@@ -597,6 +619,11 @@ finish review, the verdict, and DESIGN.md.
             <span class="fld-err" id="errSuDesc" hidden></span>
           </label>
         </div>
+        <label class="fld-tick">
+          <input type="checkbox" id="suAccept">
+          <span data-i18n-html="au.acceptBrand">I can enter into this on behalf of the business named above, and I accept the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">Terms</a>, the <a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.html">Privacy Policy</a> and the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">Refund Policy</a>.</span>
+        </label>
+        <span class="fld-err" id="errSuAccept" hidden></span>
         <span class="fld-err" id="errSignup" hidden></span>
         <button class="btn-claim modal-cta" id="btnSignup" type="submit" data-i18n="au.applyCta">APPLY FOR A BRAND ACCOUNT</button>
         <p class="fine" data-i18n="au.applyFine">We use this to check the business is real and to send booking receipts. Nothing here goes on the wall.</p>

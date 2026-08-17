@@ -373,7 +373,7 @@ test('a brand application becomes a card, and the buttons decide it', async () =
     business_name: 'Nile Soda Co.', category: 'Drinks',
     description: 'x'.repeat(220), website: 'nile-soda.example',
     contact_name: 'Sara Fahmy', phone: '+20 100 555 0134',
-    instapay_handle: 'nilesoda@instapay'
+    instapay_handle: 'nilesoda@instapay', accept: true
   };
   const before = queued().length;
   const r = await request('POST', '/api/auth/signup', JSON.stringify(form));
@@ -412,7 +412,7 @@ test('a card that creates via sendMessage sends on its own, with nothing to wait
     business_name: 'Second Brand Co.', category: 'Drinks',
     description: 'y'.repeat(220), website: 'second-brand.example',
     contact_name: 'Sara Fahmy', phone: '+20 100 555 0135',
-    instapay_handle: 'secondbrand@instapay'
+    instapay_handle: 'secondbrand@instapay', accept: true
   };
   const r = await request('POST', '/api/auth/signup', JSON.stringify(form));
   assert.equal(r.code, 200);

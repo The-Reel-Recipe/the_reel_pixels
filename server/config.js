@@ -10,6 +10,7 @@
    ═══════════════════════════════════════════════════════════════ */
 'use strict';
 
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
@@ -133,6 +134,28 @@ const STATE_DIR = path.resolve(env.STATE_DIR || (ON_VERCEL ? os.tmpdir() : ROOT)
    deploy to a VPS with a real volume. */
 const DATA_DIR = path.resolve(env.DATA_DIR ||
   (ON_VERCEL ? path.join(os.tmpdir(), 's37-data') : path.join(ROOT, 'data')));
+
+/* The version of the published documents, read from the same file the page
+   generator fills in. Stamped on a user when they accept and on every order
+   they place, so "which wording applied to S37-7F3K" has one answer that
+   cannot drift from what was actually on the site.
+
+   Falls back rather than throwing: an operator.json that is missing or
+   half-edited must not stop the wall from serving. An order stamped
+   'unversioned' is a gap in the record; a wall that will not boot is an
+   outage, and only one of those is worth having. */
+function termsVersion() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'legal', 'operator.json'), 'utf8'));
+    const v = raw.VERSION;
+    const s = String((v && typeof v === 'object' ? v.en : v) || '').trim();
+    if (s) return s;
+    warnings.push('legal/operator.json has no VERSION — orders will be stamped "unversioned"');
+  } catch (err) {
+    warnings.push(`legal/operator.json unreadable (${err.code || err.message}) — orders will be stamped "unversioned"`);
+  }
+  return 'unversioned';
+}
 
 const DEV_SECRET = 'dev-insecure-session-secret';
 let SESSION_SECRET = String(env.SESSION_SECRET || '');
@@ -266,6 +289,8 @@ module.exports = Object.freeze({
      128·N·r = 16 MB and ~60 ms per hash on the target VPS */
   SCRYPT: { N: 16384, r: 8, p: 1, keylen: 32, saltlen: 32 },
   PASS_MIN: 10,
+  /* Stamped on a user when they accept and on every order they place. */
+  TERMS_VERSION: termsVersion(),
   DESC_MIN: 200,
 
   /* secrets + integrations (unused until their phase; parsed now so a

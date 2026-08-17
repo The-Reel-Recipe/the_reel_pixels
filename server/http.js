@@ -127,7 +127,7 @@ const LIMITS = {
 
 function limitFor(urlPath) {
   if (urlPath.startsWith('/api/auth/') || urlPath === '/api/admin/login' ||
-      urlPath === '/api/me/name' ||
+      urlPath === '/api/me/name' || urlPath === '/api/me/accept' ||
       urlPath === '/api/paint/order' || urlPath.startsWith('/api/payments/')) return 'auth';
   if (urlPath === '/api/claim' || urlPath === '/api/book') return 'write';
   return 'read';
@@ -645,6 +645,26 @@ async function handler(req, res) {
 
     if (urlPath === '/api/me/notifications/seen' && req.method === 'POST') {
       return sendJson(res, 200, notifications.markSeen(row.id, now));
+    }
+
+    /* Accepting from an account that already exists. Registering records it
+       in the same transaction as the credentials, so this is for two cases:
+       somebody who signed up before there was anything to accept, and
+       somebody being asked again because a new version was published.
+
+       An account, not a guest: a record of consent attached to a cookie
+       nobody can be reached through is a record of nothing. */
+    if (urlPath === '/api/me/accept' && req.method === 'POST') {
+      if (!row.email) return sendJson(res, 403, identity.paintGate({}));
+      const body = JSON.parse((await readBody(req, 1024)).toString('utf8'));
+      if (body.accept !== true) {
+        return sendJson(res, 400, {
+          error: 'invalid',
+          fields: { accept: 'Please accept the terms, the privacy policy and the refund policy.' }
+        });
+      }
+      identity.accept(row.id, { capacity: body.capacity === true }, now);
+      return sendJson(res, 200, identity.me(row, now));
     }
 
     /* ── accounts ── */

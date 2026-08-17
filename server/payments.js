@@ -69,8 +69,8 @@ function newCode() {
 /* ── Statements ───────────────────────────────────────────────── */
 
 const insPayment = db.prepare(
-  `INSERT INTO payments (user_id, kind, pack, amount, code, status, hold_expires, created_at)
-   VALUES (?, ?, ?, ?, ?, 'awaiting_transfer', ?, ?)`);
+  `INSERT INTO payments (user_id, kind, pack, amount, code, status, hold_expires, created_at, terms_version)
+   VALUES (?, ?, ?, ?, ?, 'awaiting_transfer', ?, ?, ?)`);
 const selPayment = db.prepare('SELECT * FROM payments WHERE id = ?');
 const selByCode = db.prepare('SELECT * FROM payments WHERE code = ?');
 const linkSub = db.prepare('UPDATE submissions SET payment_id = ? WHERE id = ?');
@@ -119,10 +119,17 @@ function createOrder(userId, kind, opts, now = Date.now()) {
 
   const code = newCode();
   const hold = now + S.HOLD_TTL;
-  const id = Number(insPayment.run(userId, kind, pack, amount, code, hold, now).lastInsertRowid);
+  /* Stamped on the row, not looked up from the user later. The user's
+     terms_version moves the next time they accept a new wording; this one
+     must not, because "which terms applied to S37-7F3K" is the question a
+     complaint actually asks and its answer is fixed the moment the order
+     is placed. */
+  const terms = cfg.TERMS_VERSION;
+  const id = Number(insPayment.run(userId, kind, pack, amount, code, hold, now, terms).lastInsertRowid);
   if (opts.sid) linkSub.run(id, opts.sid);
-  logEvent(`user:${userId}`, 'order', { payment: id, kind, pack, amount, code, sid: opts.sid || null }, now);
-  return { id, code, amount, kind, pack, holdExpires: hold };
+  logEvent(`user:${userId}`, 'order',
+    { payment: id, kind, pack, amount, code, sid: opts.sid || null, terms }, now);
+  return { id, code, amount, kind, pack, holdExpires: hold, termsVersion: terms };
 }
 
 /* What the checkout modal needs to say. The QR is the user's own official
