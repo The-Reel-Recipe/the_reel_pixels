@@ -1,0 +1,25 @@
+# Everything is LF, in the repository and in the working tree.
+#
+# This is not a style preference. server/db.js checksums each migration
+# file's bytes and refuses to boot if one differs from the checksum
+# recorded when it ran — which is the right guard, because silently
+# re-running an edited migration is how a database stops matching the
+# code that reads it.
+#
+# On Windows, core.autocrlf=true checks these files out with CRLF. That
+# is invisible while deploys go through GitHub, which serves LF. It is
+# not invisible to `railway up`, which uploads the working tree: every
+# migration checksum changed at once and production crashed on boot
+# with "001_init.sql changed after it ran".
+#
+# eol=lf makes the working tree match what is committed, so the bytes
+# are the same however the code gets to the server.
+* text=auto eol=lf
+
+# Binary — never touched, never normalised.
+*.png   binary
+*.jpg   binary
+*.webp  binary
+*.ico   binary
+*.bin   binary
+*.db    binary
