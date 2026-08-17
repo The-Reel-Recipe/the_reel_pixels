@@ -1046,13 +1046,19 @@ $('pyProof').onsubmit = async e => {
       }
     }
     const r = await apiPost(`/api/payments/${pay.order.paymentId}/proof`, {
-      instapay_ref: $('pyRef').value, payer_handle: $('pyFrom').value
+      instapay_ref: $('pyRef').value, payer_handle: $('pyFrom').value,
+      /* the tick above the button — the server records it against this
+         order, because REFUNDS §6 rests on it having actually been asked */
+      accept: $('pyAccept').checked
     });
     if (!r.ok) {
       const f = r.data.fields || {};
       if (f.instapay_ref) showErr('errPyRef', f.instapay_ref);
       if (f.payer_handle) showErr('errPyFrom', f.payer_handle);
-      if (!f.instapay_ref && !f.payer_handle) showErr('errPy', r.data.message || t('py.errFailed'));
+      if (f.accept) markTick('pyAccept', 'errPyAccept');
+      if (!f.instapay_ref && !f.payer_handle && !f.accept) {
+        showErr('errPy', r.data.message || t('py.errFailed'));
+      }
       return;
     }
     $('pyForm').hidden = true;

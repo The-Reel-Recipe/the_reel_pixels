@@ -814,12 +814,24 @@ const NEEDS_CAPACITY = {
   message: 'Before buying, please confirm you are old enough to enter a contract ' +
     'and are paying for yourself.'
 };
+const STALE_ACCEPT = {
+  error: 'terms-changed',
+  message: 'The terms have changed since you last agreed to them. ' +
+    'Please read them and accept the new version before buying.'
+};
 
 /* null when the caller may buy; otherwise the 403 body. Checked in this
    order because it is the order somebody fixes them in. */
 function buyGate(e) {
   const a = acceptanceOf(e.id);
   if (!a.terms_at || !a.terms_version) return NEEDS_ACCEPT;
+  /* Publishing a new wording has to put the tick back in front of people.
+     Without this the version was decoration: somebody who accepted 1.0 kept
+     buying after 1.1 went up, and createOrder stamped their order with 1.1 —
+     recording an agreement to a document they had never been shown, which is
+     worse than recording nothing at all. The client checks this too; the
+     client is not what makes it true. */
+  if (a.terms_version !== cfg.TERMS_VERSION) return STALE_ACCEPT;
   if (!a.capacity_confirmed_at) return NEEDS_CAPACITY;
   return null;
 }

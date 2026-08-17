@@ -73,6 +73,11 @@ const insPayment = db.prepare(
    VALUES (?, ?, ?, ?, ?, 'awaiting_transfer', ?, ?, ?)`);
 const selPayment = db.prepare('SELECT * FROM payments WHERE id = ?');
 const selByCode = db.prepare('SELECT * FROM payments WHERE code = ?');
+/* Only ever set once, and only forward: the request for immediate
+   performance was made at a moment, and re-submitting a reference does not
+   move it. */
+const stampPerformance = db.prepare(
+  'UPDATE payments SET performance_at = ? WHERE id = ? AND performance_at IS NULL');
 const linkSub = db.prepare('UPDATE submissions SET payment_id = ? WHERE id = ?');
 const selSubForPayment = db.prepare('SELECT id, status FROM submissions WHERE payment_id = ?');
 
@@ -185,10 +190,29 @@ function submitProof(paymentId, userId, body, now = Date.now()) {
       fields: { payer_handle: 'We need the handle or number you paid from — that is where a refund would go.' }
     };
   }
+  /* REFUNDS §6 — the whole of it. Paint is not refundable once credited, and
+     what makes that stand up is that the buyer asked for it immediately and
+     said they had read the policy. The payment screen asks exactly that.
+
+     Checked here rather than only in the browser, and stamped on the row,
+     because a question asked and thrown away is not evidence of anything —
+     and a client that never rendered the form would otherwise have skipped
+     the question entirely while still getting the benefit of it. */
+  if (body.accept !== true) {
+    return {
+      error: 'performance-required', status: 400,
+      fields: {
+        accept: 'Please confirm you want this as soon as the transfer is checked, ' +
+          'and that you have read the refund policy.'
+      }
+    };
+  }
 
   const changed = tx(() => {
     if (!goSubmitted.run(ref, handle, now, paymentId).changes) return false;
-    logEvent(`user:${userId}`, 'payment-submitted', { payment: paymentId, ref, handle }, now);
+    stampPerformance.run(now, paymentId);
+    logEvent(`user:${userId}`, 'payment-submitted',
+      { payment: paymentId, ref, handle, performance: now }, now);
     return true;
   });
   if (!changed) return { error: 'settled', status: 409 };

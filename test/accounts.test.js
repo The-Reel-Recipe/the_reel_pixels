@@ -376,7 +376,7 @@ test('paint follows the account, not the browser it was bought in', async () => 
 
   const order = await json(phone, 'POST', '/api/paint/order', { pack: 100 });
   await json(phone, 'POST', `/api/payments/${order.json.paymentId}/proof`,
-    { instapay_ref: '5011234567', payer_handle: 'me@instapay' });
+    { instapay_ref: '5011234567', payer_handle: 'me@instapay', accept: true });
   payments.verify(order.json.paymentId, 'tg:1 (sara)');
   const paid = await json(phone, 'GET', '/api/me');
   assert.equal(paid.json.allowance.paint, 100, 'verified paint lands on the account');
@@ -448,7 +448,7 @@ test('money news lands in the bell too', async () => {
   assert.equal(order.code, 200);
   const pid = order.json.paymentId;
   await json(me, 'POST', `/api/payments/${pid}/proof`,
-    { instapay_ref: '5011234567', payer_handle: 'me@instapay' });
+    { instapay_ref: '5011234567', payer_handle: 'me@instapay', accept: true });
   payments.verify(pid, 'tg:1 (sara)');
 
   const feed = await json(me, 'GET', '/api/me/notifications');

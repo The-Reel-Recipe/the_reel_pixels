@@ -1,0 +1,23 @@
+-- ═══════════════════════════════════════════════════════════════
+-- 013_performance_request — the tick that the no-refund rule rests on
+--
+-- REFUNDS §6 says paint is not refundable once it is credited, and
+-- the thing that makes that stand up under Egyptian consumer law is
+-- that the buyer asked for it immediately and said they had read the
+-- policy. The payment screen asks exactly that, in both languages.
+--
+-- It was asked and thrown away. The tick gated the submit button in
+-- the browser and was never sent, never stored, and never tied to
+-- the order it was about — so the defence had no evidence behind it,
+-- and a client that skipped the form skipped the question entirely.
+--
+-- Recorded per payment, not per user: it is a statement about this
+-- purchase ("I want THIS as soon as the transfer is confirmed"), and
+-- a flag on the account would say nothing about which order.
+--
+-- NULL means it was never asked, which is the truth for every
+-- payment made before this. The refund policy is what it is for
+-- those; this is not backfilled.
+-- ═══════════════════════════════════════════════════════════════
+
+ALTER TABLE payments ADD COLUMN performance_at INTEGER;

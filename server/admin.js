@@ -539,7 +539,10 @@ function setHold(userId, held, actor, reason, now = Date.now()) {
 
 const ERASE = {
   profile: db.prepare('DELETE FROM brand_profiles WHERE user_id = ?'),
-  subs: db.prepare('SELECT id, preview_path FROM submissions WHERE user_id = ?'),
+  subs: db.prepare(
+    'SELECT id, preview_path, layer, brand_name FROM submissions WHERE user_id = ?'),
+  /* read before the delete, so the wall can be told which squares went */
+  cellsOf: db.prepare('SELECT idx, layer FROM cells WHERE submission_id = ?'),
   dropSubs: db.prepare('DELETE FROM submissions WHERE user_id = ?'),
   dropCells: db.prepare('DELETE FROM cells WHERE user_id = ?'),
   pays: db.prepare('SELECT id, screenshot_path FROM payments WHERE user_id = ?'),
@@ -580,8 +583,14 @@ function eraseUser(userId, actor, reason, now = Date.now()) {
      walks the string, so a bare number hashes to the same name every time. */
   const handle = identity.handleFor('u' + userId);
   const files = [];
+  /* What the in-memory wall has to be told about. Collected before the rows
+     go, because after the delete there is nothing left to read it from. */
+  const erased = [];
   const out = tx(() => {
-    for (const s of ERASE.subs.all(userId)) if (s.preview_path) files.push(s.preview_path);
+    for (const s of ERASE.subs.all(userId)) {
+      if (s.preview_path) files.push(s.preview_path);
+      erased.push({ sub: s, cells: ERASE.cellsOf.all(s.id) });
+    }
     for (const p of ERASE.pays.all(userId)) if (p.screenshot_path) files.push(p.screenshot_path);
 
     const cells = ERASE.dropCells.run(userId).changes;
@@ -607,6 +616,24 @@ function eraseUser(userId, actor, reason, now = Date.now()) {
      recoverable from a backup, a row removed with its file left behind is
      personal data still sitting on the volume. */
   for (const f of files) unlinkQuiet(f);
+
+  /* The database is not the wall. wall.live and wall.reserved are the maps
+     every snapshot is encoded from and every open canvas is drawing, and
+     deleting the cells rows does not touch them — an audit caught this by
+     erasing an account and finding its pixels still being served, under a
+     new anonymous name, with the rows gone. PRIVACY §9 says the pixels come
+     off the wall; until a restart, they did not.
+
+     publishErasure is the same call every other removal path makes
+     (submissions.reject, .expire, .takedown): it drops the squares from the
+     right map, marks the body cache dirty, unpicks a brand's sponsor link
+     if that was its last batch, and broadcasts the removal so open tabs
+     repaint. After the commit, so a rolled-back erasure leaves memory alone. */
+  for (const e of erased) {
+    try { wall.publishErasure(e.sub, e.cells); } catch (err) {
+      console.warn(`erase: wall not updated for s${e.sub.id} —`, err.message);
+    }
+  }
 
   /* wall.owners is an interned name table that nothing but this refreshes.
      A direct database edit leaves every open tab, and every fresh snapshot,

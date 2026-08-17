@@ -198,7 +198,7 @@ test('a paint order credits nothing until a person confirms it', async () => {
 
   /* the payer says they have sent it */
   const proof = await json(me, 'POST', `/api/payments/${order.json.paymentId}/proof`,
-    { instapay_ref: '5011234567', payer_handle: 'me@instapay' });
+    { instapay_ref: '5011234567', payer_handle: 'me@instapay', accept: true });
   assert.equal(proof.code, 200);
   const p = payOf(order.json.paymentId);
   assert.equal(p.status, 'submitted');
@@ -219,7 +219,7 @@ test('a paint pack shows up in MY PIXELS, where the checkout said it would', asy
   const me = await buyer('203.0.113.130');
   const order = await json(me, 'POST', '/api/paint/order', { pack: 500 });
   await json(me, 'POST', `/api/payments/${order.json.paymentId}/proof`,
-    { instapay_ref: '5044556677', payer_handle: 'me@instapay' });
+    { instapay_ref: '5044556677', payer_handle: 'me@instapay', accept: true });
 
   const h = await json(me, 'GET', '/api/me/history');
   /* a pack is money with no pixels behind it — it has no submission at all,
@@ -246,12 +246,12 @@ test('a reference has to look like one', async () => {
   const id = order.json.paymentId;
 
   const short = await json(me, 'POST', `/api/payments/${id}/proof`,
-    { instapay_ref: 'x', payer_handle: 'me@instapay' });
+    { instapay_ref: 'x', payer_handle: 'me@instapay', accept: true });
   assert.equal(short.code, 400);
   assert.ok(short.json.fields.instapay_ref);
 
   const noHandle = await json(me, 'POST', `/api/payments/${id}/proof`,
-    { instapay_ref: '5011234567', payer_handle: '  ' });
+    { instapay_ref: '5011234567', payer_handle: '  ', accept: true });
   assert.equal(noHandle.code, 400);
   assert.ok(noHandle.json.fields.payer_handle);
   assert.equal(payOf(id).status, 'awaiting_transfer');
@@ -263,7 +263,7 @@ test('somebody else cannot pay off, or look at, your order', async () => {
   const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
 
   const r = await json(nosy, 'POST', `/api/payments/${order.json.paymentId}/proof`,
-    { instapay_ref: '5011234567', payer_handle: 'nosy@instapay' });
+    { instapay_ref: '5011234567', payer_handle: 'nosy@instapay', accept: true });
   assert.equal(r.code, 404, 'and is told nothing about whose it is');
   assert.equal(payOf(order.json.paymentId).status, 'awaiting_transfer');
 
@@ -293,7 +293,7 @@ test('an unpaid order expires and cannot then be paid', async () => {
   assert.equal(payOf(id).status, 'expired');
 
   const late = await json(me, 'POST', `/api/payments/${id}/proof`,
-    { instapay_ref: '5011234567', payer_handle: 'me@instapay' });
+    { instapay_ref: '5011234567', payer_handle: 'me@instapay', accept: true });
   assert.equal(late.code, 409);
 });
 
@@ -302,7 +302,7 @@ test('a double-tapped button is one decision', async () => {
   const uid = uidOf(me);
   const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
   await json(me, 'POST', `/api/payments/${order.json.paymentId}/proof`,
-    { instapay_ref: '99887766', payer_handle: 'me@instapay' });
+    { instapay_ref: '99887766', payer_handle: 'me@instapay', accept: true });
 
   const first = payments.verify(order.json.paymentId, 'tg:1 (sara)');
   const second = payments.verify(order.json.paymentId, 'tg:2 (omar)');
@@ -351,7 +351,7 @@ test('a booking cannot be approved ahead of its payment', async () => {
   assert.equal(subOf(sid).status, 'pending', 'the pixels stay held, not live');
 
   await json(who, 'POST', `/api/payments/${pid}/proof`,
-    { instapay_ref: 'two-gates-1', payer_handle: 'twogates@instapay' });
+    { instapay_ref: 'two-gates-1', payer_handle: 'twogates@instapay', accept: true });
   const stillEarly = submissions.approve(sid, 'tg:1 (sara)');
   assert.equal(stillEarly.unpaid, true, 'a reference alone is not verified money');
 
@@ -385,7 +385,7 @@ test('money that never arrived frees the spot immediately', async () => {
     idxs.map(i => [i, 0x445566])), 'application/octet-stream');
   const pid = r.json.payment.paymentId;
   await json(who, 'POST', `/api/payments/${pid}/proof`,
-    { instapay_ref: 'made-up-1234', payer_handle: 'wrong@instapay' });
+    { instapay_ref: 'made-up-1234', payer_handle: 'wrong@instapay', accept: true });
 
   const rej = payments.reject(pid, 'tg:1 (sara)');
   assert.equal(rej.ok, true);
@@ -406,7 +406,7 @@ test('money nobody has checked yet is owed back, not written off', async () => {
   const pid = r.json.payment.paymentId;
 
   await json(who, 'POST', `/api/payments/${pid}/proof`,
-    { instapay_ref: '5011122233', payer_handle: 'unchecked@instapay' });
+    { instapay_ref: '5011122233', payer_handle: 'unchecked@instapay', accept: true });
   assert.equal(payOf(pid).status, 'submitted', 'said to be sent, not yet verified');
 
   assert.equal(submissions.reject(r.json.sid, 'tg:1 (sara)', 'not this month').ok, true);
@@ -432,7 +432,7 @@ test('rejecting paid-for pixels owes the money back, and keeps saying so', async
   const pid = r.json.payment.paymentId;
 
   await json(who, 'POST', `/api/payments/${pid}/proof`,
-    { instapay_ref: '5099887766', payer_handle: 'payer@instapay' });
+    { instapay_ref: '5099887766', payer_handle: 'payer@instapay', accept: true });
   assert.equal(payments.verify(pid, 'tg:1 (sara)').ok, true);
   assert.equal(payOf(pid).status, 'verified');
 
@@ -459,7 +459,7 @@ test('the history shows a refund as a refund', async () => {
     freeRange(10).map(i => [i, 0xaa3344])), 'application/octet-stream');
   const pid = r.json.payment.paymentId;
   await json(who, 'POST', `/api/payments/${pid}/proof`,
-    { instapay_ref: '5000111222', payer_handle: 'payer@instapay' });
+    { instapay_ref: '5000111222', payer_handle: 'payer@instapay', accept: true });
   payments.verify(pid, 'tg:1 (sara)');
   submissions.reject(r.json.sid, 'tg:1 (sara)', 'not this month');
 
@@ -569,4 +569,83 @@ test('a screenshot lands on the payment through the route', async () => {
   const junk = await req(me, 'POST', `/api/payments/${id}/screenshot`,
     Buffer.from('not an image at all'), 'image/png');
   assert.equal(junk.code, 400);
+});
+
+/* ── The request for immediate performance (REFUNDS §6) ────────── */
+
+test('the tick the no-refund rule rests on is recorded against the order', async () => {
+  const me = await buyer('203.0.113.170');
+  const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
+  const pid = order.json.paymentId;
+
+  /* Without it, nothing moves. The browser gates the button too, but the
+     browser is not what makes the record exist — a client that never
+     rendered the form would otherwise skip the question and keep the
+     benefit of having asked it. */
+  const silent = await json(me, 'POST', `/api/payments/${pid}/proof`,
+    { instapay_ref: '5011234567', payer_handle: 'me@instapay' });
+  assert.equal(silent.code, 400);
+  assert.equal(silent.json.error, 'performance-required');
+  assert.ok(silent.json.fields.accept);
+  assert.equal(payOf(pid).status, 'awaiting_transfer', 'and the order did not move');
+  assert.equal(payOf(pid).performance_at, null);
+
+  const unticked = await json(me, 'POST', `/api/payments/${pid}/proof`,
+    { instapay_ref: '5011234567', payer_handle: 'me@instapay', accept: false });
+  assert.equal(unticked.code, 400, 'a rendered-and-ignored box is not a tick either');
+
+  const asked = await json(me, 'POST', `/api/payments/${pid}/proof`,
+    { instapay_ref: '5011234567', payer_handle: 'me@instapay', accept: true });
+  assert.equal(asked.code, 200);
+
+  const row = payOf(pid);
+  assert.ok(row.performance_at > 0,
+    'REFUNDS §6 stands on the buyer having asked for it immediately — ' +
+    'a question asked and thrown away is not evidence of anything');
+  assert.equal(row.status, 'submitted');
+});
+
+test('the moment they asked does not move when they resubmit', async () => {
+  const me = await buyer('203.0.113.171');
+  const order = await json(me, 'POST', '/api/paint/order', { pack: 25 });
+  const pid = order.json.paymentId;
+
+  await json(me, 'POST', `/api/payments/${pid}/proof`,
+    { instapay_ref: '5011111111', payer_handle: 'me@instapay', accept: true });
+  const first = payOf(pid).performance_at;
+
+  await new Promise(r => setTimeout(r, 8));
+  await json(me, 'POST', `/api/payments/${pid}/proof`,
+    { instapay_ref: '5022222222', payer_handle: 'me@instapay', accept: true });
+
+  assert.equal(payOf(pid).performance_at, first,
+    'they asked at a moment; correcting a typo in the reference is not a new one');
+  assert.equal(payOf(pid).instapay_ref, '5022222222', 'though the reference did update');
+});
+
+test('a new version of the terms puts the tick back in front of everybody', async () => {
+  const me = await buyer('203.0.113.172');
+  const uid = uidOf(me);
+
+  const before = await json(me, 'POST', '/api/paint/order', { pack: 25 });
+  assert.equal(before.code, 200, 'they accepted the current wording when they registered');
+
+  /* publish a new one */
+  dbm.db.prepare("UPDATE users SET terms_version = '0.9' WHERE id = ?").run(uid);
+  identity.forget(uid);
+
+  const stale = await json(me, 'POST', '/api/paint/order', { pack: 25 });
+  assert.equal(stale.code, 403);
+  assert.equal(stale.json.error, 'terms-changed',
+    'an agreement to 0.9 is not an agreement to what is published now — and ' +
+    'stamping the new version on their order would record an agreement they never made');
+
+  const again = await json(me, 'POST', '/api/me/accept', { accept: true, capacity: true });
+  assert.equal(again.code, 200);
+  assert.equal(again.json.accepted.version, cfg.TERMS_VERSION);
+
+  const ok = await json(me, 'POST', '/api/paint/order', { pack: 25 });
+  assert.equal(ok.code, 200);
+  assert.equal(dbm.db.prepare('SELECT terms_version FROM payments WHERE id = ?')
+    .get(ok.json.paymentId).terms_version, cfg.TERMS_VERSION);
 });

@@ -813,3 +813,101 @@ test('the report survives the thing it is about', async () => {
   assert.ok(row, 'the report is still in the queue');
   assert.equal(row.status, 'rejected', 'and says what happened to the drawing');
 });
+
+/* ── The two the audit caught (both were shipped) ──────────────── */
+
+test('erasing takes the pixels off the wall, not just out of the table', async () => {
+  const g = guestClaim(3);
+  await json('POST', `/api/admin/submissions/${g.sid}/approve`, {}, AS_PANEL);
+  for (const i of g.idx) assert.ok(wall.wall.live.has(i), 'they are on the wall to start with');
+
+  await json('POST', `/api/admin/users/${g.uid}/erase`, eraseBody('asked to be forgotten'), AS_PANEL);
+
+  /* The database is not the wall. wall.live is what every snapshot is
+     encoded from and what every open canvas is drawing; deleting the cells
+     rows does not touch it. Before this was fixed, an erased account's
+     pixels kept being served — under a fresh anonymous name, with the rows
+     gone — until the process restarted. */
+  assert.equal(dbm.db.prepare('SELECT COUNT(*) n FROM cells WHERE user_id = ?').get(g.uid).n, 0);
+  for (const i of g.idx) {
+    assert.ok(!wall.wall.live.has(i),
+      `idx ${i} is gone from the database and still on the public wall`);
+  }
+});
+
+test('a swept account with a legacy ip row does not take the whole sweep down', () => {
+  const retention = require('../server/retention.js');
+  const DAY = 86400000;
+  const now = Date.now();
+
+  /* legacy_keys is the pre-Phase-2 ip→user table. Migration 003 drops it and
+     is marked @manual, so it is still there in production holding rows, and
+     it carries a foreign key into users(id) that the dormant sweep's WHERE
+     cannot exclude — it is not a reason to keep anybody. */
+  const ghost = Number(dbm.db.prepare(
+    "INSERT INTO users (kind, handle, created_at, last_seen) VALUES ('guest','Ghost',?,?)"
+  ).run(now - 400 * DAY, now - 400 * DAY).lastInsertRowid);
+  dbm.db.prepare('INSERT INTO allowances (user_id) VALUES (?)').run(ghost);
+  dbm.db.prepare('INSERT INTO legacy_keys (key, user_id, created_at) VALUES (?,?,?)')
+    .run('41.33.7.9', ghost, now - 400 * DAY);
+
+  /* A screenshot old enough to be swept in the same pass, on somebody else:
+     an account with a payment is never dormant by definition, so hanging it
+     on the ghost would have excluded the ghost and tested nothing. */
+  const payer = guestClaim(1).uid;
+  const dir = require('path').join(cfg.DATA_DIR, 'uploads');
+  fs.mkdirSync(dir, { recursive: true });
+  const shot = require('path').join(dir, 'sweep-order.png');
+  fs.writeFileSync(shot, 'evidence');
+  dbm.db.prepare(
+    `INSERT INTO payments (user_id, kind, amount, code, status, created_at, updated_at, screenshot_path)
+     VALUES (?, 'paint_pack', 100, 'S37-SWEEPT', 'verified', ?, ?, ?)`
+  ).run(payer, now - 400 * DAY, now - 400 * DAY, shot);
+
+  const out = retention.sweep(now, {
+    identity: { dayKey: identity.dayKey, forget: () => {} },
+    wall: { cycleStart: () => now }
+  });
+
+  assert.ok(out.accounts >= 1, 'the dormant account went');
+  assert.equal(dbm.db.prepare('SELECT COUNT(*) n FROM legacy_keys WHERE user_id = ?').get(ghost).n, 0,
+    'and its raw ip row with it');
+  assert.equal(fs.existsSync(shot), false, 'the screenshot went too');
+});
+
+test('a sweep that fails destroys nothing on the way down', () => {
+  const retention = require('../server/retention.js');
+  const DAY = 86400000;
+  const now = Date.now();
+
+  const dir = require('path').join(cfg.DATA_DIR, 'uploads');
+  fs.mkdirSync(dir, { recursive: true });
+  const shot = require('path').join(dir, 'must-survive.png');
+  fs.writeFileSync(shot, 'evidence');
+  const uid = Number(dbm.db.prepare(
+    "INSERT INTO users (kind, handle, created_at, last_seen) VALUES ('guest','Payer',?,?)"
+  ).run(now, now).lastInsertRowid);
+  dbm.db.prepare('INSERT INTO allowances (user_id) VALUES (?)').run(uid);
+  dbm.db.prepare(
+    `INSERT INTO payments (user_id, kind, amount, code, status, created_at, updated_at, screenshot_path)
+     VALUES (?, 'paint_pack', 100, 'S37-ROLLBK', 'verified', ?, ?, ?)`
+  ).run(uid, now - 400 * DAY, now - 400 * DAY, shot);
+
+  /* make the last step of the pass throw, after the screenshot step has run */
+  const realForget = identity.forget;
+  let threw = null;
+  try {
+    retention.sweep(now, {
+      identity: { dayKey: identity.dayKey, forget: () => { throw new Error('boom'); } },
+      wall: { cycleStart: () => { throw new Error('boom'); } }
+    });
+  } catch (err) { threw = err.message; }
+
+  assert.ok(threw, 'the pass failed, which is the situation being tested');
+  assert.ok(fs.existsSync(shot),
+    'the file is still there — files are unlinked after the commit, never inside it, ' +
+    'because a rollback would otherwise leave a row pointing at a file that is gone');
+  assert.ok(dbm.db.prepare('SELECT screenshot_path FROM payments WHERE code = ?')
+    .get('S37-ROLLBK').screenshot_path, 'and the row still points at it');
+  identity.forget = realForget;
+});

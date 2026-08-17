@@ -69,9 +69,9 @@ const staleShots = db.prepare(`
      AND COALESCE(p.updated_at, p.created_at) < ?`);
 const clearShot = db.prepare(`UPDATE payments SET screenshot_path = NULL WHERE id = ?`);
 
-function sweepScreenshots(now) {
+function sweepScreenshots(now, doomed) {
   const rows = staleShots.all(...FINAL, now - cfg.RETAIN_SCREENSHOT);
-  for (const r of rows) { unlinkQuiet(r.screenshot_path); clearShot.run(r.id); }
+  for (const r of rows) { doomed.push(r.screenshot_path); clearShot.run(r.id); }
   return rows.length;
 }
 
@@ -94,10 +94,10 @@ const staleSubs = db.prepare(`
 const dropSub = db.prepare(`DELETE FROM submissions WHERE id = ?`);
 const dropCells = db.prepare(`DELETE FROM cells WHERE submission_id = ?`);
 
-function sweepSubmissions(now, currentCycle) {
+function sweepSubmissions(now, currentCycle, doomed) {
   const rows = staleSubs.all(now - cfg.RETAIN_SUBMISSION, currentCycle);
   for (const r of rows) {
-    unlinkQuiet(r.preview_path);
+    if (r.preview_path) doomed.push(r.preview_path);
     dropCells.run(r.id);
     dropSub.run(r.id);
   }
@@ -162,26 +162,58 @@ const dormant = db.prepare(`
 const dropAllowance = db.prepare(`DELETE FROM allowances WHERE user_id = ?`);
 const dropUser = db.prepare(`DELETE FROM users WHERE id = ?`);
 
+/* Six tables carry a foreign key into users(id): brand_profiles, allowances,
+   submissions, cells, payments and legacy_keys. The WHERE above excludes an
+   account that has any of the first five. legacy_keys is the one it cannot
+   exclude, because it is not a reason to keep anybody — it is the pre-Phase-2
+   ip→user table, and migration 003 that drops it is marked @manual and has
+   never been run, so the table is still there holding rows.
+
+   Deleting the user without clearing it threw FOREIGN KEY, which rolled back
+   the entire sweep — every period in the privacy notice, silently, from the
+   first dormant account onwards, because the timer swallows the error.
+
+   Clearing it is also the right thing on its own terms: that row is a raw IP
+   address bound to an account that is being deleted for never coming back. */
+const dropLegacyKeys = db.prepare(`DELETE FROM legacy_keys WHERE user_id = ?`);
+
 function sweepDormant(now, forget) {
   const rows = dormant.all(now - cfg.RETAIN_DORMANT);
-  for (const r of rows) { dropAllowance.run(r.id); dropUser.run(r.id); forget(r.id); }
+  for (const r of rows) {
+    dropLegacyKeys.run(r.id);
+    dropAllowance.run(r.id);
+    dropUser.run(r.id);
+    forget(r.id);
+  }
   return rows.length;
 }
 
 /* ── The pass ─────────────────────────────────────────────────────
    One transaction. Either the whole sweep lands or none of it does,
    which keeps a half-swept database from ever being the thing the
-   next pass reasons about. Files are unlinked inside it: a file
+   next pass reasons about.
+
+   Files are unlinked *after* it commits, never inside. The first
+   version of this did the opposite, on the reasoning that a file
    deleted for a row that then rolls back is a preview nobody can
-   reach anyway, and the opposite mistake — a row gone with its file
-   still on the volume — is the one that leaves data behind. */
+   reach anyway. That reasoning was wrong, and an audit reproduced
+   why: the sweep hit a FOREIGN KEY error on a dormant account, the
+   whole transaction rolled back, and the payment screenshots it had
+   already unlinked were gone from disk with the rows still pointing
+   at them. Evidence destroyed, and the row that says it exists left
+   behind to contradict it.
+
+   The opposite mistake — a row gone with its file still on the
+   volume — is now the one this can make, and it is the survivable
+   one: the next pass has no row to find it by, but a file with no
+   row is inert, and it is visible on the volume. */
 
 /* Named, not an arrow built per call: db.tx caches the wrapped transaction
    against the function it was given, and a fresh closure each pass would
    re-wrap every time and never hit that cache. */
-function pass(now, identity, wall, out) {
-  out.screenshots = sweepScreenshots(now);
-  out.submissions = sweepSubmissions(now, wall.cycleStart(now));
+function pass(now, identity, wall, out, doomed) {
+  out.screenshots = sweepScreenshots(now, doomed);
+  out.submissions = sweepSubmissions(now, wall.cycleStart(now), doomed);
   out.eventIps = sweepEventIps(now);
   out.ipRows = sweepIpTables(now, identity.dayKey);
   out.accounts = sweepDormant(now, identity.forget);
@@ -195,7 +227,13 @@ function sweep(now = Date.now(), deps = {}) {
   const wall = deps.wall || require('./wall');
 
   const out = {};
-  dbm.tx(pass, now, identity, wall, out);
+  const doomed = [];
+  dbm.tx(pass, now, identity, wall, out, doomed);
+
+  /* only now, with the rows actually gone */
+  let files = 0;
+  for (const f of doomed) if (unlinkQuiet(f)) files++;
+  out.files = files;
 
   if (Object.values(out).some(n => n > 0)) logEvent('system', 'retention-sweep', out, now);
   return out;
@@ -208,8 +246,17 @@ let timer = null;
 
 function start() {
   if (timer || !cfg.RETENTION_SWEEP) return;
+  /* A sweep that throws is every published retention period quietly not
+     happening, once a day, for as long as nobody looks. console.warn was not
+     enough: it scrolls past, and the thing it is reporting is invisible from
+     the outside — the database simply stops shrinking. So it also writes an
+     event, which the panel's audit page shows and which is searchable after
+     the fact. */
   const run = () => {
-    try { sweep(Date.now()); } catch (err) { console.warn('retention sweep:', err.message); }
+    try { sweep(Date.now()); } catch (err) {
+      console.error('retention sweep FAILED — no retention period is being enforced:', err.message);
+      try { logEvent('system', 'retention-failed', { error: err.message }, Date.now()); } catch (e) { /* db is the thing that broke */ }
+    }
   };
   setTimeout(run, 60 * 1000).unref();
   timer = setInterval(run, DAY);
