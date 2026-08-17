@@ -168,6 +168,21 @@ function syncIpAllowance(ip, used, refillAt) {
 
 /* The 429 bodies. Friendly, and specific enough that support can tell
    which cap somebody hit without asking them to read a log. */
+/* An account that is no longer allowed in. Shaped like CAPPED so http.js's
+   existing `if (ses.capped)` branch answers it with a 403 and a sentence,
+   rather than the request quietly becoming somebody new. */
+const BANNED = {
+  banned: {
+    error: 'account-banned', status: 403,
+    message: 'This account has been closed for breaking the wall rules. ' +
+      'If you think that is wrong, get in touch and a person will look again.'
+  },
+  erased: {
+    error: 'account-erased', status: 403,
+    message: 'This account has been erased at its owner\'s request.'
+  }
+};
+
 const CAPPED = {
   guests: {
     error: 'ip-guest-cap',
@@ -364,6 +379,13 @@ function mintTx(ip, now) {
 function resolve(req, now, opts) {
   const ip = callerKey(req);
   const u = verifyCookie(readCookie(req), now);
+  /* A ban used to be a logout: setBan bumps token_epoch, the cookie stops
+     verifying, and the next request minted a brand-new guest — so the
+     banned person got a clean identity out of it. Nothing on this path read
+     users.status at all. */
+  if (u && u.status && u.status !== 'active') {
+    return { ip, capped: BANNED[u.status] || BANNED.banned };
+  }
   if (u) {
     const e = entryOf(u, now);
     /* Rolling session: a cookie past halfway through its life is renewed on

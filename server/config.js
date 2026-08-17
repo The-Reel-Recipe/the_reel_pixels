@@ -93,6 +93,22 @@ if (gaps.length) {
   bad('missing required env — ' + gaps.map(g => g.k).join(', '));
 }
 
+/* "Nothing goes on the public wall until a person has approved it" is the
+   promise the whole product rests on, and two environment variables could
+   quietly retire it: TG_MODE=off makes every submission approve itself on a
+   timer, and an empty moderator list used to mean "anyone in the group".
+   Both are legitimate in development and neither is survivable in
+   production, so production refuses to start on either. */
+if (PROD) {
+  const mode = env.TG_MODE || 'webhook';
+  if (mode === 'off') {
+    bad('TG_MODE=off would auto-approve every submission — moderation is not optional in production');
+  }
+  if (!ids('TG_MOD_IDS', env.TG_MOD_IDS).length) {
+    bad('TG_MOD_IDS is empty — nobody could approve anything, and an empty list must never mean everybody');
+  }
+}
+
 /* ── values ───────────────────────────────────────────────────── */
 
 /* `node server.js 5174` still works; anything non-numeric in argv[2]

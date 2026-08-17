@@ -476,9 +476,18 @@ function setBan(userId, banned, actor, reason, now = Date.now()) {
   const u = db.prepare('SELECT id, status, kind FROM users WHERE id = ?').get(userId);
   if (!u) return { error: 'not-found' };
   banStmt.run(banned ? 'banned' : 'active', userId);
-  /* a banned user's cookie has to stop working, and the epoch is what does
-     that without a session table */
-  db.prepare('UPDATE users SET token_epoch = token_epoch + 1 WHERE id = ?').run(userId);
+  /* Deliberately NOT bumping token_epoch on a ban. The epoch is what makes a
+     cookie stop verifying, and a cookie that will not verify cannot be
+     identified — so bumping it here meant the next request could not tell
+     this was a banned person and minted them a fresh identity instead. The
+     ban is enforced on every request now by identity.resolve reading
+     users.status, which needs the cookie to still say who it belongs to.
+     Lifting a ban is likewise just a status change.
+
+     What a ban does and does not do, honestly: it closes that account, its
+     paint and its history. Somebody who clears their cookies still becomes a
+     new anonymous visitor — that is inherent to painting without an account,
+     and the per-IP caps are what limit it. */
   identity.forget(userId);
   logEvent(actor, banned ? 'user-ban' : 'user-unban', { user: userId, reason: reason || null }, now);
   return { ok: true, userId, status: banned ? 'banned' : 'active' };

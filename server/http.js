@@ -577,7 +577,8 @@ async function handler(req, res) {
   const ses = identity.resolve(req, now,
     { mint: !/^\/api\/auth\/(signup|login|logout)$/.test(urlPath) });
   if (ses.cookie) res.setHeader('set-cookie', ses.cookie);
-  if (ses.capped) return sendJson(res, 429, ses.capped);
+  /* a daily cap is 429 "come back later"; a closed account is 403 "no" */
+  if (ses.capped) return sendJson(res, ses.capped.status || 429, ses.capped);
   const row = ses.e;                      // null only on the auth routes
   if (row) identity.touch(row, now);
 

@@ -356,9 +356,14 @@ test('banning stops the account and the cookie with it', async () => {
   assert.equal(r.code, 200);
   assert.equal(dbm.db.prepare('SELECT status FROM users WHERE id = ?').get(g.uid).status, 'banned');
 
-  /* the cookie they are holding was signed against the old epoch */
-  const stillIn = identity.verifyCookie(cookie.split('=')[1], Date.now());
-  assert.equal(stillIn, null, 'a ban has to log them out, not just mark them');
+  /* The cookie deliberately still verifies. Invalidating it was the old
+     behaviour and it defeated the ban: an unverifiable cookie cannot say
+     who it belongs to, so the next request minted the banned person a
+     fresh identity. The status is what stops them, and reading it needs
+     the cookie to stay readable. */
+  const held = identity.verifyCookie(cookie.split('=')[1], Date.now());
+  assert.ok(held, 'the cookie still names them');
+  assert.equal(held.status, 'banned', '…and names them as banned, which is what resolve refuses on');
 });
 
 test('an adjustment says why, or it does not happen', async () => {

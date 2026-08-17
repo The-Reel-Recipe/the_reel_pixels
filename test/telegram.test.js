@@ -476,23 +476,41 @@ test('an empty queue is not an occasion for a warning', () => {
 
 /* ── the convenience commands (§7.3) ──────────────────────────── */
 
+const OUR_CHAT = Number(process.env.TG_CHAT_ID);
+
 test('/pending and /stats answer in the group', async () => {
   calls.length = 0;
-  await telegram.onCommand({ text: '/pending', chat: { id: -1 }, from: { id: 4242 } });
-  await telegram.onCommand({ text: '/stats@s37bot', chat: { id: -1 }, from: { id: 4242 } });
+  await telegram.onCommand({ text: '/pending', chat: { id: OUR_CHAT }, from: { id: 4242 } });
+  await telegram.onCommand({ text: '/stats@s37bot', chat: { id: OUR_CHAT }, from: { id: 4242 } });
   assert.equal(calls.length, 2);
   assert.match(calls[0].params.text, /waiting/);
   assert.match(calls[1].params.text, /live/);
 
   calls.length = 0;
-  await telegram.onCommand({ text: '/stats', chat: { id: -1 }, from: { id: 1 } });
+  await telegram.onCommand({ text: '/stats', chat: { id: OUR_CHAT }, from: { id: 1 } });
   assert.equal(calls.length, 0, 'not for strangers');
+});
+
+test('the bot only listens to its own group', async () => {
+  /* The bot has a public username, so anyone can add it to a group. Without
+     an origin check that hands strangers /pending and /stats — which list
+     the queue with people's handles — and /freeze, which closes the wall to
+     writes everywhere. */
+  calls.length = 0;
+  await telegram.onCommand({ text: '/stats', chat: { id: -99 }, from: { id: 4242 } });
+  await telegram.onCommand({ text: '/freeze', chat: { id: -99 }, from: { id: 4242 } });
+  assert.equal(calls.length, 0, 'a moderator in the wrong room is still the wrong room');
+
+  const r = await telegram.onCallback({
+    id: 'q1', data: 'ap:1', from: { id: 4242 }, message: { chat: { id: -99 } }
+  });
+  assert.equal(r, null, 'and no decision travels from it');
 });
 
 test('/freeze asks before it closes the wall', async () => {
   const settings = require('../server/settings.js');
   calls.length = 0;
-  await telegram.onCommand({ text: '/freeze', chat: { id: -1 }, from: { id: 4242 } });
+  await telegram.onCommand({ text: '/freeze', chat: { id: OUR_CHAT }, from: { id: 4242 } });
   assert.equal(settings.S.MAINTENANCE, false, 'asking is not doing');
   const ask = calls.find(c => c.method === 'sendMessage');
   assert.ok(ask, 'it asked');
@@ -500,18 +518,18 @@ test('/freeze asks before it closes the wall', async () => {
 
   await telegram.onCallback({
     id: 'cb', data: 'fz:1', from: { id: 4242, username: 'sara' },
-    message: { message_id: 7, chat: { id: -1 } }
+    message: { message_id: 7, chat: { id: OUR_CHAT } }
   });
   assert.equal(settings.S.MAINTENANCE, true, 'and the tap does it');
 
   await telegram.onCallback({
     id: 'cb2', data: 'fz:0', from: { id: 4242, username: 'sara' },
-    message: { message_id: 8, chat: { id: -1 } }
+    message: { message_id: 8, chat: { id: OUR_CHAT } }
   });
   assert.equal(settings.S.MAINTENANCE, false);
 
   /* a stranger cannot even ask */
   calls.length = 0;
-  await telegram.onCommand({ text: '/freeze', chat: { id: -1 }, from: { id: 1 } });
+  await telegram.onCommand({ text: '/freeze', chat: { id: OUR_CHAT }, from: { id: 1 } });
   assert.equal(calls.length, 0);
 });

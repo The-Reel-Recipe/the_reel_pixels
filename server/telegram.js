@@ -477,7 +477,18 @@ function remindRefund(paymentId, now = Date.now()) {
 
 /* ── Callbacks ────────────────────────────────────────────────── */
 
-const isMod = id => cfg.TG_MOD_IDS.length === 0 || cfg.TG_MOD_IDS.includes(Number(id));
+/* Fails closed. This read "an empty list means everybody", which turns one
+   blanked environment variable into "every member of the group decides what
+   goes on the public wall" — silently, with nothing in the log. An empty
+   list now means nobody, and config.js refuses to boot production without
+   one, so the failure is loud at start rather than invisible forever. */
+const isMod = id => cfg.TG_MOD_IDS.includes(Number(id));
+
+/* Updates from anywhere but the moderation group are ignored outright.
+   Without this, adding the bot to any other group by its public username
+   hands strangers /pending and /stats (which list the queue with handles)
+   and a /freeze button that closes the wall to writes. */
+const fromOurChat = chatId => String(chatId) === String(cfg.TG_CHAT_ID);
 const who = from => `tg:${from.id} (${from.username || from.first_name || 'unknown'})`;
 
 /* Always answers the callback query — an unanswered one leaves a spinner on
@@ -493,6 +504,7 @@ async function answer(id, text, alert) {
 async function onCallback(q) {
   const data = String(q.data || '');
   const actor = who(q.from || {});
+  if (!fromOurChat(q.message && q.message.chat && q.message.chat.id)) return null;
   if (!isMod(q.from && q.from.id)) {
     await answer(q.id, 'You are not on the moderator list for this wall.', true);
     return { refused: true };
@@ -578,6 +590,7 @@ async function onCallback(q) {
 /* Convenience commands (§7.3). Anything heavier belongs in the panel. */
 async function onCommand(msg) {
   const text = String(msg.text || '').trim().split(/\s+/)[0].replace(/@.*$/, '');
+  if (!fromOurChat(msg.chat && msg.chat.id)) return null;
   if (!isMod(msg.from && msg.from.id)) return null;
   const say = t => call('sendMessage', {
     chat_id: msg.chat.id, text: t, parse_mode: 'HTML'

@@ -264,6 +264,25 @@ test('a brand still signs in through the same door', async () => {
   assert.match(String(who.jar.get('uid')), /^b\d/, 'a brand cookie, marked as one');
 });
 
+test('a ban closes the door instead of handing out a new one', async () => {
+  /* setBan bumps token_epoch, which stops the cookie verifying — and the
+     request path used to answer that by minting a fresh guest, so being
+     banned was a logout with a clean slate attached. */
+  const me = visitor('203.0.113.251');
+  await json(me, 'GET', '/api/me');
+  const id = uidOf(me);
+
+  /* through the real admin action, so the test breaks if it starts
+     invalidating the cookie again and loses track of who it banned */
+  const admin = require('../server/admin.js');
+  admin.setBan(id, true, 'tester', 'painted something illegal');
+
+  const after = await json(me, 'GET', '/api/me');
+  assert.equal(after.code, 403, 'not a fresh identity, and not a 429 either');
+  assert.equal(after.json.error, 'account-banned');
+  assert.ok(after.json.message, 'and it says what to do about it');
+});
+
 /* ── the name on your pixels ──────────────────────────────────── */
 
 test('a painter with an account can rename themselves', async () => {
