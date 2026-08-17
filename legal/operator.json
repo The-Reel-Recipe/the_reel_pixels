@@ -1,0 +1,180 @@
+{
+  "_README": [
+    "The details only you can supply. tools/make-legal.js reads this, fills every",
+    "[[PLACEHOLDER]] in legal/*.md and legal/ar/*.md, and writes six pages to assets/.",
+    "",
+    "  node tools/make-legal.js --check    what is still missing",
+    "  node tools/make-legal.js --draft    preview with the gaps highlighted",
+    "  node tools/make-legal.js            build for real (refuses while gaps remain)",
+    "",
+    "Three kinds of value:",
+    "  \"something\"        an answer, published as written in both languages",
+    "  {\"en\":..,\"ar\":..}  an answer that reads as prose, so it needs both",
+    "  \"\"                 NOBODY HAS ANSWERED YET — blocks the build",
+    "  null               answered: publish nothing, and drop the line it sat on",
+    "",
+    "null is not a weaker \"\". Use it for details you have decided not to publish.",
+    "Never type the words 'not registered' anywhere in this file: a published",
+    "document saying so is a dated, signed admission. Leaving the line out is",
+    "neutral. See legal/FILL-IN.md for what each entry is and why it matters.",
+    "",
+    "The Arabic is the operative text by these documents' own choice, so an ar",
+    "value is not a translation of the en one — it is the version that binds."
+  ],
+
+  "_A": "═══ ONLY YOU CAN ANSWER THESE — the build is blocked until you do ═══",
+
+  "OPERATOR LEGAL NAME": { "en": "", "ar": "" },
+  "OPERATOR ADDRESS": { "en": "", "ar": "" },
+  "COURTS CITY": { "en": "", "ar": "" },
+  "CONTACT EMAIL": "",
+  "COMPLAINTS EMAIL": "",
+  "PRIVACY CONTACT EMAIL": "",
+  "EFFECTIVE DATE": "",
+
+  "_A_note": [
+    "OPERATOR LEGAL NAME — the full legal name that receives the money; your",
+    "  national ID name if you are not incorporated. Put the Arabic spelling in",
+    "  'ar' and the Latin one in 'en'. Appears in all six files.",
+    "OPERATOR ADDRESS — a real address for correspondence and service, written",
+    "  the way each country's post would read it.",
+    "COURTS CITY — follows from your address. e.g. en 'Cairo', ar 'القاهرة'.",
+    "The three emails may all be the same mailbox. One you actually read.",
+    "EFFECTIVE DATE — the day you publish, as YYYY-MM-DD. It is also stamped on",
+    "  every account and every payment as the version they accepted."
+  ],
+
+  "_B": "═══ DECISIONS — sensible answers already in place; change if you disagree ═══",
+
+  "OPERATOR LEGAL FORM": {
+    "en": "an individual operating in Egypt",
+    "ar": "فرد يعمل في مصر"
+  },
+  "COMMERCIAL / TAX REGISTRATION NUMBER": null,
+  "COMMERCIAL REGISTRATION NUMBER": null,
+  "TAX REGISTRATION NUMBER": null,
+  "PHONE / WHATSAPP": null,
+  "CONTACT HOURS": null,
+
+  "_B_note": [
+    "The four nulls above are the registration numbers and the phone line.",
+    "Set to null deliberately: the imprint drops those lines entirely rather",
+    "than publishing a blank label or a number that rings out. When you",
+    "register, put the numbers in and rebuild — that is the only change needed.",
+    "A phone line you will answer is worth adding: this audience expects one.",
+    "Give it as {\"en\": \"+20 1x xxx xxxx\", \"ar\": \"٠١x xxx xxxx\"}."
+  ],
+
+  "SITE URL": "https://project-s37.up.railway.app",
+  "VERSION": { "en": "1.0", "ar": "١٫٠" },
+  "LIABILITY FLOOR": { "en": "5,000", "ar": "٥٬٠٠٠" },
+
+  "CLOSURE NOTICE DAYS": { "en": "60", "ar": "٦٠" },
+  "CLOSURE REFUND DAYS": { "en": "30", "ar": "٣٠" },
+  "TERMINATION REFUND DAYS": { "en": "30", "ar": "٣٠" },
+  "REFUND SEND DAYS": { "en": "7", "ar": "٧" },
+
+  "GENERAL REPLY DAYS": { "en": "7", "ar": "٧" },
+  "COMPLAINT REPLY DAYS": { "en": "7", "ar": "٧" },
+  "DISPUTE REPLY DAYS": { "en": "7", "ar": "٧" },
+  "DSR REPLY DAYS": { "en": "7", "ar": "٧" },
+  "APPEAL REPLY DAYS": { "en": "7", "ar": "٧" },
+
+  "_reply_note": [
+    "One number, five places, on purpose. One person with a phone cannot honour",
+    "four different clocks, and a deadline you miss is worse than a longer one",
+    "you keep. Raise all five together or none.",
+    "LIABILITY FLOOR is the bare number: the documents supply 'EGP' and",
+    "'جنيهًا مصريًا' around it themselves."
+  ],
+
+  "_C": "═══ ENFORCED BY CODE — test/retention.test.js fails if these drift ═══",
+
+  "GUEST COOKIE LIFETIME": { "en": "365 days", "ar": "٣٦٥ يومًا" },
+  "BRAND COOKIE LIFETIME": { "en": "180 days", "ar": "١٨٠ يومًا" },
+  "IP RETENTION": { "en": "180 days", "ar": "١٨٠ يومًا" },
+  "SUBMISSION RETENTION": { "en": "24 months", "ar": "٢٤ شهرًا" },
+  "SCREENSHOT RETENTION": { "en": "12 months", "ar": "١٢ شهرًا" },
+  "DORMANT ACCOUNT MONTHS": { "en": "12", "ar": "١٢" },
+
+  "_C_note": [
+    "These are not prose. server/config.js RETAIN_IP, RETAIN_SUBMISSION,",
+    "RETAIN_SCREENSHOT and RETAIN_DORMANT are what server/retention.js deletes",
+    "on, and test/retention.test.js reads this file and fails if the published",
+    "number and the enforced one disagree. Change one, change both, or the",
+    "suite stops you — which is the whole reason a published retention period",
+    "here means something. A month is 30 days on both sides.",
+    "",
+    "IP RETENTION is a floor as well as a ceiling: Anti-Cyber Crime Law 175/2018",
+    "obliges a service provider to retain data identifying its users for 180",
+    "days. Shortening it is not a privacy improvement. CONFIRM WITH A LAWYER",
+    "that S37 counts as a service provider for that purpose.",
+    "",
+    "The two cookie lifetimes are config.js GUEST_TTL and BRAND_TTL. Shortening",
+    "GUEST_TTL is recommended (CODE-CHANGES S1) — a 365-day rolling identifier",
+    "weakens the 'strictly necessary' position in PRIVACY §12. Change both."
+  ],
+
+  "_D": "═══ CONFIRM WITH A PROFESSIONAL — drafted from public sources ═══",
+
+  "TAX RECORD RETENTION": { "en": "5 years", "ar": "٥ سنوات" },
+  "BREACH DEADLINE": { "en": "72 hours", "ar": "٧٢ ساعة" },
+
+  "CPA CONTACT": {
+    "en": "hotline 19588, cpa.gov.eg, or info@cpa.gov.eg",
+    "ar": "الخط الساخن ١٩٥٨٨، أو cpa.gov.eg، أو info@cpa.gov.eg"
+  },
+  "DATA PROTECTION CENTRE CONTACT": {
+    "en": "the Personal Data Protection Centre at the Ministry of Communications and Information Technology, pdpc.gov.eg",
+    "ar": "مركز حماية البيانات الشخصية التابع لوزارة الاتصالات وتكنولوجيا المعلومات، pdpc.gov.eg"
+  },
+
+  "_D_note": [
+    "TAX RECORD RETENTION — commonly cited as 5 years; confirm with an accountant.",
+    "  It appears in REFUNDS §1 and PRIVACY §7.2/§9 and is what turns 'we keep",
+    "  payment records indefinitely' into 'the law requires us to'.",
+    "BREACH DEADLINE — the PDPL notification deadline, commonly cited as 72 hours.",
+    "CPA CONTACT — verified live 2026-08-17: hotline 19588, cpa.gov.eg carries a",
+    "  working complaints page, info@cpa.gov.eg. A WhatsApp line (01281661880)",
+    "  was also published; left out because it was not independently re-verified.",
+    "DATA PROTECTION CENTRE CONTACT — the Centre exists under MCIT and pdpc.gov.eg",
+    "  resolves, but as of 2026-08-17 its portal was reported not yet operational.",
+    "  Deliberately worded as who and where, promising no email and no form.",
+    "  NOTE: the Executive Regulations landed 1 Nov 2025 (PM Decree 816/2025) with",
+    "  a one-year grace period — full PDPL enforcement is expected October 2026."
+  ],
+
+  "_E": "═══ BACKUPS — describes what actually runs today ═══",
+
+  "BACKUP DESTINATION AND STATUS": {
+    "en": "We take copies of the database by hand. There is no automatic schedule, and no copy is stored outside our hosting provider.",
+    "ar": "نأخذ نسخًا من قاعدة البيانات يدويًا. لا يوجد جدول تلقائي، ولا تُحفظ أي نسخة خارج مزوّد الاستضافة."
+  },
+  "BACKUP RETENTION": {
+    "en": "we keep a hand-made copy only until the next one replaces it",
+    "ar": "نحتفظ بالنسخة اليدوية حتى تحل محلها النسخة التالية فقط"
+  },
+
+  "_E_note": [
+    "This is the honest description of today, and it is a sentence you will not",
+    "want to leave up. Nothing automatic runs: deploy/s37-backup.timer is a",
+    "systemd unit from the VPS design and does not exist on Railway; the",
+    "Litestream keys in .env.production are blank; and tools/backup-nightly.js",
+    "writes into DATA_DIR/backup — the same volume as the database it copies.",
+    "",
+    "When you fix it (CODE-CHANGES M9), rewrite both entries to name the",
+    "destination, the country and the retention — and rewrite them BEFORE",
+    "switching the destination on, not after. A new country has to appear in",
+    "PRIVACY §5 before any data starts going there."
+  ],
+
+  "_F": "═══ AUTOMATIC — the pages' own addresses; leave alone ═══",
+
+  "ENGLISH TERMS URL": "/assets/terms.html",
+  "ENGLISH PRIVACY URL": "/assets/privacy.html",
+  "ENGLISH REFUNDS URL": "/assets/refunds.html",
+  "ARABIC TERMS URL": "/assets/terms.ar.html",
+  "ARABIC PRIVACY URL": "/assets/privacy.ar.html",
+  "ARABIC REFUNDS URL": "/assets/refunds.ar.html",
+  "PRIVACY NOTICE URL": "/assets/privacy.html"
+}

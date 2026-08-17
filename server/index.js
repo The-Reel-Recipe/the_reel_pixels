@@ -23,6 +23,7 @@ const wall = require('./wall.js');
 const telegram = require('./telegram.js');
 const payments = require('./payments.js');
 const submissions = require('./submissions.js');
+const retention = require('./retention.js');
 const httpMod = require('./http.js');
 const { handler } = httpMod;
 
@@ -37,6 +38,10 @@ function boot() {
   wall.load();
   telegram.start();
   payments.startSweeper();
+  /* The privacy notice publishes four retention periods; this is what
+     makes them true rather than aspirational. Daily, and off outside
+     production — see config.RETENTION_SWEEP. */
+  retention.start();
   if (cfg.ON_VERCEL) console.log(`data dir    →  ${cfg.DATA_DIR} (per-instance; set DATA_DIR for durable storage)`);
 }
 boot();
@@ -66,6 +71,7 @@ function shutdown(sig, code = 0) {
   telegram.stopWorker();
   telegram.stopPolling();
   payments.stopSweeper();
+  retention.stop();
   submissions.cancelPending();
 
   try { db.close(); } catch (err) { console.error('shutdown: db.close failed —', err.message); }

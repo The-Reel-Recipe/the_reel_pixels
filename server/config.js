@@ -56,6 +56,16 @@ function count(name, v, dflt) {
   if (!Number.isInteger(n) || n < 0) bad(`${name} must be a whole number ≥ 0, got "${v}"`);
   return n;
 }
+/* A retention period, configured in whole days because that is the unit the
+   privacy notice publishes it in, and returned in milliseconds because that
+   is the unit everything else here speaks. Dividing back out is exact. */
+const DAY = 24 * 60 * 60 * 1000;
+function days(name, v, dflt) {
+  const n = count(name, v, dflt);
+  if (n < 1) bad(`${name} must be at least 1 day, got "${v}"`);
+  return n * DAY;
+}
+
 /* tri-state: "1" on, "0" off, unset = whatever the deploy implies */
 function flag(v, dflt) {
   if (v === '1') return true;
@@ -211,6 +221,44 @@ module.exports = Object.freeze({
      every cycle, on the visit where they were coming to spend money. */
   GUEST_TTL: 365 * 24 * 60 * 60 * 1000,
   BRAND_TTL: 180 * 24 * 60 * 60 * 1000,
+
+  /* ── How long things are kept ────────────────────────────────
+     The privacy notice publishes these as promises, so they are
+     defined once, here, and retention.js is what makes them true.
+     test/retention.test.js reads legal/operator.json and fails if
+     the published number and the enforced one drift apart — the
+     only way a promise stays honest is if breaking it breaks the
+     build.
+
+     RETAIN_IP is a floor as well as a ceiling: Anti-Cyber Crime
+     Law 175/2018 obliges a service provider to retain the data
+     identifying its users for 180 days. Shortening it is not a
+     privacy improvement, it is a different offence.
+
+     Where the notice says "months", a month is 30 days here. That
+     makes 24 months 720 days rather than 730 — a few days shorter
+     than the reading somebody might take off the page, which is the
+     safe direction to be wrong in: we delete before the promise
+     expires, never after. */
+  RETAIN_IP: days('RETAIN_IP', env.RETAIN_IP, 180),
+  /* A submission is the evidence for a moderation decision — the
+     answer to "you deleted my drawing" and to a demand about what
+     was on the wall in March. Two years outlives any plausible
+     complaint window and is not "forever". */
+  RETAIN_SUBMISSION: days('RETAIN_SUBMISSION', env.RETAIN_SUBMISSION, 720),
+  /* Counted from the day a payment stopped moving, not from the day
+     it was made: a screenshot settles "did the money arrive", and
+     that question is closed once the payment is final. The payment
+     row itself stays for the tax period — that is a different
+     obligation with a different clock. */
+  RETAIN_SCREENSHOT: days('RETAIN_SCREENSHOT', env.RETAIN_SCREENSHOT, 360),
+  /* An account with no email, no submission and no payment is a
+     cookie nobody came back for. Deleting it is the whole of what
+     it means to hold no more than you need. */
+  RETAIN_DORMANT: days('RETAIN_DORMANT', env.RETAIN_DORMANT, 360),
+  /* Off by default everywhere but production: a suite that seeds a
+     row dated last year should not race a sweeper for it. */
+  RETENTION_SWEEP: flag(env.RETENTION_SWEEP, PROD),
   /* Secure would make the cookie invisible over plain http, which is
      every local dev session — on by default only where TLS is certain */
   COOKIE_SECURE: flag(env.COOKIE_SECURE, PROD),
