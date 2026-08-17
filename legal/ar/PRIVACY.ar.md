@@ -22,7 +22,7 @@ S37 حائط عام من مليون بكسل. وهذه الصفحة تبيّن �
 
 ## ١. من المسؤول
 
-يُشغّل S37 **[[OPERATOR LEGAL NAME]]**، [[OPERATOR LEGAL FORM]]، وعنوانه [[OPERATOR ADDRESS]]، مصر. [[COMMERCIAL / TAX REGISTRATION NUMBER]]
+يُشغّل S37 **[[OPERATOR LEGAL NAME]]**، [[OPERATOR LEGAL FORM]]، وعنوانه [[OPERATOR ADDRESS]]. [[COMMERCIAL / TAX REGISTRATION NUMBER]]
 
 وبلغة قانون حماية البيانات الشخصية المصري رقم ١٥١ لسنة ٢٠٢٠ («القانون»)، فذلك الشخص هو **المتحكّم** في بياناتك الشخصية.
 

@@ -24,32 +24,49 @@
 
   "_A": "═══ ONLY YOU CAN ANSWER THESE — the build is blocked until you do ═══",
 
-  "OPERATOR LEGAL NAME": { "en": "", "ar": "" },
-  "OPERATOR ADDRESS": { "en": "", "ar": "" },
-  "COURTS CITY": { "en": "", "ar": "" },
-  "CONTACT EMAIL": "",
-  "COMPLAINTS EMAIL": "",
-  "PRIVACY CONTACT EMAIL": "",
-  "EFFECTIVE DATE": "",
+  "OPERATOR LEGAL NAME": { "en": "Mohab Yasser Albahrawy", "ar": "مهاب ياسر البحراوي" },
+  "OPERATOR ADDRESS": { "en": "Fifth Settlement, New Cairo, Cairo Governorate, Egypt", "ar": "التجمع الخامس، القاهرة الجديدة، محافظة القاهرة، مصر" },
+  "COURTS CITY": { "en": "Cairo", "ar": "القاهرة" },
+  "CONTACT EMAIL": "mohabhelp@gmail.com",
+  "COMPLAINTS EMAIL": "mohabhelp@gmail.com",
+  "PRIVACY CONTACT EMAIL": "mohabhelp@gmail.com",
+  "EFFECTIVE DATE": "2026-08-17",
 
   "_A_note": [
-    "OPERATOR LEGAL NAME — the full legal name that receives the money; your",
-    "  national ID name if you are not incorporated. Put the Arabic spelling in",
-    "  'ar' and the Latin one in 'en'. Appears in all six files.",
-    "OPERATOR ADDRESS — a real address for correspondence and service, written",
-    "  the way each country's post would read it.",
-    "COURTS CITY — follows from your address. e.g. en 'Cairo', ar 'القاهرة'.",
-    "The three emails may all be the same mailbox. One you actually read.",
-    "EFFECTIVE DATE — the day you publish, as YYYY-MM-DD. It is also stamped on",
-    "  every account and every payment as the version they accepted."
+    "Supplied by Mohab, 2026-08-17.",
+    "",
+    "⚠ OPERATOR ADDRESS is a district, not a street address. It is enough to",
+    "  publish, but service of legal process wants somewhere a courier can",
+    "  actually deliver — a street and building number. Narrow it when you",
+    "  can, and rebuild: nothing else has to change.",
+    "",
+    "⚠ All three contact lines are one personal Gmail. That works and it is",
+    "  honest, but it is now printed in six public documents and will be",
+    "  scraped. A forwarding address on your own domain would let you change",
+    "  the mailbox behind it later without republishing the documents.",
+    "",
+    "EFFECTIVE DATE — the day this wording came into force. Stamped on every",
+    "  account and every order as the version they accepted, so it is a real",
+    "  date and not a backdated one. Changing the documents means bumping",
+    "  VERSION, not this: see _C_note on how a new version re-asks everybody."
   ],
 
   "_B": "═══ DECISIONS — sensible answers already in place; change if you disagree ═══",
 
   "OPERATOR LEGAL FORM": {
-    "en": "an individual operating in Egypt",
-    "ar": "فرد يعمل في مصر"
+    "en": "an individual",
+    "ar": "شخص طبيعي"
   },
+  "_form_note": [
+    "Just the form, no geography: every sentence this drops into already",
+    "supplies the country ('established in Egypt', 'ومقره في مصر', 'of",
+    "<address>, Egypt'). 'an individual operating in Egypt' read as",
+    "'…operating in Egypt, established in Egypt'.",
+    "",
+    "It says what is true and volunteers nothing further. If you register",
+    "later, change this to the form you registered as and fill in the two",
+    "registration numbers below — that is the whole edit."
+  ],
   "COMMERCIAL / TAX REGISTRATION NUMBER": null,
   "COMMERCIAL REGISTRATION NUMBER": null,
   "TAX REGISTRATION NUMBER": null,

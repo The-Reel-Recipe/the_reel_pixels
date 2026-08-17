@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — S37</title>
+<meta name="robots" content="index,follow">
+<style>
+:root{--bg:#150A10;--surface:#1F1019;--text:#FAF2F4;--dim:#CDAFBA;--pink:#FF4D9D;--line:rgba(255,255,255,.14)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-text-size-adjust:100%}
+.wrap{max-width:46rem;margin:0 auto;padding:24px 20px 96px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding-bottom:16px;border-bottom:1px solid var(--line);margin-bottom:8px}
+header img{width:34px;height:34px;image-rendering:pixelated}
+header b{font-size:18px;letter-spacing:.02em}
+header .sp{margin-inline-start:auto;display:flex;gap:10px;flex-wrap:wrap}
+a{color:var(--pink)}
+h1{font-size:1.7rem;line-height:1.25;margin:24px 0 8px}
+h2{font-size:1.22rem;margin:32px 0 8px;padding-top:8px;border-top:1px solid var(--line)}
+h3{font-size:1.05rem;margin:22px 0 6px}
+p,li{color:var(--text)}
+li{margin:5px 0}
+blockquote{margin:14px 0;padding:12px 16px;background:var(--surface);
+  border-inline-start:3px solid var(--pink);border-radius:8px;color:var(--dim)}
+code{background:rgba(255,255,255,.08);padding:1px 5px;border-radius:4px;font-size:.9em}
+hr{border:0;border-top:1px solid var(--line);margin:28px 0}
+table{width:100%;border-collapse:collapse;margin:14px 0;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:start;vertical-align:top}
+th{background:var(--surface)}
+footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:var(--dim);font-size:.9rem}
+.gap{background:#FFC24B;color:#241300;padding:1px 5px;border-radius:4px;font-weight:700}
+@media print{body{background:#fff;color:#000}a{color:#000}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <img src="/assets/logo-icon.png" alt="">
+  <b>S37</b>
+  <span class="sp">
+    <a href="/">The wall</a>
+    <a href="/assets/privacy.ar.html">العربية</a>
+  </span>
+</header>
+<h1>S37 — Privacy Notice</h1>
+<p><strong>شخبط على الحيط</strong></p>
+<p>Version 1.0 · In force from 2026-08-17</p>
+<p>Arabic version: /assets/privacy.ar.html. <strong>The Arabic version is the one that applies.</strong></p>
+<hr>
+<h2>What this says, in short</h2>
+<p>S37 is a public wall of a million pixels. This page says exactly what we record, why, who else sees it, and how long we keep it.</p>
+<ol>
+<li><strong>We record something the moment the page loads</strong>, before you tap anything: an anonymous account, a cookie, and your IP address. Section 3 explains why.</li>
+<li><strong>There is no analytics and no advertising tracking here.</strong> No Google Analytics, no Meta pixel, no third-party script, no external fonts, no CDN. Everything is served from our own server. This is verifiable — open your browser's network tab.</li>
+<li><strong>Everything you paint is reviewed by a person over Telegram</strong> before it goes public. Your artwork, your display name and your payment details go to Telegram. Section 6.</li>
+<li><strong>The wall is wiped every month. Our records are not.</strong> Section 7.</li>
+<li><strong>You have rights over your data and we honour them by hand</strong>, because there is no self-service button yet. Section 9 says exactly what we can and cannot undo.</li>
+</ol>
+<hr>
+<h2>1. Who is responsible</h2>
+<p>S37 is run by <strong>Mohab Yasser Albahrawy</strong>, an individual, of Fifth Settlement, New Cairo, Cairo Governorate, Egypt.</p>
+<p>Under Egypt's Personal Data Protection Law No. 151 of 2020 ("the PDPL") that person is the <strong>controller</strong> of your personal data.</p>
+<ul>
+<li>Data protection and requests about your data: <strong>mohabhelp@gmail.com</strong></li>
+<li>Everything else: <strong>mohabhelp@gmail.com</strong></li>
+</ul>
+<p>S37 is run by one person. There is no support team; requests are read and answered by hand.</p>
+<h2>2. What this covers</h2>
+<p>The S37 website at https://project-s37.up.railway.app and the private admin panel used to run it. It does not cover your own bank or InstaPay app — when you pay you leave our site and pay inside your bank's app, and we never see your bank sign-in, card number, PIN or InstaPay password. It does not cover websites a brand links to from its pixels.</p>
+<h2>3. What we collect, and when</h2>
+<h3>3.1 The moment you open the site — before you tap anything</h3>
+<p>As soon as your browser asks our server for the wall, three things happen.</p>
+<p><strong>An anonymous account is created.</strong> It holds an internal number, a public name of the form <code>Pixel fan #1234</code> calculated from that number, the time it was made and the time you were last seen. It is not calculated from your name, your email or your IP.</p>
+<p><strong>A cookie called <code>uid</code> is set</strong> on your device, holding your account number and a signature. Details in section 12.</p>
+<p><strong>Your IP address is recorded</strong>, specifically:</p>
+<ul>
+<li>in a daily counter table, with the date and how many new identities, submissions and brand applications came from it that day — this is what stops one person clearing cookies for unlimited free pixels;</li>
+<li>in a second table holding the free-pixel clock, so a fresh browser tab does not reset your allowance;</li>
+<li>permanently in our activity log at the moment your account is created (section 3.7), subject to the retention in section 7;</li>
+<li>in the server's memory for a few minutes, for rate limiting. That copy is never written to disk.</li>
+</ul>
+<p>IPv6 addresses are shortened to their first four blocks before storing. IPv4 addresses are stored whole.</p>
+<h3>3.2 When you paint</h3>
+<ul>
+<li>The exact pixels: their positions and colours, stored both as individual wall squares linked to your account and as one packed copy inside the record of your submission.</li>
+<li>How many pixels, whether they were free or paid paint, and the box they fit in.</li>
+<li>The times it was submitted and decided, the decision, and the reason if it was refused.</li>
+<li>Which moderator decided it.</li>
+<li>A picture of your batch as it would look on the wall, rendered by our server and saved as a file.</li>
+</ul>
+<p><strong>Every wall square carries your account number.</strong> Anyone who taps a pixel sees the display name of whoever painted it.</p>
+<h3>3.3 When you choose a display name</h3>
+<p>If you have an account with an email address, you can replace <code>Pixel fan #1234</code> with a name of your choice, 2 to 24 characters. Guests without an email cannot; brands publish under their approved business name and cannot rename.</p>
+<p><strong>That name is public to everyone.</strong> It is sent to every visitor's browser with the wall, not only to people who tap your pixels. Both the old and the new name are written into our activity log.</p>
+<p>Please do not use your full real name unless you want strangers to have it.</p>
+<h3>3.4 When you make a painter account</h3>
+<ul>
+<li>Your email address, used as your sign-in name and to reach you about money you have paid us.</li>
+<li>Your password, stored only as a scrambled value (scrypt) that cannot be turned back into your password.</li>
+</ul>
+<h3>3.5 When you apply as a brand</h3>
+<p>In one form: business name and category; a description of at least 200 characters; website and/or social links; a contact person's name; a phone number; a commercial registration or tax number (optional); an InstaPay handle; an email address and a password.</p>
+<p>None of this goes on the wall. It is used to check the business is real and to handle bookings and refunds. All of it goes to our moderator over Telegram — section 6.</p>
+<h3>3.6 When you pay</h3>
+<p>Payment is an InstaPay bank transfer made inside your own bank app. We record:</p>
+<ul>
+<li>the order: what you bought, the amount in EGP, a reference code, and its status;</li>
+<li><strong>the InstaPay transaction reference</strong> you type in;</li>
+<li><strong>the handle or number you paid from</strong> — usually a phone number or a <code>name@instapay</code> handle;</li>
+<li><strong>a screenshot of the transfer, if you choose to attach one</strong>;</li>
+<li>who confirmed or refunded it, and when.</li>
+</ul>
+<p><strong>About the screenshot.</strong> Before storing it we check the file really is an image and strip the hidden data files carry — location, camera details and similar. We do <strong>not</strong> change what the picture shows. A banking screenshot usually shows your full name, part of your account number, your balance and other recent transactions. <strong>If you would rather not share that, do not attach a screenshot.</strong> The transaction reference alone is enough; the screenshot only makes it faster.</p>
+<h3>3.7 The activity log</h3>
+<p>Every important action writes one line into a log: who did it, what it was, a small block of details, and the time. Lines containing personal data include: account created (<strong>your IP address</strong>); brand application (email, business name, category); sign-in (email); painter account created (email); display name changed (old and new name); payment reported (<strong>the InstaPay reference and the handle you paid from</strong>); refund sent (the handle it went to); painting, booking and ordering (pixel counts, brand names, links, amounts); admin actions (the account acted on and the operator's written reason); admin sign-in (the operator's IP address).</p>
+<p>The log is append-only: nothing in the software edits a line. Lines are removed or redacted only by the retention sweeps and erasure described in sections 7 and 9.</p>
+<h3>3.8 Moderators and operators</h3>
+<p>People who moderate S37 are data subjects too. We store their Telegram numeric ID and username against every decision they make, and their IP address when they sign in to the admin panel.</p>
+<h3>3.9 What we do not collect</h3>
+<ul>
+<li><strong>No analytics or advertising trackers of any kind.</strong> No Google Analytics, Tag Manager, Meta pixel, Plausible, PostHog, Sentry or Hotjar.</li>
+<li><strong>No third-party scripts and no font CDN.</strong> Our two typefaces are on our own server; your browser is never told to contact Google or anyone else.</li>
+<li>No location data, no device fingerprinting, no advertising ID, no contacts.</li>
+<li>No date of birth (see section 11), no gender, no national ID.</li>
+<li><strong>No logo file is ever uploaded.</strong> When a brand picks a logo image the whole conversion into pixels happens inside your browser. Only the finished coloured squares reach our server; the image file never leaves your device.</li>
+<li>No card details and no bank credentials. There is no payment gateway here.</li>
+</ul>
+<p>The only file you can ever upload to us is the payment screenshot in 3.6.</p>
+<h2>4. Why we process each thing, and on what basis</h2>
+<table><thead><tr><th>What</th><th>Why</th><th>Basis</th></tr></thead><tbody>
+<tr><td>Anonymous account and <code>uid</code> cookie</td><td>So your pixels, history and paint balance stay yours across visits, with no sign-up</td><td>Necessary to provide the service you asked for — the wall cannot tell your pixels from anyone else's without it</td></tr>
+<tr><td>IP address: daily caps, allowance clock, rate limits</td><td>To stop one person taking everyone's free pixels, and to keep the site standing</td><td>Necessary to provide the service on the terms it is offered — a free allowance only exists because it can be rationed</td></tr>
+<tr><td>IP address kept in the activity log</td><td>To investigate abuse and answer a lawful demand</td><td>A legal obligation on service providers to retain data identifying users (section 7)</td></tr>
+<tr><td>Pixels, colours, submission record</td><td>To draw the wall and let a person review it before it becomes public</td><td>Necessary to provide the service</td></tr>
+<tr><td>Display name</td><td>To show who painted what</td><td><strong>Your consent</strong> — you choose to set it, and the app tells you it is public before you do</td></tr>
+<tr><td>Email and password</td><td>To let you sign in from another device, to allow paint purchases, and to reach you about money you paid us</td><td>Necessary to provide the service</td></tr>
+<tr><td>Brand application details</td><td>To check a paying business is real and to reach you about a booking or refund</td><td>Necessary to prepare and perform a contract</td></tr>
+<tr><td>Payment details and screenshot</td><td>To match your transfer to your order and settle a dispute later</td><td>Necessary to perform a contract, and a legal obligation to keep tax records</td></tr>
+<tr><td>Moderator identity</td><td>So every decision on the wall is traceable to a person</td><td>Necessary to operate a moderated service, and to answer a legal demand</td></tr>
+</tbody></table>
+<p><strong>When we start recording.</strong> The account, the cookie and the IP record in 3.1 are created on your very first request, before you can have agreed to anything, because the wall cannot work otherwise. <strong>We show you a short notice about it, with a link to this page, before your first pixel.</strong> We do not use any of it for advertising, for analytics, or to follow you anywhere else.</p>
+<h2>5. Where your data is stored</h2>
+<p>The site runs on <strong>Railway</strong>, a hosting company, on servers in the <strong>Netherlands, in the European Union</strong>. The database, the payment screenshots, the moderation preview images and the monthly wall archives all sit on a disk attached to that server. <strong>Your data leaves Egypt the moment you use the site.</strong></p>
+<h2>6. Who else receives it</h2>
+<h3>6.1 Telegram — the moderation channel</h3>
+<p>Every human review happens in a private Telegram group. Telegram is a messaging company outside Egypt.</p>
+<p><strong>For every batch of pixels:</strong> a picture of your artwork as it would appear on the wall, your display name or brand name, the pixel count, how many of your batches were approved or refused before, and — if it was paid for — the order code, its status and the InstaPay reference.</p>
+<p><strong>For every brand application:</strong> the business name, category, contact person's name, <strong>phone number, email address</strong>, website, social links, <strong>commercial registration number, InstaPay handle</strong>, and the full description. In plain text.</p>
+<p><strong>For every payment:</strong> the amount, the order code, the InstaPay reference, the handle you paid from, <strong>and the screenshot itself if you attached one.</strong> Where a refund is owed, a reminder repeating the handle is re-sent every 24 hours until it is paid.</p>
+<p>Once a message is in Telegram, Telegram stores it and everyone in that moderation group can see it. We can delete our own copy. <strong>We cannot promise every copy inside Telegram is gone.</strong> Telegram's own handling of that data is governed by Telegram's privacy policy, not ours.</p>
+<h3>6.2 Railway — hosting</h3>
+<p>Railway runs the server, holds the disk, terminates the encryption on your connection, and keeps its own record of requests, which normally includes IP addresses. Those records are Railway's, not ours; we cannot read or delete them.</p>
+<h3>6.3 InstaPay</h3>
+<p>We show you a link so you can pay. <strong>We send no data to InstaPay</strong> and the link carries no referrer. You pay inside your own bank app, and your bank tells us nothing except what you type back to us.</p>
+<h3>6.4 Offsite backup</h3>
+<p>We take copies of the database by hand. There is no automatic schedule, and no copy is stored outside our hosting provider.</p>
+<h3>6.5 Nobody else</h3>
+<p>We do not sell your data. We do not share it for advertising. We run no advertising on the site. We would disclose data where an Egyptian court or a competent authority lawfully required it, and where the law allows, we would tell you.</p>
+<h2>7. How long we keep things</h2>
+<h3>7.1 The monthly wipe — what it really does</h3>
+<p>On the 1st of every month the wall is cleared. Before it is cleared, our server <strong>saves a picture of the whole wall as it looked</strong>. That picture is kept permanently. <strong>It is a flat image of one million colours: it contains no names, no account numbers and no identifiers of any kind.</strong></p>
+<p>The wipe deletes <strong>only the coloured squares that were on public display.</strong> It does not delete the record of your submission — which contains <strong>a copy of the exact pixels you painted</strong> — the moderation preview image, your account, your email, your display name, brand application details, payment records, payment screenshots, or the activity log.</p>
+<p>So "the wall is wiped clean every month" is true about <strong>what you can see</strong>, and not true about <strong>what we store</strong>. We would rather say that than let you assume otherwise.</p>
+<h3>7.2 Item by item</h3>
+<ul>
+<li><strong>Your account, email, password hash and display name</strong> — kept until you ask us to erase them, or until 12 months after your last visit if you never come back and have no payments with us.</li>
+<li><strong>Submission records, including the stored copy of your pixels, the bounding box, the decision and the reason</strong> — kept for 24 months, then deleted. <strong>This is true whether the batch was approved, refused or expired.</strong> A refusal deletes the squares from the wall immediately; the record of the submission is kept for that period so we can answer a complaint or a legal demand about it.</li>
+<li><strong>Moderation preview images</strong> — deleted with the submission record.</li>
+<li><strong>Monthly wall archive pictures</strong> — kept permanently, by design. They contain no personal data.</li>
+<li><strong>Payment records</strong> — kept for 5 years, because Egyptian tax and commercial law requires it. This is why we cannot delete a payment record when you ask us to erase your data.</li>
+<li><strong>Payment screenshots</strong> — deleted 12 months after the payment reaches a final state, whether that is confirmed, refunded, refused or expired. Until then they are what settles a dispute over whether money arrived.</li>
+<li><strong>IP addresses in the activity log</strong> — kept for 180 days, then the address is removed from the log line while the rest of the line stays. We keep them for that period because Egyptian law requires service providers to retain data identifying users.</li>
+<li><strong>IP daily counters</strong> — the row for an address and a day is deleted 180 days after that day.</li>
+<li><strong>IP free-pixel clock</strong> — emptied at every monthly wipe.</li>
+<li><strong>Rate-limiting memory</strong> — dropped about ten minutes after your last request; never written to disk.</li>
+<li><strong>Backups</strong> — we keep a hand-made copy only until the next one replaces it. A backup contains everything above as it stood when it was taken.</li>
+<li><strong>Messages in Telegram</strong> — outside our control (6.1).</li>
+</ul>
+<h2>8. How we protect it</h2>
+<ul>
+<li><strong>Passwords</strong> are stored with scrypt and a random salt. We never store the password itself and cannot recover it. Minimum 10 characters.</li>
+<li><strong>Sign-in cookies are signed</strong>, marked <code>HttpOnly</code> so page scripts cannot read them, and sent only over an encrypted connection in production.</li>
+<li><strong>A session can be revoked</strong> without waiting for the cookie to expire, by bumping a counter on the account.</li>
+<li><strong>The admin panel requires a password and a one-time code</strong> from an authenticator app. Codes cannot be replayed. Attempts are limited to five per 15 minutes per address. Admin accounts cannot be created from the web. Admin sessions last 12 hours.</li>
+<li><strong>Payment screenshots are never served publicly.</strong> They can only be fetched through an authenticated admin route, and the server refuses to serve any file from the data folder over the web.</li>
+<li><strong>Uploads are checked by their actual contents</strong>, not by what they claim to be. Only PNG, JPEG and WebP are accepted, at most 5 MB, and hidden metadata is stripped.</li>
+<li><strong>Database queries use prepared statements</strong>, which closes off SQL injection.</li>
+<li><strong>Strict browser security headers</strong>, including a content security policy forbidding the page from loading any script, style, font or connection from anywhere but our own server.</li>
+<li><strong>Request size limits and rate limits</strong> on every route.</li>
+<li><strong>The connection is encrypted (HTTPS)</strong> and browsers are told to keep using it.</li>
+</ul>
+<p>No system is completely safe. Section 13 says what we do if something goes wrong.</p>
+<h2>9. Your rights, and what happens when you use them</h2>
+<p>Under the PDPL you have the right to know what we hold, to get a copy, to have mistakes corrected, to have data erased, to object to a use, to limit a use, and to withdraw consent where consent is what we relied on.</p>
+<p><strong>To use any of them, email mohabhelp@gmail.com</strong> from the address on your account, or describe your pixels well enough for us to find them. We aim to reply within 7 days.</p>
+<p>Here is the state of each right, honestly.</p>
+<p><strong>See your data — partly self-service.</strong> MY PIXELS already shows your batches, their status, the reason if one was refused, and a summary of your payments; the ME screen shows the email on your account. Neither shows the IP records, the activity log or your payment screenshots. Ask us and we put those together by hand.</p>
+<p><strong>Get a copy in a portable file.</strong> There is no download button. Ask us and we send you a file.</p>
+<p><strong>Correct your data.</strong> If you have an account with an email address you can change your display name in the app. Guests without an email and brand accounts cannot — brands publish under the approved business name. Everything else, including a wrong email or a wrong phone number on a brand application, is corrected by hand. Ask us.</p>
+<p><strong>Erase your data.</strong> There is no delete-account button. Signing out only removes the cookie from your device. When you ask us to erase you, a person does it, and this is what it does:</p>
+<blockquote>We delete your email, your password, your display name and your brand application; we delete the records of your submissions including the stored copies of your pixels and the rendered preview images; we delete your pixels from the wall; we delete your payment screenshots; and we remove your details from the activity log.</blockquote>
+<blockquote></blockquote>
+<blockquote><strong>The monthly archive pictures stay.</strong> They are flat images of a million colours with no names, no accounts and no identifiers in them. Once your submission records are gone, nothing connects any square in those pictures to you.</blockquote>
+<blockquote></blockquote>
+<blockquote><strong>Two things we cannot fully undo.</strong> Messages already delivered to our moderators' Telegram group are stored by Telegram: we delete what we can and stop sending more, but we cannot guarantee every copy there is gone. And we keep the payment record itself for 5 years because tax and commercial law requires it — stripped of the reference, the handle and the screenshot.</blockquote>
+<blockquote></blockquote>
+<blockquote><strong>We do not erase anything while a legal matter about it is open.</strong> If a court, a prosecutor or an authority has required us to preserve material, or a complaint about it is live, we hold it until that is resolved and we tell you so.</blockquote>
+<blockquote></blockquote>
+<blockquote>We tell you exactly what we deleted and what we kept, and why.</blockquote>
+<p><strong>Object, or limit a use.</strong> Email us. Since almost everything here is needed to run the wall, objecting usually means asking us to erase your account and stop.</p>
+<p><strong>Withdraw consent.</strong> Where we relied on your consent — chiefly your public display name — you can withdraw it. Ask us and we reset your name to an anonymous <code>Pixel fan #NNNN</code>. Archive pictures are colours only, so there is nothing there to change.</p>
+<p><strong>Complain.</strong> If you are not satisfied you may complain to Egypt's Personal Data Protection Centre: the Personal Data Protection Centre at the Ministry of Communications and Information Technology, pdpc.gov.eg.</p>
+<h2>10. Automated decisions</h2>
+<p><strong>Nothing is published without a person.</strong> Every batch of pixels, every brand application and every payment confirmation is decided by a person. There is no profiling, no scoring, and no automated approval.</p>
+<p>Some things are <strong>removed or closed automatically, by a timer:</strong></p>
+<ul>
+<li>Work still waiting for a decision when its month ends is expired by our system.</li>
+<li>An order whose transfer never arrives is closed by our system when its deadline passes, and a brand booking waiting on it is cancelled with it — you see this as a refusal with the reason "payment never arrived".</li>
+<li>Our system records automatically that a refund has become due when a paid booking does not go up.</li>
+<li>A visitor is refused a new identity, and requests are refused, when the daily limits or the rate limits in section 3.1 are reached.</li>
+</ul>
+<p>None of those look at who you are. Section 12 of the Terms says what comes back in each case. If you think a timer got it wrong, write to mohabhelp@gmail.com and a person will look.</p>
+<p>The software has a setting that would make submissions approve themselves automatically. <strong>It is switched off, and the service refuses to start in production with it on.</strong></p>
+<h2>11. Children</h2>
+<p><strong>There is no age check on this site.</strong> Anyone who opens the page can paint without an account. We do not ask for a date of birth and we cannot tell a child from an adult. We ask for an age confirmation before an account can buy paint, but we cannot verify it.</p>
+<p>We are telling you this plainly rather than writing a rule we do not enforce.</p>
+<p>If you are a parent or guardian and your child has used S37, email <strong>mohabhelp@gmail.com</strong> and we will delete their account and their data. If they have paid us, we return the money — see section 5 of the Terms.</p>
+<h2>12. Cookies and things stored on your device</h2>
+<p>We use <strong>two</strong> cookies. Both are ours and both exist to keep you signed in. Neither is used for advertising, analytics, or following you across other sites.</p>
+<p><strong><code>uid</code> — your identity on the wall</strong></p>
+<ul>
+<li>Holds: your account number, an expiry date and a signature. No name, no email, no IP address.</li>
+<li>Lifetime: <strong>365 days</strong> for a guest, <strong>180 days</strong> for a brand account. Once past halfway, visiting the site quietly extends it.</li>
+<li>Flags: <code>HttpOnly</code> (page scripts cannot read it), <code>SameSite=Lax</code> (not sent from other sites), <code>Secure</code> over HTTPS.</li>
+<li>Set on your very first request, before you interact with anything, because the wall cannot draw your pixels without knowing they are yours. <strong>We show you a notice about it before your first pixel.</strong></li>
+<li>Delete it and you get a new blank account; your old pixels and paint are no longer reachable from that browser.</li>
+</ul>
+<p><strong><code>adm</code> — operators only.</strong> Set only after signing in to the private admin panel, never for a visitor. Lifetime 12 hours; <code>HttpOnly</code>, <code>SameSite=Strict</code>, <code>Secure</code>.</p>
+<p><strong>Stored in your browser, never sent to us.</strong> Three small values live in your browser's local storage and our server never receives them. They stay until you clear your browser data: <code>s37.help</code> (that you have closed the help screen once), <code>s37.recent</code> (the last 12 colours you used), <code>s37.lang</code> (English or Arabic).</p>
+<p>Both cookies are strictly necessary to run the wall and neither tracks you, so we show you a notice rather than a consent pop-up.</p>
+<h2>13. If there is a data breach</h2>
+<p>If personal data here is exposed, lost or stolen we will find out what happened and stop it; write down what we found, when, and what data was involved; <strong>notify Egypt's Personal Data Protection Centre within 72 hours of becoming aware of it</strong>; and, where the breach puts you at risk — for example if payment screenshots were exposed — <strong>tell affected users without delay, in the app and by email where we hold one for you</strong>. We will say what happened, what data was involved, what we have done and what you should do.</p>
+<h2>14. Changes to this notice</h2>
+<p>If we change how we handle your data we update this page and the version and date at the top. For anything significant — a new company receiving your data, a new use of what we hold, switching on an offsite backup — we show a notice in the app <strong>before</strong> the change takes effect.</p>
+<h2>15. Contact</h2>
+<ul>
+<li>Data protection and requests about your data: <strong>mohabhelp@gmail.com</strong></li>
+<li>Everything else: <strong>mohabhelp@gmail.com</strong></li>
+<li>Postal address: <strong>Fifth Settlement, New Cairo, Cairo Governorate, Egypt</strong></li>
+<li>Egypt's Personal Data Protection Centre: <strong>the Personal Data Protection Centre at the Ministry of Communications and Information Technology, pdpc.gov.eg</strong></li>
+</ul>
+<p>This notice describes how S37 handles personal data. Nothing in it limits any right you have under Egyptian law.</p>
+<footer>
+  <p>Privacy Policy · v[object Object] · 2026-08-17</p>
+  <p>
+    <a href="/assets/terms.html">Terms</a> ·
+    <a href="/assets/privacy.html">Privacy</a> ·
+    <a href="/assets/refunds.html">Refunds</a>
+  </p>
+</footer>
+</div>
+</body>
+</html>

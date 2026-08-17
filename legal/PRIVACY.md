@@ -22,7 +22,7 @@ S37 is a public wall of a million pixels. This page says exactly what we record,
 
 ## 1. Who is responsible
 
-S37 is run by **[[OPERATOR LEGAL NAME]]**, [[OPERATOR LEGAL FORM]], of [[OPERATOR ADDRESS]], Egypt. [[COMMERCIAL / TAX REGISTRATION NUMBER]]
+S37 is run by **[[OPERATOR LEGAL NAME]]**, [[OPERATOR LEGAL FORM]], of [[OPERATOR ADDRESS]]. [[COMMERCIAL / TAX REGISTRATION NUMBER]]
 
 Under Egypt's Personal Data Protection Law No. 151 of 2020 ("the PDPL") that person is the **controller** of your personal data.
 
