@@ -41,6 +41,22 @@ async function post(path, body, method = 'POST') {
   if (!res.ok) throw new Error(data.message || data.error || `${path} → ${res.status}`);
   return data;
 }
+/* Back to the login screen, for real.
+
+   `location.href = '/admin'` is not reliable from here. Every page in the
+   panel now carries a hash — /admin#pay, /admin#brands — and a navigation
+   to a URL that differs only in its fragment is defined as a same-document
+   navigation: the browser may move the fragment and never reload, leaving
+   the whole panel on screen with a session that no longer exists. It
+   reloads in some browsers and not others, which is the worst kind of
+   difference to depend on.
+
+   Dropping the hash without navigating, then reloading, is unambiguous. */
+function leave() {
+  try { history.replaceState(null, '', '/admin'); } catch (e) { /* older browsers */ }
+  location.reload();
+}
+
 function signedOut() {
   document.body.innerHTML = '<p style="padding:40px;font-family:monospace">Signed out. ' +
     '<a href="/admin">Sign in again</a>.</p>';
@@ -104,7 +120,7 @@ function shell() {
   const who = el('div', 'who');
   who.append(el('span', null, me.username));
   const out = el('button', null, 'SIGN OUT');
-  out.onclick = async () => { await post('/api/admin/logout'); location.href = '/admin'; };
+  out.onclick = async () => { await post('/api/admin/logout'); leave(); };
   who.append(out);
   top.append(who);
 
@@ -1013,7 +1029,7 @@ RENDER.system = async main => {
   const revoke = el('button', 'bad', 'SIGN OUT EVERYWHERE');
   revoke.onclick = async () => {
     if (!sure('End every admin session you hold, including this one?')) return;
-    try { await post('/api/admin/system/revoke'); location.href = '/admin'; } catch (e) { oops(e); }
+    try { await post('/api/admin/system/revoke'); leave(); } catch (e) { oops(e); }
   };
   row.append(backup, restart, revoke);
   ops.append(row);
