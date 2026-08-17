@@ -202,7 +202,16 @@ function snapshotFor(e, now) {
        until now there was nowhere to. Sent from the same file the documents
        are built from, so the app cannot end up naming a different address
        than the ones printed in them. */
-    contact: cfg.CONTACT_EMAIL || null
+    contact: cfg.CONTACT_EMAIL || null,
+    /* Which doors are actually open. The page renders a Google button only
+       when there is a Google to send anybody to, and offers an emailed code
+       only when there is something to send it with — an affordance that
+       cannot work is worse than one that is absent, which is the same rule
+       the policy links follow. */
+    signin: {
+      google: require('./google.js').on(),
+      code: require('./mail.js').on()
+    }
   };
   return Buffer.concat([encodeHead(meta), snapshotBody()]);
 }

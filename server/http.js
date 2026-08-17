@@ -769,6 +769,23 @@ async function handler(req, res) {
     /* The painter upgrade (§3): attach email+password to the guest the
        caller already is. Same id, same cookie — nothing to re-issue. */
     if (urlPath === '/api/auth/register' && req.method === 'POST') {
+      /* One account-creation door, whichever one is configured. Where there
+         is a Google to send people to, that is how a painter account is
+         made and this one is closed — the page stopped offering it, and a
+         route that still worked would just be the same thing without the
+         page. Where Google is not configured (a dev box, the suite) this
+         stays open, because otherwise there would be no way to make an
+         account at all.
+
+         Accounts made before this keep their password; login is untouched.
+         Closing the door somebody is standing in is a lockout, not a
+         migration. */
+      if (google.on()) {
+        return sendJson(res, 410, {
+          error: 'use-google',
+          message: 'Accounts are made with Google now. Your existing password still signs you in.'
+        });
+      }
       const body = JSON.parse((await readBody(req, 4096)).toString('utf8'));
       const r = identity.register(row, body, now);
       if (r.error) return sendJson(res, r.status, { error: r.error, fields: r.fields, message: r.message });

@@ -13,10 +13,11 @@ Arabic version: [[ARABIC PRIVACY URL]]. **The Arabic version is the one that app
 S37 is a public wall of a million pixels. This page says exactly what we record, why, who else sees it, and how long we keep it.
 
 1. **We record something the moment the page loads**, before you tap anything: an anonymous account, a cookie, and your IP address. Section 3 explains why.
-2. **There is no analytics and no advertising tracking here.** No Google Analytics, no Meta pixel, no third-party script, no external fonts, no CDN. Everything is served from our own server. This is verifiable — open your browser's network tab.
+2. **There is no analytics and no advertising tracking here.** No Google Analytics, no Meta pixel, no third-party script, no external fonts, no CDN. Everything is served from our own server, including the "Continue with Google" button — it is a plain link, not Google's code, so Google is not watching this page. This is verifiable: open your browser's network tab.
 3. **Everything you paint is reviewed by a person over Telegram** before it goes public. Your artwork and your display name go to Telegram. Your contact details, bank details and payment screenshots do not. Section 6.
 4. **The wall is wiped every month. Our records are not.** Section 7.
-5. **You have rights over your data and we honour them by hand**, because there is no self-service button yet. Section 9 says exactly what we can and cannot undo.
+5. **Signing in is optional, and so is who it involves.** Painting needs no account. If you make one, you choose whether that goes through Google or through a code we email you — section 6.
+6. **You have rights over your data and we honour them by hand**, because there is no self-service button yet. Section 9 says exactly what we can and cannot undo.
 
 ---
 
@@ -136,6 +137,13 @@ The only file you can ever upload to us is the payment screenshot in 3.6.
 
 The site runs on **Railway**, a hosting company, on servers in the **Netherlands, in the European Union**. The database, the payment screenshots, the moderation preview images and the monthly wall archives all sit on a disk attached to that server. **Your data leaves Egypt the moment you use the site.**
 
+Two more companies hold a little of it, and only because you chose a way of signing in that involves them:
+
+- **Google**, in the **United States and wherever else Google operates**, if you sign in with a Google account. Google knows you signed in to this site. We hold the account identifier Google gives us and the address on it — see 6.2.
+- **Brevo**, in the **European Union**, if you ask for a sign-in code by email. Brevo is given your address and the message, because that is what sending an email to you means — see 6.3.
+
+Neither is used for anything else, and neither is involved at all if you paint as a guest.
+
 ## 6. Who else receives it
 
 ### 6.1 Telegram — the moderation channel
@@ -153,6 +161,20 @@ What we send there is deliberately thin.
 **What we do not send there:** phone numbers, email addresses, commercial registration numbers, InstaPay handles, transaction references, and payment screenshots. None of those reach Telegram. The moderator opens the link and signs in to our own admin panel with a password and a one-time code, and sees them there.
 
 Once a message is in Telegram, Telegram stores it and everyone in that moderation group can see it. We can delete our own copy. **We cannot promise every copy inside Telegram is gone.** Telegram's own handling of that data is governed by Telegram's privacy policy, not ours.
+
+### 6.2 Google — signing in
+
+If you sign in with a Google account, your browser goes to Google, you approve it there, and Google sends us back a signed statement of who you are. **We never see your Google password**, and we ask Google for the least it will give: that you are signed in, your email address, and your name. Nothing else — not your contacts, not your files, not anything in your Google account.
+
+What we keep from that is the account identifier Google gives us and your email address. The identifier is what recognises you next time; the address is what connects a Google sign-in to an account you already had here, so your pixels and your paint are still yours.
+
+**Google knows you signed in to this site.** That is inherent to signing in with Google and we cannot prevent it. What Google does with that is governed by Google's privacy policy, not ours. If you would rather they did not know, do not use that button — painting needs no account at all.
+
+### 6.3 Brevo — the emails that carry a sign-in code
+
+If you ask for a code by email, we hand your address and the message to **Brevo**, an email company in the European Union, because that is what sending you an email means. They are given nothing else: no name, no pixels, no payment details.
+
+We do not send marketing, we have no mailing list, and there is nothing to unsubscribe from. The only email this site sends is the one carrying a code you asked for.
 
 ### 6.2 Railway — hosting
 

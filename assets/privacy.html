@@ -54,9 +54,10 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:v
 <p>S37 is a public wall of a million pixels. This page says exactly what we record, why, who else sees it, and how long we keep it.</p>
 <ol>
 <li><strong>We record something the moment the page loads</strong>, before you tap anything: an anonymous account, a cookie, and your IP address. Section 3 explains why.</li>
-<li><strong>There is no analytics and no advertising tracking here.</strong> No Google Analytics, no Meta pixel, no third-party script, no external fonts, no CDN. Everything is served from our own server. This is verifiable — open your browser's network tab.</li>
+<li><strong>There is no analytics and no advertising tracking here.</strong> No Google Analytics, no Meta pixel, no third-party script, no external fonts, no CDN. Everything is served from our own server, including the "Continue with Google" button — it is a plain link, not Google's code, so Google is not watching this page. This is verifiable: open your browser's network tab.</li>
 <li><strong>Everything you paint is reviewed by a person over Telegram</strong> before it goes public. Your artwork and your display name go to Telegram. Your contact details, bank details and payment screenshots do not. Section 6.</li>
 <li><strong>The wall is wiped every month. Our records are not.</strong> Section 7.</li>
+<li><strong>Signing in is optional, and so is who it involves.</strong> Painting needs no account. If you make one, you choose whether that goes through Google or through a code we email you — section 6.</li>
 <li><strong>You have rights over your data and we honour them by hand</strong>, because there is no self-service button yet. Section 9 says exactly what we can and cannot undo.</li>
 </ol>
 <hr>
@@ -144,6 +145,12 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:v
 <p><strong>When we start recording.</strong> The account, the cookie and the IP record in 3.1 are created on your very first request, before you can have agreed to anything, because the wall cannot work otherwise. <strong>We show you a short notice about it, with a link to this page, before your first pixel.</strong> We do not use any of it for advertising, for analytics, or to follow you anywhere else.</p>
 <h2>5. Where your data is stored</h2>
 <p>The site runs on <strong>Railway</strong>, a hosting company, on servers in the <strong>Netherlands, in the European Union</strong>. The database, the payment screenshots, the moderation preview images and the monthly wall archives all sit on a disk attached to that server. <strong>Your data leaves Egypt the moment you use the site.</strong></p>
+<p>Two more companies hold a little of it, and only because you chose a way of signing in that involves them:</p>
+<ul>
+<li><strong>Google</strong>, in the <strong>United States and wherever else Google operates</strong>, if you sign in with a Google account. Google knows you signed in to this site. We hold the account identifier Google gives us and the address on it — see 6.2.</li>
+<li><strong>Brevo</strong>, in the <strong>European Union</strong>, if you ask for a sign-in code by email. Brevo is given your address and the message, because that is what sending an email to you means — see 6.3.</li>
+</ul>
+<p>Neither is used for anything else, and neither is involved at all if you paint as a guest.</p>
 <h2>6. Who else receives it</h2>
 <h3>6.1 Telegram — the moderation channel</h3>
 <p>Every human review happens in a private Telegram group. Telegram is a messaging company outside Egypt.</p>
@@ -153,6 +160,13 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:v
 <p><strong>For every payment:</strong> the amount, the order code and its status. Then a link. Where a refund is owed, a reminder repeating the amount and the order code is sent every 24 hours until it is paid.</p>
 <p><strong>What we do not send there:</strong> phone numbers, email addresses, commercial registration numbers, InstaPay handles, transaction references, and payment screenshots. None of those reach Telegram. The moderator opens the link and signs in to our own admin panel with a password and a one-time code, and sees them there.</p>
 <p>Once a message is in Telegram, Telegram stores it and everyone in that moderation group can see it. We can delete our own copy. <strong>We cannot promise every copy inside Telegram is gone.</strong> Telegram's own handling of that data is governed by Telegram's privacy policy, not ours.</p>
+<h3>6.2 Google — signing in</h3>
+<p>If you sign in with a Google account, your browser goes to Google, you approve it there, and Google sends us back a signed statement of who you are. <strong>We never see your Google password</strong>, and we ask Google for the least it will give: that you are signed in, your email address, and your name. Nothing else — not your contacts, not your files, not anything in your Google account.</p>
+<p>What we keep from that is the account identifier Google gives us and your email address. The identifier is what recognises you next time; the address is what connects a Google sign-in to an account you already had here, so your pixels and your paint are still yours.</p>
+<p><strong>Google knows you signed in to this site.</strong> That is inherent to signing in with Google and we cannot prevent it. What Google does with that is governed by Google's privacy policy, not ours. If you would rather they did not know, do not use that button — painting needs no account at all.</p>
+<h3>6.3 Brevo — the emails that carry a sign-in code</h3>
+<p>If you ask for a code by email, we hand your address and the message to <strong>Brevo</strong>, an email company in the European Union, because that is what sending you an email means. They are given nothing else: no name, no pixels, no payment details.</p>
+<p>We do not send marketing, we have no mailing list, and there is nothing to unsubscribe from. The only email this site sends is the one carrying a code you asked for.</p>
 <h3>6.2 Railway — hosting</h3>
 <p>Railway runs the server, holds the disk, terminates the encryption on your connection, and keeps its own record of requests, which normally includes IP addresses. Those records are Railway's, not ours; we cannot read or delete them.</p>
 <h3>6.3 InstaPay</h3>

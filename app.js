@@ -356,6 +356,7 @@ async function loadWall() {
   }
   showLegalLinks(meta.legal !== false);
   setContact(meta.contact || null);
+  applySignin(meta.signin);
   for (const [name, brand] of Object.entries(meta.brands || {})) {
     const safe = safeUrl(brand.url);
     if (safe) brands.set(name, { url: safe, cta: brand.cta || 'VISIT SITE' });
@@ -1492,7 +1493,21 @@ $('paneSignup').addEventListener('submit', async e => {
   }
 });
 
-$('paneLogin').addEventListener('submit', async e => {
+/* Where a successful sign-in lands, whichever door it came through: a
+   painter goes back to the wall they came for, a brand goes on with the
+   booking the sign-in was in the way of. */
+function afterSignIn(data) {
+  setMe(data);
+  if (data.allowance) applyAllowance(data.allowance);
+  loadAlerts();
+  if (me.kind === 'guest') {
+    closeModal('modalAuth'); closeModal('modalMe');
+    toast(`${ic('check')} ${t('toast.welcomeBack', { name: me.handle })}`);
+  } else if (canBook()) { closeModal('modalAuth'); openCompany(); }
+  else openAuth('status');
+}
+
+$('formLogin').addEventListener('submit', async e => {
   e.preventDefault();
   const btn = $('btnLogin');
   clearErr('errLogin');
@@ -1501,23 +1516,132 @@ $('paneLogin').addEventListener('submit', async e => {
     const r = await apiPost('/api/auth/login', { email: $('liEmail').value, password: $('liPass').value });
     if (!r.ok) { showErr('errLogin', r.data.message || t('au.badCreds')); return; }
     $('liPass').value = '';
-    setMe(r.data);
-    if (r.data.allowance) applyAllowance(r.data.allowance);
     await loadWall();
-    loadAlerts();
-    /* a painter goes back to the wall they came for; a brand goes on with
-       the booking business the login was in the way of */
-    if (me.kind === 'guest') {
-      closeModal('modalAuth'); closeModal('modalMe');
-      toast(`${ic('check')} ${t('toast.welcomeBack', { name: me.handle })}`);
-    } else if (canBook()) { closeModal('modalAuth'); openCompany(); }
-    else openAuth('status');
+    afterSignIn(r.data);
   } catch (err) {
     showErr('errLogin', t('toast.unreachable'));
   } finally {
     btn.disabled = false; btn.textContent = t('au.loginCta');
   }
 });
+
+/* ── Which doors are open ─────────────────────────────────────────
+   The server says what is configured; the page renders only that. A
+   Google button with no Google behind it, or an offer to email a code
+   with nothing to send it, is worse than no button — it is a promise
+   that fails at the moment somebody is trying to get in. */
+let signinWays = { google: false, code: false };
+
+function applySignin(ways) {
+  signinWays = { google: !!(ways && ways.google), code: !!(ways && ways.code) };
+  $('btnGoogle').hidden = !signinWays.google;
+  $('paneCode').hidden = !signinWays.code;
+  /* the "or" divider only earns its place with something on both sides */
+  $('authOr').hidden = !(signinWays.google && signinWays.code);
+  /* Creating an account is Google's job now. With Google off there is no
+     way to make a painter account at all, so the register pane says that
+     rather than showing a form that cannot finish. */
+  $('rgGoogle').hidden = !signinWays.google;
+  $('rgNoWay').hidden = signinWays.google;
+}
+
+$('btnGoogle').onclick = () => { location.href = `${API_BASE}/api/auth/google/start`; };
+$('rgGoogle').onclick = () => { location.href = `${API_BASE}/api/auth/google/start`; };
+
+/* ── Signing in with a code ───────────────────────────────────────
+   Two steps in one form: the first submit asks for a code, the second
+   sends it back. The email field stays filled and disabled in between,
+   because the address is half of what verifies. */
+let codeSent = false;
+
+function resetCodeForm() {
+  codeSent = false;
+  $('cdCodeRow').hidden = true;
+  $('cdSentNote').hidden = true;
+  $('btnCodeAgain').hidden = true;
+  $('cdCode').value = '';
+  $('cdEmail').disabled = false;
+  $('btnCode').textContent = t('au.codeCta');
+  clearErr('errCode'); clearErr('errCdEmail'); clearErr('errCdCode');
+}
+
+async function askForCode() {
+  const btn = $('btnCode');
+  clearErr('errCode'); clearErr('errCdEmail');
+  btn.disabled = true; btn.textContent = t('au.sending');
+  try {
+    const r = await apiPost('/api/auth/code/request', { email: $('cdEmail').value, lang });
+    if (!r.ok) {
+      const f = r.data.fields || {};
+      if (f.email) showErr('errCdEmail', f.email);
+      else showErr('errCode', r.data.message || t('toast.unreachable'));
+      return;
+    }
+    codeSent = true;
+    $('cdCodeRow').hidden = false;
+    $('cdSentNote').hidden = false;
+    $('btnCodeAgain').hidden = false;
+    $('cdEmail').disabled = true;
+    $('cdCode').focus();
+  } catch (err) {
+    showErr('errCode', t('toast.unreachable'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t(codeSent ? 'au.codeVerify' : 'au.codeCta');
+  }
+}
+
+async function sendCode() {
+  const btn = $('btnCode');
+  clearErr('errCode'); clearErr('errCdCode');
+  btn.disabled = true; btn.textContent = t('au.checking');
+  try {
+    const r = await apiPost('/api/auth/code/verify',
+      { email: $('cdEmail').value, code: $('cdCode').value });
+    if (!r.ok) {
+      const f = r.data.fields || {};
+      if (f.code) showErr('errCdCode', f.code);
+      else showErr('errCode', r.data.message || t('au.badCreds'));
+      return;
+    }
+    await loadWall();
+    resetCodeForm();
+    afterSignIn(r.data);
+  } catch (err) {
+    showErr('errCode', t('toast.unreachable'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t(codeSent ? 'au.codeVerify' : 'au.codeCta');
+  }
+}
+
+$('paneCode').addEventListener('submit', e => {
+  e.preventDefault();
+  return codeSent ? sendCode() : askForCode();
+});
+$('btnCodeAgain').onclick = () => { resetCodeForm(); askForCode(); };
+
+/* ── Coming back from Google ──────────────────────────────────────
+   The callback redirects here with ?signin=… rather than rendering
+   JSON in the address bar. Read it, say something true, and take it
+   out of the URL so a refresh does not repeat the message. */
+const SIGNIN_SAID = {
+  ok: 'toast.welcomeBackPlain', welcome: 'toast.googleNew',
+  cancelled: null,
+  expired: 'au.signinExpired', failed: 'au.signinFailed',
+  'account-closed': 'au.signinClosed', 'email-taken': 'au.signinTaken',
+  'already-registered': 'au.signinAlready'
+};
+
+function readSigninResult() {
+  const said = new URLSearchParams(location.search).get('signin');
+  if (!said) return;
+  history.replaceState(null, '', location.pathname);
+  const key = SIGNIN_SAID[said];
+  if (!key) return;                                   // cancelled: say nothing
+  const bad = !['ok', 'welcome'].includes(said);
+  toast(`${ic(bad ? 'warn' : 'check')} ${t(key, { name: me.handle })}`, { cls: bad ? 'err' : '', dur: 5200 });
+}
 
 /* Logging out drops the account cookie; the next request mints a plain
    guest again, so the wall is reloaded to pick up whose pixels are whose. */
@@ -2753,6 +2877,21 @@ const L = {
     'au.descPh': 'What you sell, who you sell it to, how long you have been going, where you are based.',
     'au.applyFine': 'We use this to check the business is real and to reach you about a booking. Nothing here goes on the wall.',
     'au.loginFine': 'Painting as a guest needs no account at all.',
+    /* the two new doors */
+    'au.google': 'Continue with Google', 'au.googleCreate': 'Create my account with Google',
+    'au.googleFine': 'By continuing you accept the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">Terms</a>, the <a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.html">Privacy Policy</a> and the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">Refund Policy</a>, and confirm you are 18 or older.',
+    'au.noWay': 'Accounts are not open right now. Painting as a guest needs no account at all.',
+    'au.or': 'or',
+    'au.havePassword': 'I have a password',
+    'au.code': 'THE 6-DIGIT CODE',
+    'au.codeCta': 'EMAIL ME A CODE', 'au.codeVerify': 'SIGN ME IN', 'au.codeAgain': 'SEND ANOTHER',
+    'au.sending': 'SENDING…',
+    'au.codeSent': 'If that address can sign in, a code is on its way. It works for 5 minutes.',
+    'au.signinExpired': 'That took too long — try signing in again.',
+    'au.signinFailed': 'Google could not sign you in. Try again in a moment.',
+    'au.signinClosed': 'That account is closed. If you think that is wrong, get in touch.',
+    'au.signinTaken': 'That address already has an account here. Log out first, then sign in with it.',
+    'au.signinAlready': 'This browser is already signed in. Log out first to use a different account.',
     /* One sentence, one tick. The age statement and the acceptance are made
        together because they are read together — recording a distinction
        nobody was shown would be recording something that did not happen. */
@@ -2762,6 +2901,10 @@ const L = {
     'au.book': 'START A PRE-ORDER',
     'toast.applied': '<b>Application sent.</b> Watch the bell — the decision appears there.',
     'toast.welcomeBack': 'Welcome back, <b>{name}</b> — your pixels are right where you left them.',
+    /* Shown on the way back from Google, where the wall snapshot has not
+       landed yet, so these do not quote a name the page may not have. */
+    'toast.welcomeBackPlain': 'Signed in. Your pixels are right where you left them.',
+    'toast.googleNew': '<b>Account made.</b> Everything you have painted came with you.',
     'toast.renamed': 'You are <b>{name}</b> on the wall now.',
     'toast.loggedOut': 'Logged out — you are painting as a guest again.',
     'toast.registered': '<b>Account created.</b> Your pixels now follow you anywhere you sign in.',
@@ -2991,12 +3134,28 @@ const L = {
     'au.descPh': 'بتبيع إيه، لمين، بقالك قد إيه، وفين.',
     'au.applyFine': 'بنستخدم ده عشان نتأكد إن البيزنس حقيقي ونقدر نوصلك بخصوص الحجز. مفيش حاجة منه بتطلع الحيط.',
     'au.loginFine': 'الشخبطة كضيف مش محتاجة حساب أصلاً.',
+    'au.google': 'كمّل بحساب جوجل', 'au.googleCreate': 'اعمل حسابي بجوجل',
+    'au.googleFine': 'بالاستمرار إنت مُوافق على <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.ar.html">الشروط</a> و<a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.ar.html">سياسة الخصوصية</a> و<a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.ar.html">سياسة الاسترداد</a>، وبتأكد إن عندك ١٨ سنة أو أكتر.',
+    'au.noWay': 'الحسابات مقفولة دلوقتي. الشخبطة كضيف مش محتاجة حساب أصلاً.',
+    'au.or': 'أو',
+    'au.havePassword': 'عندي كلمة مرور',
+    'au.code': 'الكود المكوّن من ٦ أرقام',
+    'au.codeCta': 'ابعتلي كود على الإيميل', 'au.codeVerify': 'دخّلني', 'au.codeAgain': 'ابعت كود تاني',
+    'au.sending': 'بنبعت…',
+    'au.codeSent': 'لو العنوان ده يقدر يدخل، الكود في الطريق. صالح ٥ دقايق.',
+    'au.signinExpired': 'الوقت طوّل — جرّب تدخل تاني.',
+    'au.signinFailed': 'جوجل ما قدرش يدخّلك. جرّب كمان شوية.',
+    'au.signinClosed': 'الحساب ده مقفول. لو شايف إن في غلطة، كلّمنا.',
+    'au.signinTaken': 'العنوان ده عنده حساب هنا. اخرج الأول، وبعدين ادخل بيه.',
+    'au.signinAlready': 'المتصفح ده داخل بحساب بالفعل. اخرج الأول عشان تستخدم حساب تاني.',
     'au.accept': 'عندي ١٨ سنة أو أكتر وبتعاقد عن نفسي، ومُوافق على <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.ar.html">الشروط</a> و<a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.ar.html">سياسة الخصوصية</a> و<a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.ar.html">سياسة الاسترداد</a>.',
     'au.acceptBrand': 'أقدر أتعاقد نيابةً عن النشاط المذكور فوق، ومُوافق على <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.ar.html">الشروط</a> و<a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.ar.html">سياسة الخصوصية</a> و<a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.ar.html">سياسة الاسترداد</a>.',
     'au.acceptErr': 'علّم على ده عشان تكمّل.',
     'au.book': 'ابدأ حجز',
     'toast.applied': '<b>الطلب اتبعت.</b> تابع الجرس — القرار بينزل هناك.',
     'toast.welcomeBack': 'أهلاً بيك تاني يا <b>{name}</b> — بكسلاتك زي ما سيبتها.',
+    'toast.welcomeBackPlain': 'دخلت. بكسلاتك زي ما سيبتها.',
+    'toast.googleNew': '<b>الحساب اتعمل.</b> كل اللي رسمته جه معاك.',
     'toast.renamed': 'بقيت <b>{name}</b> على الحيط.',
     'toast.loggedOut': 'خرجت — بترسم كضيف تاني.',
     'toast.registered': '<b>الحساب اتعمل.</b> بكسلاتك بقت بتمشي معاك في أي حتة تدخل منها.',
@@ -3394,38 +3553,9 @@ $('psGateLogin').onclick = () => { closeModal('modalPaint'); openAuth('login', '
 $('moreShop').onclick = () => { closeModal('modalMore'); openPaintShop(); };
 $('brandFab').onclick = () => $('btnCompany').click();
 
-/* create-account submit — the guest keeps everything, gains a password */
-$('paneRegister').addEventListener('submit', async e => {
-  e.preventDefault();
-  const btn = $('btnRegister');
-  for (const id of ['errRgEmail', 'errRgPass', 'errRegister']) $(id).hidden = true;
-  $('rgEmail').classList.remove('bad'); $('rgPass').classList.remove('bad');
-  clearTick('rgAccept', 'errRgAccept');
-  if (!markTick('rgAccept', 'errRgAccept')) return;
-  btn.disabled = true; btn.textContent = t('au.busy');
-  try {
-    const r = await apiPost('/api/auth/register',
-      { email: $('rgEmail').value, password: $('rgPass').value, accept: true });
-    if (!r.ok) {
-      const f = r.data.fields || {};
-      if (f.email) { showErr('errRgEmail', f.email); $('rgEmail').classList.add('bad'); }
-      if (f.password) { showErr('errRgPass', f.password); $('rgPass').classList.add('bad'); }
-      if (f.accept) markTick('rgAccept', 'errRgAccept');
-      if (r.data.message && !f.email && !f.password) showErr('errRegister', r.data.message);
-      return;
-    }
-    $('rgAccept').checked = false;
-    $('rgPass').value = '';
-    setMe(r.data);
-    if (r.data.allowance) applyAllowance(r.data.allowance);
-    closeModal('modalAuth'); closeModal('modalMe');
-    toast(`${ic('check')} ${t('toast.registered')}`, { dur: 5200 });
-  } catch (err) {
-    showErr('errRegister', t('toast.unreachable'));
-  } finally {
-    btn.disabled = false; btn.textContent = t('au.createCta');
-  }
-});
+/* Password registration is gone from the page: an account comes from
+   Google now, and the button above is the whole of it. The route behind
+   the old form refuses too — see the note on /api/auth/register. */
 
 /* ── the bell ─────────────────────────────────────────────────── */
 
@@ -3538,4 +3668,8 @@ async function loadAlerts(markSeen) {
   }
   syncNavSel();
   renderMe();
+  /* Coming back from Google lands here with ?signin=… — say what happened
+     and take it out of the URL so a refresh does not repeat it. After
+     renderMe so the toast can name them if the snapshot has arrived. */
+  readSigninResult();
 })();

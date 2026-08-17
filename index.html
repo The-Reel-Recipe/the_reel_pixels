@@ -573,32 +573,23 @@ finish review, the verdict, and DESIGN.md.
       </div>
 
       <!-- Painter — create account -->
-      <form class="auth-pane" id="paneRegister" hidden novalidate>
-        <p class="me-note" data-i18n="au.registerNote">Your pixels, paint and history stay exactly as they are — this just gives them an email and a password so you can sign in anywhere.</p>
-        <label class="fld">
-          <span class="lbl" data-i18n="au.email">EMAIL</span>
-          <input type="email" id="rgEmail" maxlength="160" autocomplete="email" spellcheck="false">
-          <span class="fld-err" id="errRgEmail" hidden></span>
-        </label>
-        <label class="fld">
-          <span class="lbl" data-i18n="au.pass">PASSWORD</span>
-          <input type="password" id="rgPass" maxlength="200" placeholder="10 characters or more" data-i18n-ph="au.passPh" autocomplete="new-password">
-          <span class="fld-err" id="errRgPass" hidden></span>
-        </label>
-        <!-- TERMS §4 and PRIVACY §11. One tick, one sentence: the age
-             statement and the acceptance are made together because they are
-             read together, and recording a distinction nobody was shown
-             would be recording something that did not happen. The three
-             links inside are rewritten to the current language by
-             syncLegalLinks, like every other [data-legal]. -->
-        <label class="fld-tick">
-          <input type="checkbox" id="rgAccept">
-          <span data-i18n-html="au.accept">I am 18 or older and entering this for myself, and I accept the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">Terms</a>, the <a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.html">Privacy Policy</a> and the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">Refund Policy</a>.</span>
-        </label>
-        <span class="fld-err" id="errRgAccept" hidden></span>
-        <span class="fld-err" id="errRegister" hidden></span>
-        <button class="btn-claim modal-cta" id="btnRegister" type="submit" data-i18n="au.createCta">CREATE MY ACCOUNT</button>
-      </form>
+      <!-- Making an account is Google's job now. No password is handed out
+           any more; the pixels you have already painted come with you. -->
+      <div class="auth-pane" id="paneRegister" hidden>
+        <p class="me-note" data-i18n="au.registerNote">Your pixels, paint and history stay exactly as they are — this just gives them somewhere to live so you can sign in anywhere.</p>
+        <button class="btn-google" id="rgGoogle" hidden type="button">
+          <svg class="g-mark" viewBox="0 0 18 18" aria-hidden="true">
+            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"/>
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
+          </svg>
+          <span data-i18n="au.googleCreate">Create my account with Google</span>
+        </button>
+        <p class="fine" id="rgNoWay" hidden data-i18n="au.noWay">Accounts are not open right now. Painting as a guest needs no account at all.</p>
+        <p class="fine" data-i18n-html="au.googleFine">By continuing you accept the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">Terms</a>, the <a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.html">Privacy Policy</a> and the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">Refund Policy</a>, and confirm you are 18 or older.</p>
+      </div>
+
 
       <!-- Brand — apply -->
       <form class="auth-pane" id="paneSignup" novalidate>
@@ -678,20 +669,63 @@ finish review, the verdict, and DESIGN.md.
         <p class="fine" data-i18n="au.applyFine">We use this to check the business is real and to send booking receipts. Nothing here goes on the wall.</p>
       </form>
 
-      <!-- Log in — painters and brands, one door -->
-      <form class="auth-pane" id="paneLogin" hidden novalidate>
-        <label class="fld">
-          <span class="lbl" data-i18n="au.email">EMAIL</span>
-          <input type="email" id="liEmail" maxlength="160" autocomplete="email" spellcheck="false">
-        </label>
-        <label class="fld">
-          <span class="lbl" data-i18n="au.pass">PASSWORD</span>
-          <input type="password" id="liPass" maxlength="200" autocomplete="current-password">
-        </label>
-        <span class="fld-err" id="errLogin" hidden></span>
-        <button class="btn-claim modal-cta" id="btnLogin" type="submit" data-i18n="au.loginCta">LOG IN</button>
+      <!-- Log in — three ways in, and which ones are offered depends on
+           what is configured (meta.signin). Google first because it is the
+           one most people will use and the only one that makes a new
+           painter account; the emailed code for brands; and the password
+           box only for the accounts that already have one, kept because
+           taking a door away from somebody standing in it is a lockout,
+           not a migration. -->
+      <div class="auth-pane" id="paneLogin" hidden>
+        <button class="btn-google" id="btnGoogle" hidden type="button">
+          <svg class="g-mark" viewBox="0 0 18 18" aria-hidden="true">
+            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"/>
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
+          </svg>
+          <span data-i18n="au.google">Continue with Google</span>
+        </button>
+
+        <!-- the emailed code, for brands -->
+        <form id="paneCode" hidden novalidate>
+          <p class="auth-or" hidden id="authOr"><span data-i18n="au.or">or</span></p>
+          <label class="fld">
+            <span class="lbl" data-i18n="au.email">EMAIL</span>
+            <input type="email" id="cdEmail" maxlength="160" autocomplete="email" spellcheck="false">
+            <span class="fld-err" id="errCdEmail" hidden></span>
+          </label>
+          <label class="fld" id="cdCodeRow" hidden>
+            <span class="lbl" data-i18n="au.code">THE 6-DIGIT CODE</span>
+            <input type="text" id="cdCode" maxlength="6" inputmode="numeric" autocomplete="one-time-code"
+                   pattern="[0-9]*" spellcheck="false" dir="ltr">
+            <span class="fld-err" id="errCdCode" hidden></span>
+          </label>
+          <span class="fld-err" id="errCode" hidden></span>
+          <p class="fine" id="cdSentNote" hidden data-i18n="au.codeSent">If that address can sign in, a code is on its way. It works for 5 minutes.</p>
+          <button class="btn-claim modal-cta" id="btnCode" type="submit" data-i18n="au.codeCta">EMAIL ME A CODE</button>
+          <button class="btn-mini" id="btnCodeAgain" hidden type="button" data-i18n="au.codeAgain">SEND ANOTHER</button>
+        </form>
+
+        <!-- password, for accounts that already have one -->
+        <details class="auth-old" id="paneOldLogin">
+          <summary data-i18n="au.havePassword">I have a password</summary>
+          <form id="formLogin" novalidate>
+            <label class="fld">
+              <span class="lbl" data-i18n="au.email">EMAIL</span>
+              <input type="email" id="liEmail" maxlength="160" autocomplete="email" spellcheck="false">
+            </label>
+            <label class="fld">
+              <span class="lbl" data-i18n="au.pass">PASSWORD</span>
+              <input type="password" id="liPass" maxlength="200" autocomplete="current-password">
+            </label>
+            <span class="fld-err" id="errLogin" hidden></span>
+            <button class="btn-claim modal-cta" id="btnLogin" type="submit" data-i18n="au.loginCta">LOG IN</button>
+          </form>
+        </details>
+
         <p class="fine" data-i18n="au.loginFine">Painting as a guest needs no account at all.</p>
-      </form>
+      </div>
 
       <!-- Where the brand application got to -->
       <div class="auth-pane" id="paneStatus" hidden>
