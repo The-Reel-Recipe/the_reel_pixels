@@ -191,9 +191,29 @@ function snapshotFor(e, now) {
       holdHours: Math.round(S.HOLD_TTL / 3600000)
     },
     allowance: identity.allowanceOf(e, now),
-    pending: pendingFor(e)
+    pending: pendingFor(e),
+    /* Whether the six documents are actually on disk. The app links to them
+       from MORE and from the explainer, and a link to a policy that 404s is
+       worse than no link: it reads as a policy that was taken down. So the
+       links are hidden until tools/make-legal.js has written the pages,
+       which it refuses to do while any operator detail is unanswered. */
+    legal: legalPublished()
   };
   return Buffer.concat([encodeHead(meta), snapshotBody()]);
+}
+
+/* Checked once at boot rather than per request — publishing means a deploy,
+   and six existsSync calls on the hot path to answer a question that changes
+   about never is the wrong trade. */
+let legalCache = null;
+function legalPublished() {
+  if (legalCache === null) {
+    const dir = path.join(cfg.ROOT, 'assets');
+    legalCache = ['terms', 'privacy', 'refunds']
+      .flatMap(d => [`${d}.html`, `${d}.ar.html`])
+      .every(f => fs.existsSync(path.join(dir, f)));
+  }
+  return legalCache;
 }
 
 /* ── Statements ───────────────────────────────────────────────── */

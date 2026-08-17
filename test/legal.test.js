@@ -61,6 +61,24 @@ test('no published page carries an unanswered placeholder', () => {
   }
 });
 
+test('the app only offers a link once the page behind it exists', () => {
+  /* The wall snapshot carries meta.legal, and the client hides the links
+     when it is false. This is the pair to the check above: a half-published
+     set would have the flag on and one link broken, which is the failure
+     this whole arrangement exists to make impossible. */
+  const wall = fs.readFileSync(path.join(ROOT, 'server', 'wall.js'), 'utf8');
+  assert.match(wall, /legal:\s*legalPublished\(\)/,
+    'wall.js no longer reports whether the documents are published');
+
+  const app = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  assert.match(app, /showLegalLinks\(meta\.legal !== false\)/,
+    'app.js no longer acts on the flag — the links would show whether or not the pages exist');
+
+  const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  assert.match(html, /<nav class="more-legal"[^>]*\shidden/,
+    'the links must start hidden, or they flash before the wall snapshot arrives');
+});
+
 test('the pages are all present, or all absent', () => {
   const here = PAGES.filter(n => fs.existsSync(path.join(ROOT, 'assets', n)));
   assert.ok(here.length === 0 || here.length === PAGES.length,

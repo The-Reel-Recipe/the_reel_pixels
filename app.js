@@ -354,6 +354,7 @@ async function loadWall() {
     PRICE_COMPANY = meta.prices.company;               // the ghost's running total reads this
     applyPrices(meta.prices);
   }
+  showLegalLinks(meta.legal !== false);
   for (const [name, brand] of Object.entries(meta.brands || {})) {
     const safe = safeUrl(brand.url);
     if (safe) brands.set(name, { url: safe, cta: brand.cta || 'VISIT SITE' });
@@ -2901,6 +2902,18 @@ const legalHref = doc => (LEGAL_PAGES[doc] || LEGAL_PAGES.terms)[lang] || LEGAL_
 
 function syncLegalLinks() {
   document.querySelectorAll('[data-legal]').forEach(a => { a.href = legalHref(a.dataset.legal); });
+}
+
+/* The server says whether the pages are on disk. A link to a policy that
+   404s is worse than no link — it reads as a policy somebody took down —
+   so until they are published these are hidden rather than broken. The
+   whole help note goes with them: what is left of that sentence once the
+   two links are gone is an instruction to read nothing. */
+function showLegalLinks(on) {
+  const nav = document.querySelector('.more-legal');
+  if (nav) nav.hidden = !on;
+  const note = document.querySelector('[data-i18n-html="help.n4"]');
+  if (note && note.parentElement) note.parentElement.hidden = !on;
 }
 
 function setLang(next) {

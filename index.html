@@ -212,7 +212,7 @@ finish review, the verdict, and DESIGN.md.
         <!-- Reachable from the explainer as well as from MORE. Somebody
              deciding whether to pay is reading this sheet, not hunting
              through a menu for the refund policy. -->
-        <p><svg class="ic" aria-hidden="true"><use href="#i-warn"/></svg> <span data-i18n-html="help.n4">Before you pay, read the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">refund policy</a> and the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">terms</a>.</span></p>
+        <p hidden><svg class="ic" aria-hidden="true"><use href="#i-warn"/></svg> <span data-i18n-html="help.n4">Before you pay, read the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">refund policy</a> and the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">terms</a>.</span></p>
       </div>
       <button class="btn-claim modal-cta" data-close data-i18n="help.cta">START PAINTING</button>
     </div>
@@ -481,7 +481,10 @@ finish review, the verdict, and DESIGN.md.
            another tab, keep it, and send someone the link. app.js swaps the
            href between the English and Arabic page whenever the language
            changes — see LEGAL_PAGES. -->
-      <nav class="more-legal" aria-labelledby="moLegalTitle">
+      <!-- hidden until the wall snapshot says the pages are on disk; see
+           showLegalLinks. Starting hidden avoids a flash of links that
+           would 404 if somebody opened MORE before the wall loaded. -->
+      <nav class="more-legal" aria-labelledby="moLegalTitle" hidden>
         <h3 id="moLegalTitle" class="sr-only" data-i18n="mo.legal">THE SMALL PRINT</h3>
         <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html" data-i18n="mo.terms">TERMS</a>
         <a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.html" data-i18n="mo.privacy">PRIVACY</a>
