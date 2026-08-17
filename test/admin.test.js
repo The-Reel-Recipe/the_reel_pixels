@@ -934,3 +934,128 @@ test('one reporter cannot bury the moderation queue', async () => {
   assert.ok(sent <= 30, `${sent} reports went through in a day`);
   assert.ok(refused > 0, 'and the rest were refused rather than queued');
 });
+
+/* ── A brand's drawings, and showing one early (§7.2) ──────────── */
+
+function bookedBrand(name, n) {
+  const now = Date.now();
+  const uid = Number(dbm.db.prepare(
+    "INSERT INTO users (kind, handle, email, pass_hash, created_at, last_seen) VALUES ('brand',?,?,'x',?,?)"
+  ).run(name, `${name.replace(/\W/g, '')}@brands.example`, now, now).lastInsertRowid);
+  dbm.db.prepare('INSERT INTO allowances (user_id) VALUES (?)').run(uid);
+  dbm.db.prepare(
+    `INSERT INTO brand_profiles (user_id, business_name, category, description, contact_name,
+       phone, instapay_handle, status) VALUES (?,?,'Drinks','x','Sara','+20100','b@instapay','approved')`
+  ).run(uid, name);
+  identity.accept(uid, { capacity: true }, now);
+
+  const e = identity.rowFor(uid, now);
+  const px = freeRange(n).map(i => [i, 0xff3366]);
+  const r = wall.bookBrand(e, { name: name.toUpperCase(), url: 'https://example.test', cta: 'VISIT' },
+    px.map(([i, c]) => [i, c]), now);
+  submissions.approve(r.sid, 'tg:1 (sara)', now);
+  return { uid, sid: r.sid, idx: px.map(([i]) => i) };
+}
+
+test('a brand card can show everything that brand has drawn', async () => {
+  const b = bookedBrand('Nile Soda Works', 4);
+
+  const r = await json('GET', `/api/admin/brands/${b.uid}/works`, null, AS_PANEL);
+  assert.equal(r.code, 200);
+  const w = r.json.rows.find(x => x.sid === b.sid);
+  assert.ok(w, 'the booking is listed');
+  assert.equal(w.layer, 'next', 'booked for next cycle');
+  assert.equal(w.status, 'approved');
+  assert.equal(w.px, 4);
+  assert.ok(w.thumb && w.thumb.length, 'with something to look at');
+  assert.equal(w.early, true, 'and it is a candidate for showing early');
+});
+
+test('showing early says exactly whose pixels it would take first', async () => {
+  const b = bookedBrand('Cairo Cola', 4);
+
+  /* somebody else painting over two of those squares on the live wall */
+  const g = guestClaim(0);
+  const painter = identity.rowFor(g.uid, Date.now());
+  const clash = wall.claimPixels(painter, b.idx.slice(0, 2).map(i => [i, 0x111111]), Date.now());
+  submissions.approve(clash.sid, 'tg:1 (sara)', Date.now());
+
+  const p = await json('GET', `/api/admin/submissions/${b.sid}/early`, null, AS_PANEL);
+  assert.equal(p.code, 200);
+  assert.equal(p.json.px, 4);
+  assert.equal(p.json.displacing, 2, 'two squares belong to somebody else');
+  assert.equal(p.json.free, 2);
+  assert.equal(p.json.displaces[0].sid, clash.sid, 'and it says whose');
+  assert.equal(p.json.displaces[0].px, 2);
+
+  /* asking is not doing */
+  assert.equal(dbm.db.prepare(
+    "SELECT COUNT(*) n FROM cells WHERE submission_id = ? AND layer = 'live'").get(b.sid).n, 0);
+});
+
+test('showing early puts it on the wall and takes the displaced work down properly', async () => {
+  const b = bookedBrand('Alex Fizz', 4);
+  const g = guestClaim(0);
+  const painter = identity.rowFor(g.uid, Date.now());
+  const clash = wall.claimPixels(painter, b.idx.slice(0, 2).map(i => [i, 0x111111]), Date.now());
+  submissions.approve(clash.sid, 'tg:1 (sara)', Date.now());
+  for (const i of b.idx.slice(0, 2)) assert.ok(wall.wall.live.has(i), 'their pixels are up');
+
+  const r = await json('POST', `/api/admin/submissions/${b.sid}/early`,
+    { reason: 'the brand asked and the wall is quiet' }, AS_PANEL);
+  assert.equal(r.code, 200, JSON.stringify(r.json));
+  assert.equal(r.json.px, 4);
+  assert.equal(r.json.displaced, 2);
+
+  /* the booking is live now */
+  for (const i of b.idx) assert.ok(wall.wall.live.has(i), `idx ${i} should be on the live wall`);
+
+  /* and the painter it displaced was told, through the normal path */
+  assert.equal(dbm.db.prepare('SELECT status FROM submissions WHERE id = ?').get(clash.sid).status,
+    'rejected', 'taken down rather than silently overwritten');
+  assert.match(
+    dbm.db.prepare('SELECT reject_reason FROM submissions WHERE id = ?').get(clash.sid).reject_reason,
+    /shown early/i);
+
+  /* it is still booked for next cycle too, so the reset still works */
+  assert.equal(dbm.db.prepare('SELECT layer FROM submissions WHERE id = ?').get(b.sid).layer, 'next');
+});
+
+test('only an approved brand booking can be shown early', async () => {
+  const g = guestClaim(2);
+  const noReason = await json('POST', `/api/admin/submissions/${g.sid}/early`, {}, AS_PANEL);
+  assert.equal(noReason.code, 400);
+  assert.equal(noReason.json.error, 'reason-required');
+
+  const notBrand = await json('POST', `/api/admin/submissions/${g.sid}/early`,
+    { reason: 'trying it on a free claim' }, AS_PANEL);
+  assert.equal(notBrand.code, 400);
+  assert.equal(notBrand.json.error, 'not-a-booking');
+
+  const missing = await json('GET', '/api/admin/submissions/999999/early', null, AS_PANEL);
+  assert.equal(missing.code, 400);
+  assert.equal(missing.json.error, 'not-found');
+});
+
+test('showing early is refused for a booking nobody has approved', async () => {
+  const now = Date.now();
+  const uid = Number(dbm.db.prepare(
+    "INSERT INTO users (kind, handle, email, pass_hash, created_at, last_seen) VALUES ('brand','Undecided Co','u@b.example','x',?,?)"
+  ).run(now, now).lastInsertRowid);
+  dbm.db.prepare('INSERT INTO allowances (user_id) VALUES (?)').run(uid);
+  dbm.db.prepare(
+    `INSERT INTO brand_profiles (user_id, business_name, category, description, contact_name,
+       phone, instapay_handle, status) VALUES (?,'Undecided Co','Drinks','x','Sara','+20100','b@instapay','approved')`
+  ).run(uid);
+  identity.accept(uid, { capacity: true }, now);
+  const e = identity.rowFor(uid, now);
+  const r = wall.bookBrand(e, { name: 'UNDECIDED CO', url: 'https://example.test', cta: 'GO' },
+    freeRange(3).map(i => [i, 0x22aa88]), now);
+
+  const out = await json('POST', `/api/admin/submissions/${r.sid}/early`,
+    { reason: 'before anybody looked at it' }, AS_PANEL);
+  assert.equal(out.code, 400);
+  assert.equal(out.json.error, 'not-approved',
+    'a booking put on the wall before a person has seen it is the one thing ' +
+    'this product does not do');
+});

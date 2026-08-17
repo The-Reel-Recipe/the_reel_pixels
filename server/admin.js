@@ -372,6 +372,142 @@ const brands = () => many(
      FROM users u JOIN brand_profiles b ON b.user_id = u.id
     ORDER BY CASE b.status WHEN 'pending' THEN 0 ELSE 1 END, u.created_at DESC`);
 
+/* ── A brand's artwork (§7.2) ──────────────────────────────────────
+   Everything one brand has ever put on the wall, newest first, with the
+   same rendered preview the moderation card carries. The queue only shows
+   what is undecided, and the wall only shows what is up now — neither
+   answers "what has this brand actually run with us", which is the
+   question somebody asks before approving a fourth booking. */
+const brandWorks = db.prepare(
+  `SELECT s.id sid, s.type, s.layer, s.cycle, s.px_count, s.bbox, s.pixels,
+          s.status, s.created_at, s.decided_at, s.decided_by, s.reject_reason,
+          s.brand_name, s.brand_url, s.preview_path, s.payment_id, s.legal_hold
+     FROM submissions s
+    WHERE s.user_id = ? ORDER BY s.created_at DESC LIMIT ?`);
+
+function worksFor(userId, limit = 50) {
+  return brandWorks.all(userId, Math.min(200, Math.max(1, Number(limit) || 50))).map(s => {
+    const bbox = JSON.parse(s.bbox || '[0,0,0,0]');
+    return {
+      sid: s.sid, type: s.type, layer: s.layer, cycle: s.cycle,
+      px: s.px_count, bbox, status: s.status,
+      at: s.created_at, decidedAt: s.decided_at, decidedBy: s.decided_by,
+      reason: s.reject_reason, brand: s.brand_name, url: s.brand_url,
+      held: !!s.legal_hold,
+      thumb: submissions.thumbOf(s.pixels, bbox),
+      preview: s.preview_path ? `/api/admin/preview/${s.sid}.png` : null,
+      payment: s.payment_id ? payments.get(s.payment_id) : null,
+      /* whether "show early" is even a question for this one */
+      early: s.layer === 'next' && s.status === 'approved'
+    };
+  });
+}
+
+/* ── Showing a booking early ───────────────────────────────────────
+   A brand books next month's wall and its pixels sit on the `next` layer
+   until the 1st. This moves one onto the live wall now.
+
+   It is a gift, not a right: TERMS §16 and REFUNDS §12.1 say the logo goes
+   up when the wall resets, and going up sooner gives the brand more than
+   was promised, which nobody complains about. What it can take away is
+   somebody else's live pixels, and that is the part this refuses to do
+   quietly. Every live cell in the way belongs to a painter who spent free
+   pixels or paint on it, and the honest way to remove it is the one the
+   product already has: submissions.takedown, which tells them and refunds
+   the paint. So the answer is always "here is exactly who this displaces",
+   and it only proceeds when somebody has said yes to that number.
+
+   The booking stays on the `next` layer in the database as well as moving
+   to live, because the monthly reset is what makes it permanent and this
+   must not stop that happening. */
+
+const liveCellsAt = db.prepare(
+  `SELECT c.idx, c.submission_id FROM cells c
+    WHERE c.cycle = ? AND c.layer = 'live' AND c.idx IN (SELECT value FROM json_each(?))`);
+const nextCellsOf = db.prepare(
+  `SELECT idx, color FROM cells WHERE submission_id = ? AND layer = 'next'`);
+const copyToLive = db.prepare(
+  `INSERT INTO cells (cycle, layer, idx, color, submission_id, user_id, state)
+   VALUES (?, 'live', ?, ?, ?, ?, 'live')`);
+
+function previewEarly(sid) {
+  const sub = submissions.get(sid);
+  if (!sub) return { error: 'not-found' };
+  if (sub.type !== 'brand') return { error: 'not-a-booking', message: 'Only a brand booking can be shown early.' };
+  if (sub.layer !== 'next') return { error: 'already-live', message: 'That is not booked for next cycle.' };
+  if (sub.status !== 'approved') {
+    return { error: 'not-approved', message: `That booking is ${sub.status} — approve it first.` };
+  }
+
+  const cells = nextCellsOf.all(sid);
+  const idxs = cells.map(c => c.idx);
+  const occupied = idxs.length
+    ? liveCellsAt.all(wall.wall.cycle, JSON.stringify(idxs))
+    : [];
+
+  /* who each displaced square belongs to, so the number has faces behind it */
+  const bySub = new Map();
+  for (const o of occupied) bySub.set(o.submission_id, (bySub.get(o.submission_id) || 0) + 1);
+  const displaces = [...bySub].map(([id, n]) => {
+    const s = submissions.get(id);
+    return { sid: id, px: n, handle: s ? (s.brand_name || s.handle || null) : null, type: s ? s.type : null };
+  });
+
+  return {
+    ok: true, sid, px: idxs.length, brand: sub.brand_name,
+    free: idxs.length - occupied.length,
+    displacing: occupied.length,
+    displaces
+  };
+}
+
+function showEarly(sid, actor, reason, now = Date.now()) {
+  if (!reason || String(reason).trim().length < 3) {
+    return { error: 'reason-required', message: 'Say why — it goes in the audit log.' };
+  }
+  const check = previewEarly(sid);
+  if (check.error) return check;
+
+  const sub = submissions.get(sid);
+  const cells = nextCellsOf.all(sid);
+
+  /* Anything in the way comes down through the normal path first, outside
+     our transaction, because takedown runs its own and tells the painter. */
+  const idxs = cells.map(c => c.idx);
+  const occupied = idxs.length ? liveCellsAt.all(wall.wall.cycle, JSON.stringify(idxs)) : [];
+  const hit = [...new Set(occupied.map(o => o.submission_id))];
+  for (const other of hit) {
+    const r = submissions.takedown(other, actor,
+      `Made way for a brand booking shown early — your paint has been returned`, now);
+    if (!r.ok && !r.missing) {
+      return { error: 'blocked', message: `Could not clear s${other}: ${r.already || 'unknown'}.` };
+    }
+  }
+
+  const placed = tx(() => {
+    let n = 0;
+    for (const c of cells) {
+      /* the cells primary key is the backstop: if something raced us onto
+         that square, this throws and the whole promotion rolls back */
+      copyToLive.run(wall.wall.cycle, c.idx, c.color, sid, sub.user_id);
+      n++;
+    }
+    return n;
+  });
+
+  /* The cells are in SQLite; the wall people are looking at is the pair of
+     maps in memory. Rebuild them and tell every open tab to refetch — the
+     owner table is index-addressed by the body each client holds, so a
+     targeted patch would be a bigger risk than a resync for something this
+     rare. Same reasoning publishErasure uses for a brand takedown. */
+  wall.rebuildCache();
+  wall.broadcast({ t: 'sync' });
+  logEvent(actor, 'brand-early',
+    { submission: sid, brand: sub.brand_name, px: placed, displaced: occupied.length, reason }, now);
+
+  return { ok: true, sid, px: placed, displaced: occupied.length, brand: sub.brand_name };
+}
+
 function paymentList(filter = {}, limit = 100) {
   const where = [], args = [];
   if (filter.status) { where.push('p.status = ?'); args.push(filter.status); }
@@ -844,6 +980,6 @@ module.exports = {
   clearCookie, ipAllowed, throttled,
   overview, queue, users, brands, paymentList, reconcile, events, actionList,
   pixelAt, systemInfo, setBan, adjust, eraseRegion, forceReset, forceReseed,
-  eraseUser, setHold,
+  eraseUser, setHold, worksFor, previewEarly, showEarly,
   override, paymentsCsv, exportFromDb, renderWall
 };

@@ -393,6 +393,30 @@ async function adminRoutes(req, res, urlPath, now) {
 
     /* ── brands ── */
     if (urlPath === '/api/admin/brands') return sendJson(res, 200, { rows: admin.brands() });
+
+    /* Everything one brand has put on the wall — the question the queue and
+       the wall between them do not answer. */
+    const works = urlPath.match(/^\/api\/admin\/brands\/(\d+)\/works$/);
+    if (works && req.method === 'GET') {
+      return sendJson(res, 200,
+        { rows: admin.worksFor(Number(works[1]), Number(q.get('limit')) || 50) });
+    }
+
+    /* Showing a booking before the 1st. GET asks what it would cost — how
+       many live pixels it displaces and whose — and POST does it, having
+       been told. Two calls on purpose: the number is the decision. */
+    const early = urlPath.match(/^\/api\/admin\/submissions\/(\d+)\/early$/);
+    if (early) {
+      const sid = Number(early[1]);
+      if (req.method === 'GET') {
+        const r = admin.previewEarly(sid);
+        return sendJson(res, r.error ? 400 : 200, r);
+      }
+      if (req.method === 'POST') {
+        const r = admin.showEarly(sid, actor, reason, now);
+        return sendJson(res, r.error ? 400 : 200, r);
+      }
+    }
     const brandAct = urlPath.match(/^\/api\/admin\/brands\/(\d+)\/(approve|reject|revoke)$/);
     if (brandAct && req.method === 'POST') {
       const uid = Number(brandAct[1]);

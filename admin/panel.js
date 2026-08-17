@@ -555,11 +555,138 @@ RENDER.brands = async main => {
     };
     if (b.status === 'pending') act.append(call('approve', 'APPROVE', 'go'), call('reject', 'REJECT', 'bad'));
     if (b.status === 'approved') act.append(call('revoke', 'REVOKE', 'bad'));
+
+    /* What have they actually run with us. The queue shows only what is
+       undecided and the wall only what is up now, so neither answers it —
+       and it is the question worth asking before approving a fourth
+       booking, or before showing one early. */
+    const works = el('div');
+    works.style.marginTop = '10px';
+    const seeBtn = el('button', null, 'DRAWINGS');
+    seeBtn.onclick = async () => {
+      if (works.dataset.open === '1') {
+        works.dataset.open = ''; works.innerHTML = ''; works.append(seeBtn);
+        return;
+      }
+      works.dataset.open = '1';
+      seeBtn.disabled = true;
+      try {
+        const w = await get(`/api/admin/brands/${b.user_id}/works`);
+        works.innerHTML = '';
+        works.append(seeBtn);
+        works.append(renderWorks(w.rows, b));
+      } catch (e) { oops(e); } finally { seeBtn.disabled = false; }
+    };
+    works.append(seeBtn);
+    act.append(works);
+
     card.append(act);
     main.append(card);
   }
   if (!d.rows.length) main.append(el('div', 'card q-empty', 'No brand accounts yet.'));
 };
+
+const WORK_CHIP = {
+  approved: 'c-ok', pending: 'c-warn', rejected: 'c-bad', expired: 'c-dim'
+};
+
+function renderWorks(rows, brand) {
+  const box = el('div');
+  box.style.marginTop = '10px';
+  if (!rows.length) {
+    box.append(el('div', 'q-empty', 'Nothing on the wall from this brand yet.'));
+    return box;
+  }
+
+  for (const w of rows) {
+    const item = el('div', 'card');
+    item.style.margin = '8px 0';
+    const inner = el('div', 'q-card');
+
+    if (w.preview) {
+      const img = el('img');
+      img.src = w.preview; img.alt = `submission ${w.sid}`; img.loading = 'lazy';
+      inner.append(img);
+    } else {
+      const c = el('canvas');
+      const cw = Math.max(1, w.bbox[2] - w.bbox[0] + 1);
+      const ch = Math.max(1, w.bbox[3] - w.bbox[1] + 1);
+      c.width = cw; c.height = ch;
+      c.style.width = '160px'; c.style.imageRendering = 'pixelated'; c.style.background = '#fff';
+      const g = c.getContext('2d');
+      for (const [dx, dy, col] of w.thumb || []) {
+        g.fillStyle = '#' + col.toString(16).padStart(6, '0');
+        g.fillRect(dx, dy, 1, 1);
+      }
+      inner.append(c);
+    }
+
+    const side = el('div', 'q-side');
+    const meta = el('div', 'q-meta');
+    const head = el('b', null, `#s${w.sid}`);
+    head.append(el('span', ` chip ${WORK_CHIP[w.status] || 'c-dim'}`, w.status.toUpperCase()));
+    if (w.layer === 'next') head.append(el('span', ' chip c-accent', 'NEXT CYCLE'));
+    if (w.held) head.append(el('span', ' chip c-warn', 'LEGAL HOLD'));
+    meta.append(head);
+    meta.append(el('span', null,
+      `${fmt(w.px)} px · at ${w.bbox[0]},${w.bbox[1]} · sent ${when(w.at)}`));
+    if (w.decidedAt) {
+      meta.append(el('span', null,
+        `${w.status} by ${w.decidedBy || '—'} · ${when(w.decidedAt)}${w.reason ? ` · ${w.reason}` : ''}`));
+    }
+    if (w.url) meta.append(el('span', null, w.url));
+    if (w.payment) {
+      meta.append(el('span', null,
+        `${w.payment.code} · ${(w.payment.amount / 100).toLocaleString('en-US')} EGP · ${w.payment.status}`));
+    }
+    side.append(meta);
+
+    /* Show early. Two steps, because the number is the decision: ask what it
+       would displace, then say yes to that number. */
+    if (w.early) {
+      const act = el('div', 'row');
+      act.style.marginTop = '8px';
+      const go = el('button', 'go', 'SHOW EARLY');
+      go.onclick = async () => {
+        go.disabled = true;
+        try {
+          const p = await get(`/api/admin/submissions/${w.sid}/early`);
+          const lines = [
+            `Put ${brand.business_name}'s ${fmt(p.px)} px on the wall now,`,
+            `before the 1st?`,
+            '',
+            `${fmt(p.free)} of those squares are empty.`
+          ];
+          if (p.displacing) {
+            lines.push('',
+              `${fmt(p.displacing)} are NOT — they belong to somebody else and will be`,
+              `taken down. Those painters are told, and their paint goes back:`);
+            for (const d of p.displaces) {
+              lines.push(`   #s${d.sid} · ${fmt(d.px)} px · ${d.handle || 'a painter'}`);
+            }
+          } else {
+            lines.push('', 'Nothing of anybody else\'s is in the way.');
+          }
+          lines.push('', 'Say why — it goes in the audit log:');
+
+          const reason = prompt(lines.join('\n'), 'Shown early at the brand\'s request');
+          if (reason === null) return;
+          const r = await post(`/api/admin/submissions/${w.sid}/early`, { reason });
+          toast(`On the wall — ${fmt(r.px)} px${r.displaced ? `, ${fmt(r.displaced)} taken down` : ''}.`);
+          show('brands');
+        } catch (e) { oops(e); } finally { go.disabled = false; }
+      };
+      act.append(go);
+      act.append(el('span', 'muted', 'goes up now instead of on the 1st'));
+      side.append(act);
+    }
+
+    inner.append(side);
+    item.append(inner);
+    box.append(item);
+  }
+  return box;
+}
 
 /* ── payments ─────────────────────────────────────────────────── */
 
