@@ -182,7 +182,14 @@ function snapshotFor(e, now) {
     brands: Object.fromEntries(wall.brands),
     nextBrands: Object.fromEntries(wall.nextBrands),
     me: identity.meta(e),
-    prices: { paint: S.PRICE_PAINT, company: S.PRICE_COMPANY, packs: S.PACKS },
+    /* holdHours rides with the prices because it is a term of the sale, not
+       a detail of one order: the booking screen quotes it before an order
+       exists. It used to be the literal "48 hours" in the copy, which
+       stopped being true the moment anybody moved hold_ttl in the panel. */
+    prices: {
+      paint: S.PRICE_PAINT, company: S.PRICE_COMPANY, packs: S.PACKS,
+      holdHours: Math.round(S.HOLD_TTL / 3600000)
+    },
     allowance: identity.allowanceOf(e, now),
     pending: pendingFor(e)
   };

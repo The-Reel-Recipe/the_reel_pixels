@@ -190,8 +190,14 @@ test('GET /api/wall serves the seed as a decodable envelope', async () => {
   assert.equal(meta.dev, undefined, 'the demo controls, and the flag that hid them, are gone');
   /* Confirmed 2026-08-13: 2 EGP a pixel for paint, 5 for brand space, packs
      at 10/20/30% off the paint rate. The page derives every figure it shows
-     from this, so a change here is a change everywhere. */
-  assert.deepEqual(meta.prices, { paint: 2, company: 5, packs: { 25: 45, 100: 160, 500: 700 } });
+     from this, so a change here is a change everywhere.
+
+     holdHours joined them because it is a term of the sale rather than a
+     detail of one order — the booking screen quotes it before any order
+     exists, and it used to be the literal "48 hours" in the copy, which
+     stopped being true the moment anybody moved hold_ttl in the panel. */
+  assert.deepEqual(meta.prices,
+    { paint: 2, company: 5, packs: { 25: 45, 100: 160, 500: 700 }, holdHours: 48 });
   for (const [amount, price] of Object.entries(meta.prices.packs)) {
     const save = Math.round((1 - price / (amount * meta.prices.paint)) * 100);
     assert.ok(save >= 10 && save <= 30, `pack ${amount} saves ${save}%`);

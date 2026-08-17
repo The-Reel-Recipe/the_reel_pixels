@@ -669,10 +669,18 @@ function decideBrand(userId, status, actor, reason, now = Date.now()) {
   return { ok: true, userId, status: status === 'revoked' ? 'rejected' : status };
 }
 
+/* These said "we will email you" and "reply to the email we sent". There is
+   no SMTP client and no mail API anywhere in server/ or tools/, so both were
+   promises about a channel that does not exist — and the second one told
+   somebody to reply to a message they never received, which is worse than
+   silence because it looks like the failure is at their end.
+
+   The notifications feed does exist and already carries brand decisions, so
+   that is where they are pointed. */
 const GATE = {
   'not-brand': 'Booking a logo spot needs a brand account — it takes a minute to apply.',
-  pending: 'Your brand application is still being reviewed. We will email you the moment it is approved.',
-  rejected: 'This brand account was not approved. Reply to the team if you think that is wrong.'
+  pending: 'Your brand application is still being reviewed. The decision appears in your notifications.',
+  rejected: 'This brand account was not approved. The reason is in your notifications, and you can write to us if you think it is wrong.'
 };
 
 /* ── Display name ─────────────────────────────────────────────────

@@ -136,6 +136,12 @@ const QR_FILE = path.join(cfg.ROOT, 'assets', 'instapay-qr.png');
 function instructionsFor(order) {
   return {
     paymentId: order.id,
+    /* The screen says different things about the two: a brand booking holds
+       pixels somebody else could have had, a paint pack holds nothing. Both
+       carry a deadline — REFUNDS §5 makes that deadline the promise — but
+       telling a paint buyer their "spot is held" describes a reservation
+       that does not exist. */
+    kind: order.kind,
     code: order.code,
     amount: order.amount,
     amountEgp: order.amount / 100,

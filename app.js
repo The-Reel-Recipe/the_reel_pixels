@@ -177,6 +177,14 @@ const cycleStart = t => { const d = new Date(t); return new Date(d.getFullYear()
 const cycleEnd   = t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(); };
 const monthName  = t => new Date(t).toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
 const shortDate  = t => new Date(t).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }).toUpperCase();
+/* A date and time to show somebody, in their language and pinned to Cairo.
+   The timezone is not decoration: the payment screen's deadline is a
+   contractual term (REFUNDS §5) and the wall resets at midnight Cairo, so
+   a deadline rendered in the reader's own zone is a different deadline. */
+const stamp = ms => new Date(ms).toLocaleString(lang === 'ar' ? 'ar-EG' : 'en-GB', {
+  day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit',
+  timeZone: 'Africa/Cairo', timeZoneName: 'short'
+});
 /* Every countdown targets the end of the cycle the *wall* is in — which the
    server tells us — not whatever month this machine's calendar says. */
 const cycleEndsAt = () => cycleEnd(cycle);
@@ -864,6 +872,14 @@ function applyPrices(prices) {
   if (!prices) return;
   for (const el of document.querySelectorAll('.px-rate')) el.textContent = fmt(prices.paint);
   for (const el of document.querySelectorAll('.co-rate')) el.textContent = fmt(prices.company);
+  /* The booking screen quotes the hold before an order exists, so it comes
+     from the server like the rates do rather than being written into the
+     copy. cf.hold reads {h}; the sweep runs before this, so re-fill it. */
+  if (prices.holdHours) {
+    for (const el of document.querySelectorAll('[data-i18n="cf.hold"]')) {
+      el.textContent = t('cf.hold', { h: prices.holdHours });
+    }
+  }
 
   const host = $('packs');
   if (!host) return;
@@ -898,7 +914,7 @@ async function buyPack(btn, amount) {
   try {
     const order = await apiJson('/api/paint/order', { pack: amount });
     closeModal('modalPaint');
-    openPay(order, `${fmt(amount)} paint`);
+    openPay(order, t('py.whatPaint', { n: fmt(amount) }));
   } catch (e) {
     toast(t('toast.shopDown'), { cls: 'err' });
   } finally { btn.disabled = false; }
@@ -928,16 +944,24 @@ function openPay(order, what) {
   // is nothing, because a regenerated one would send money somewhere else
   if (order.qr) { $('pyQr').src = order.qr; qr.hidden = false; } else { qr.hidden = true; }
 
-  $('pyHold').textContent = order.holdExpires
-    ? `Your spot is held until ${new Date(order.holdExpires).toLocaleString('en-US',
-      { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}.`
-    : `This order stays open for ${order.holdHours} hours.`;
+  /* REFUNDS §5: "your order screen shows a deadline, and that deadline is the
+     promise". So the deadline is what gets shown — never a duration, which
+     would start counting from whenever the reader happened to look. The
+     hours are the fallback for an order that somehow arrived without one,
+     and they come from the server because HOLD_TTL is admin-editable: this
+     line used to say "48 hours" in the dictionary, which stopped being true
+     the moment anybody moved the setting. */
+  const held = order.holdExpires;
+  const brand = order.kind === 'brand_booking';
+  $('pyHold').textContent = held
+    ? t(brand ? 'py.holdBrand' : 'py.holdPaint', { d: stamp(held) })
+    : t(brand ? 'py.openBrand' : 'py.openPaint', { h: order.holdHours });
 
   $('pyRef').value = ''; $('pyFrom').value = '';
-  $('pyShotName').textContent = 'No file chosen';
+  $('pyShotName').textContent = t('common.nofile');
   for (const id of ['errPyRef', 'errPyFrom', 'errPyShot', 'errPy']) $(id).hidden = true;
   $('pyForm').hidden = false; $('pySent').hidden = true;
-  $('pySubmit').disabled = false; $('pySubmit').textContent = 'I’VE SENT IT';
+  $('pySubmit').disabled = false; $('pySubmit').textContent = t('py.sent');
   openModal('modalPay');
 }
 
@@ -945,11 +969,11 @@ $('pyCopy').onclick = async () => {
   const code = $('pyCode').textContent;
   try {
     await navigator.clipboard.writeText(code);
-    $('pyCopy').textContent = 'COPIED';
-    setTimeout(() => { $('pyCopy').textContent = 'COPY'; }, 1600);
+    $('pyCopy').textContent = t('py.copied');
+    setTimeout(() => { $('pyCopy').textContent = t('py.copy'); }, 1600);
   } catch (e) {
     // clipboard is blocked on insecure origins and in some embedded browsers
-    toast(`Copy it by hand: <b>${code}</b>`, { dur: 6000 });
+    toast(t('py.copyByHand', { code }), { dur: 6000 });
   }
 };
 
@@ -957,12 +981,12 @@ $('pyShotPick').onclick = () => $('pyShot').click();
 $('pyShot').onchange = () => {
   const f = $('pyShot').files[0];
   pay.shot = f || null;
-  $('pyShotName').textContent = f ? f.name : 'No file chosen';
+  $('pyShotName').textContent = f ? f.name : t('common.nofile');
   $('errPyShot').hidden = true;
   // the server enforces this too; failing here saves a 5MB upload to be told so
   if (f && f.size > 5 << 20) {
     pay.shot = null;
-    showErr('errPyShot', 'That image is over 5 MB — a screenshot should be well under.');
+    showErr('errPyShot', t('py.errTooBig'));
   }
 };
 
@@ -973,7 +997,7 @@ $('pyProof').onsubmit = async e => {
 
   pay.busy = true;
   const btn = $('pySubmit');
-  btn.disabled = true; btn.textContent = 'SENDING…';
+  btn.disabled = true; btn.textContent = t('py.sending');
   try {
     /* Screenshot first, so the card the moderator gets has the picture on it
        rather than arriving a second later without one. A failure here is not
@@ -984,7 +1008,7 @@ $('pyProof').onsubmit = async e => {
       });
       if (!up.ok) {
         const d = await up.json().catch(() => ({}));
-        showErr('errPyShot', d.message || 'That image could not be read — carry on without it.');
+        showErr('errPyShot', d.message || t('py.errUnreadable'));
       }
     }
     const r = await apiPost(`/api/payments/${pay.order.paymentId}/proof`, {
@@ -994,20 +1018,20 @@ $('pyProof').onsubmit = async e => {
       const f = r.data.fields || {};
       if (f.instapay_ref) showErr('errPyRef', f.instapay_ref);
       if (f.payer_handle) showErr('errPyFrom', f.payer_handle);
-      if (!f.instapay_ref && !f.payer_handle) showErr('errPy', r.data.message || 'That did not go through — try again.');
+      if (!f.instapay_ref && !f.payer_handle) showErr('errPy', r.data.message || t('py.errFailed'));
       return;
     }
     $('pyForm').hidden = true;
     $('pySentSub').textContent = pay.what
-      ? `We are checking for your transfer. ${pay.what} lands the moment it is confirmed, and MY PIXELS tracks it.`
-      : 'We are checking for your transfer. You will see it land in MY PIXELS.';
+      ? t('py.checkingWhat', { what: pay.what })
+      : t('py.checking');
     $('pySent').hidden = false;
     loadHistory(false);
   } catch (err) {
-    showErr('errPy', 'Could not reach the server — try again in a moment.');
+    showErr('errPy', t('py.errOffline'));
   } finally {
     pay.busy = false;
-    btn.disabled = false; btn.textContent = 'I’VE SENT IT';
+    btn.disabled = false; btn.textContent = t('py.sent');
   }
 };
 
@@ -1999,7 +2023,7 @@ $('btnConfirmPlace').onclick = () => {
       cancelPlacing();
       /* The spot is held, not bought. Straight into the transfer, because a
          booking nobody pays for is 48 hours of dead ground. */
-      if (d.payment) openPay(d.payment, `${name}’s spot`);
+      if (d.payment) openPay(d.payment, t('py.whatSpot', { name }));
       else toast(`${ic('brand')} <b>${name}</b> is booked — it goes live on ${shortDate(d.goesLive)}.`, { dur: 5200 });
     } catch (err) {
       btn.disabled = false; btn.textContent = 'BOOK & PAY';
@@ -2495,9 +2519,13 @@ const L = {
     'toast.payExpired': 'An order expired before the transfer arrived.',
     'toast.payRefunded': 'Your refund has been sent.',
     'brand.chip.pending': 'UNDER REVIEW', 'brand.chip.approved': 'APPROVED', 'brand.chip.rejected': 'NOT APPROVED',
-    'brand.note.pending': 'Your application is with the team. We read every one by hand — usually the same day. You will get an email the moment it is approved.',
+    /* No SMTP client exists anywhere in the project, so every "we will email
+       you" here was a promise about a channel that does not run. The bell
+       does — notifications.js already carries brand decisions — so these
+       point at the thing that actually happens. */
+    'brand.note.pending': 'Your application is with the team. We read every one by hand — usually the same day. The decision lands in your notifications.',
     'brand.note.approved': "You are cleared to book logo space on next month's wall.",
-    'brand.note.rejected': 'We could not verify this business from the details given. Reply to the email we sent if you think that is wrong.',
+    'brand.note.rejected': 'We could not verify this business from the details given. The reason is in your notifications — write to us if you think that is wrong.',
     'brand.titleBook': "Pre-order a logo spot on next month's wall",
     'brand.titlePending': 'Your brand application is still being reviewed',
     'brand.titleApply': 'Brands book logo space — apply once, then pre-order any month',
@@ -2517,10 +2545,10 @@ const L = {
     'au.instapay': 'INSTAPAY HANDLE', 'au.instapayHint': 'Where a refund goes if a booking is turned down.',
     'au.reg': 'COMMERCIAL REG / TAX ID', 'au.desc': 'WHAT THE BUSINESS DOES',
     'au.descPh': 'What you sell, who you sell it to, how long you have been going, where you are based.',
-    'au.applyFine': 'We use this to check the business is real and to send booking receipts. Nothing here goes on the wall.',
+    'au.applyFine': 'We use this to check the business is real and to reach you about a booking. Nothing here goes on the wall.',
     'au.loginFine': 'Painting as a guest needs no account at all.',
     'au.book': 'START A PRE-ORDER',
-    'toast.applied': '<b>Application sent.</b> We will email you as soon as it is reviewed.',
+    'toast.applied': '<b>Application sent.</b> Watch the bell — the decision appears there.',
     'toast.welcomeBack': 'Welcome back, <b>{name}</b> — your pixels are right where you left them.',
     'toast.renamed': 'You are <b>{name}</b> on the wall now.',
     'toast.loggedOut': 'Logged out — you are painting as a guest again.',
@@ -2579,12 +2607,34 @@ const L = {
     'py.from': 'THE HANDLE YOU PAID FROM', 'py.fromHint': 'If anything goes wrong, this is where the refund goes.',
     'py.shot': 'SCREENSHOT', 'py.shotHint': 'Speeds it up. We strip location data before storing it.',
     'py.sent': "I'VE SENT IT", 'py.team': 'WITH THE TEAM', 'py.gohistory': 'OPEN MY PIXELS',
+    /* The deadline, in the words REFUNDS §5 uses for it. A brand booking
+       holds pixels; a paint pack holds nothing, so it does not claim to. */
+    'py.holdBrand': 'Your spot is held until {d}. Tell us the reference before then.',
+    'py.holdPaint': 'This order is open until {d}. Tell us the reference before then, or it closes and nothing is owed either way.',
+    'py.openBrand': 'Your spot is held for {h} hours while the transfer comes through.',
+    'py.openPaint': 'This order stays open for {h} hours.',
+    'py.copied': 'COPIED', 'py.sending': 'SENDING…',
+    'py.copyByHand': 'Copy it by hand: <b>{code}</b>',
+    'py.checking': 'We are checking for your transfer. You will see it land in MY PIXELS.',
+    'py.checkingWhat': 'We are checking for your transfer. {what} lands the moment it is confirmed, and MY PIXELS tracks it.',
+    'py.whatPaint': '{n} paint', 'py.whatSpot': '{name}’s spot',
+    'py.errTooBig': 'That image is over 5 MB — a screenshot should be well under.',
+    'py.errUnreadable': 'That image could not be read — carry on without it.',
+    'py.errFailed': 'That did not go through — try again.',
+    'py.errOffline': 'Could not reach the server — try again in a moment.',
     'hs.title': 'MY PIXELS',
     'hs.sub': 'Every batch you have sent, newest first. A person checks each one before it goes on the wall — usually within minutes.',
     'hs.more': 'LOAD OLDER',
     'ps.title': 'PAINT SHOP',
     'ps.sub': 'Paint = prepaid pixels at <b><span class="px-rate">—</span> EGP/PX</b>. It takes you straight past the {n} free ones — no waiting.',
-    'ps.fine': 'Paid by InstaPay and confirmed by a person — usually within the hour. Paint never expires. If a batch is turned down, the paint comes straight back.',
+    /* This and cf.fine are shown at the moment money changes hands, which
+       makes them the contract — and the Arabic ones are the operative text
+       by the documents' own choice. Three corrections: "usually within the
+       hour" was an unqualified promise where REFUNDS §5 is explicit that it
+       is not a guarantee; "never expires" outlives S37 itself, which TERMS
+       §20 does not; and neither said the wall is wiped on the 1st, which is
+       the single most surprising thing about what is being bought. */
+    'ps.fine': 'Paid by InstaPay and confirmed by a person — usually within the hour, but there is no guaranteed time. Paint stays on your account for as long as S37 runs. If a batch is turned down, the paint comes straight back. Pixels you paint are erased with the whole wall on the 1st.',
     'zoom.in': 'Zoom in (+)', 'zoom.out': 'Zoom out (−)', 'zoom.fit': 'Fit whole wall (0)',
     'tool.pan': 'Move — drag to pan, tap to place one pixel (V)',
     'tool.brush': 'Brush — hold and drag to paint (B)',
@@ -2608,7 +2658,7 @@ const L = {
     'cp.pick': 'PICK YOUR SPOT',
     'cf.title': 'CONFIRM PRE-ORDER', 'cf.company': 'COMPANY', 'cf.pixels': 'PIXELS',
     'cf.golive': 'GOES LIVE', 'cf.skipped': 'SKIPPED (BOOKED)', 'cf.link': 'CTA LINK',
-    'cf.hold': 'Your spot is held for 48 hours while the transfer comes through.',
+    'cf.hold': 'Your spot is held for {h} hours while the transfer comes through. Your order screen shows the exact deadline.',
     'cf.fine': 'Your logo is reviewed like every other pixel. If it is turned down, the payment is refunded to the InstaPay handle you paid from.',
     'cf.cta': 'BOOK & PAY'
   },
@@ -2667,9 +2717,9 @@ const L = {
     'toast.payExpired': 'طلب انتهى قبل ما التحويل يوصل.',
     'toast.payRefunded': 'فلوسك اتردّت.',
     'brand.chip.pending': 'تحت المراجعة', 'brand.chip.approved': 'اتوافق عليه', 'brand.chip.rejected': 'ما اتوافقش',
-    'brand.note.pending': 'طلبك عند الفريق. بنقرا كل طلب بنفسنا — غالبًا نفس اليوم. هيوصلك إيميل أول ما يتوافق عليه.',
+    'brand.note.pending': 'طلبك عند الفريق. بنقرا كل طلب بنفسنا — غالبًا نفس اليوم. القرار هينزل في إشعاراتك.',
     'brand.note.approved': 'تمام — تقدر تحجز مكان اللوجو على حيط الشهر الجاي.',
-    'brand.note.rejected': 'ما قدرناش نتأكد من البيزنس من البيانات دي. ردّ على الإيميل لو شايف إن في غلطة.',
+    'brand.note.rejected': 'ما قدرناش نتأكد من البيزنس من البيانات دي. السبب موجود في إشعاراتك — اكتبلنا لو شايف إن في غلطة.',
     'brand.titleBook': 'احجز مكان لوجو على حيط الشهر الجاي',
     'brand.titlePending': 'طلب البراند لسه بيتراجع',
     'brand.titleApply': 'البراندات بتحجز مكان — قدّم مرة واحدة واحجز أي شهر',
@@ -2689,10 +2739,10 @@ const L = {
     'au.instapay': 'حساب إنستاباي', 'au.instapayHint': 'لو حجز اترفض، الفلوس بترجع هنا.',
     'au.reg': 'سجل تجاري / رقم ضريبي', 'au.desc': 'البيزنس بيعمل إيه',
     'au.descPh': 'بتبيع إيه، لمين، بقالك قد إيه، وفين.',
-    'au.applyFine': 'بنستخدم ده عشان نتأكد إن البيزنس حقيقي ونبعت إيصالات الحجز. مفيش حاجة منه بتطلع الحيط.',
+    'au.applyFine': 'بنستخدم ده عشان نتأكد إن البيزنس حقيقي ونقدر نوصلك بخصوص الحجز. مفيش حاجة منه بتطلع الحيط.',
     'au.loginFine': 'الشخبطة كضيف مش محتاجة حساب أصلاً.',
     'au.book': 'ابدأ حجز',
-    'toast.applied': '<b>الطلب اتبعت.</b> هنبعتلك إيميل أول ما يتراجع.',
+    'toast.applied': '<b>الطلب اتبعت.</b> تابع الجرس — القرار بينزل هناك.',
     'toast.welcomeBack': 'أهلاً بيك تاني يا <b>{name}</b> — بكسلاتك زي ما سيبتها.',
     'toast.renamed': 'بقيت <b>{name}</b> على الحيط.',
     'toast.loggedOut': 'خرجت — بترسم كضيف تاني.',
@@ -2749,12 +2799,25 @@ const L = {
     'py.from': 'الحساب اللي دفعت منه', 'py.fromHint': 'لو حصلت مشكلة، الفلوس بترجع هنا.',
     'py.shot': 'سكرين شوت', 'py.shotHint': 'بتسرّع الموضوع. بنشيل بيانات الموقع قبل الحفظ.',
     'py.sent': 'بعتّها', 'py.team': 'وصلت للفريق', 'py.gohistory': 'افتح بكسلاتي',
+    'py.holdBrand': 'مكانك محجوز لحد {d}. قولنا الرقم المرجعي قبل كده.',
+    'py.holdPaint': 'الطلب ده مفتوح لحد {d}. قولنا الرقم المرجعي قبل كده، وإلا هيتقفل ومحدش مدين لحد.',
+    'py.openBrand': 'مكانك محجوز {h} ساعة لحد ما التحويل يوصل.',
+    'py.openPaint': 'الطلب ده بيفضل مفتوح {h} ساعة.',
+    'py.copied': 'اتنسخ', 'py.sending': 'بنبعت…',
+    'py.copyByHand': 'انسخه بإيدك: <b>{code}</b>',
+    'py.checking': 'بندوّر على تحويلك. هتشوفه بينزل في «بكسلاتي».',
+    'py.checkingWhat': 'بندوّر على تحويلك. {what} بينزل أول ما يتأكد، و«بكسلاتي» بتتابعه.',
+    'py.whatPaint': '{n} بوية', 'py.whatSpot': 'مكان {name}',
+    'py.errTooBig': 'الصورة دي أكبر من ٥ ميجا — السكرين شوت المفروض أقل من كده بكتير.',
+    'py.errUnreadable': 'مش قادرين نقرا الصورة دي — كمّل من غيرها.',
+    'py.errFailed': 'ما نفعتش — جرّب تاني.',
+    'py.errOffline': 'ما قدرناش نوصل للسيرفر — جرّب كمان شوية.',
     'hs.title': 'بكسلاتي',
     'hs.sub': 'كل دفعة بعتّها، الأجدد الأول. حد بيبص على كل واحدة قبل ما تطلع الحيط — غالبًا دقايق.',
     'hs.more': 'حمّل الأقدم',
     'ps.title': 'محل البوية',
     'ps.sub': 'البوية = بكسلات مدفوعة مقدّمًا بـ<b><span class="px-rate">—</span> جنيه/بكسل</b>. بتعدّيك الـ{n} المجانية من غير انتظار.',
-    'ps.fine': 'الدفع بإنستاباي وحد بيأكده — غالبًا خلال ساعة. البوية ما بتنتهيش. لو دفعة اترفضت، البوية بترجعلك فورًا.',
+    'ps.fine': 'الدفع بإنستاباي وحد بيأكده — غالبًا خلال ساعة، بس من غير وقت مضمون. البوية بتفضل في حسابك طول ما S37 شغّالة. لو دفعة اترفضت، البوية بترجعلك فورًا. البكسلات اللي بترسمها بتتمسح مع الحيط كله يوم ١.',
     'zoom.in': 'قرّب (+)', 'zoom.out': 'بعّد (−)', 'zoom.fit': 'الحيط كله (0)',
     'tool.pan': 'تحريك — اسحب تتنقل، دوس تحط بكسل (V)',
     'tool.brush': 'فرشة — دوس واسحب تلوّن (B)',
@@ -2778,7 +2841,7 @@ const L = {
     'cp.pick': 'اختار مكانك',
     'cf.title': 'أكّد الحجز', 'cf.company': 'الشركة', 'cf.pixels': 'البكسلات',
     'cf.golive': 'بيطلع يوم', 'cf.skipped': 'اتشال (محجوز)', 'cf.link': 'اللينك',
-    'cf.hold': 'مكانك محجوز ٤٨ ساعة لحد ما التحويل يوصل.',
+    'cf.hold': 'مكانك محجوز {h} ساعة لحد ما التحويل يوصل. شاشة الطلب بتوريك الموعد النهائي بالظبط.',
     'cf.fine': 'اللوجو بيتراجع زي أي بكسل. لو اترفض، الفلوس بترجع لحساب إنستاباي اللي دفعت منه.',
     'cf.cta': 'احجز وادفع'
   }

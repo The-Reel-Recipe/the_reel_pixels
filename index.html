@@ -778,7 +778,9 @@ finish review, the verdict, and DESIGN.md.
         <span class="ps-icon" aria-hidden="true"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg></span>
         <div>
           <b>INSTAPAY</b>
-          <span data-i18n="cf.hold">Your spot is held for 48 hours while the transfer comes through.</span>
+          <!-- the number is filled by applyPrices from the live hold_ttl, not
+               written here: the panel can move it, and this used to lie -->
+          <span data-i18n="cf.hold">Your spot is held while the transfer comes through.</span>
         </div>
       </div>
       <p class="fine" data-i18n="cf.fine">Your logo is reviewed like every other pixel. If it is turned down, the payment is refunded to the InstaPay handle you paid from.</p>
