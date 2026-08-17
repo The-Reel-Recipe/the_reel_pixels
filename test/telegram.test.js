@@ -550,13 +550,23 @@ test('a report becomes its own card, with one thing to do about it', async () =>
     'a message, not a photo — the group already saw the artwork when it was moderated');
 
   const p = JSON.parse(q[0].payload);
-  assert.equal(p.about.kind, 'report',
-    'its own kind, so a later decision does not try to edit it as a moderation card');
+  assert.equal(p.about, undefined,
+    'no `about`: it is looked up through msgIdOf, which only knows the kinds ' +
+    'that have a tg_msg_id column — a report card carrying one throws on delivery');
   assert.match(p.params.text, /Reported/);
   assert.match(p.params.text, /Hate or harassment/);
   assert.match(p.params.text, /\(12, 34\)/, 'the coordinates, so somebody can go and look');
   assert.match(p.params.text, /it is a slur/);
   assert.equal(p.params.reply_markup.inline_keyboard[0][0].callback_data, `td:${r.sid}`);
+
+  /* Actually send it. Checking the payload shape is not enough: the first
+     version of this carried about.kind = 'report', which looks fine sitting
+     in the outbox and throws in drainOne the moment it is delivered,
+     because msgIdOf only knows the kinds with a tg_msg_id column. */
+  calls.length = 0;
+  await telegram.drain();
+  assert.equal(queued().length, 0, 'it went, rather than deferring forever');
+  assert.equal(calls[0].method, 'sendMessage');
 });
 
 test('a report about something already gone offers no button', async () => {

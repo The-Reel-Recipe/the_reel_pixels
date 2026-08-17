@@ -329,9 +329,14 @@ function cardForReport(sid, about, now = Date.now()) {
   if (where) lines.push(`\n${where}`);
 
   return tx(() => enqueue('sendMessage', {
-    /* its own kind, so a later decision on the submission does not try to
-       edit this message as though it were the moderation card */
-    about: { kind: 'report', id: sid },
+    /* No `about`. That field exists so a later edit can find the message it
+       edits, and drainOne looks it up through msgIdOf, which only knows the
+       three kinds that have a tg_msg_id column. A report is never edited —
+       the take-down button clears its own keyboard through the callback — so
+       carrying one here meant dereferencing msgIdOf['report'] and throwing on
+       delivery, and would also have overwritten the submission's real card
+       id. The test drains the card rather than only inspecting its shape,
+       because the shape looked perfectly fine. */
     params: {
       chat_id: cfg.TG_CHAT_ID,
       text: lines.join('\n'),
