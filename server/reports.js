@@ -40,10 +40,22 @@ const logEvent = dbm.logEvent;
 const REASON_MAX = 500;
 const REASONS = new Set(['sexual', 'hate', 'violence', 'personal', 'copyright', 'spam', 'other']);
 
-const cellAt = db.prepare(
+/* One layer at a time, because the cells primary key is (cycle, layer, idx)
+   and a query naming only cycle and idx can seek to the cycle and must then
+   walk it — up to a million rows, on a route anybody can call without an
+   account. Naming the layer turns it into a single key lookup.
+
+   'live' is asked first because that is what somebody is looking at when
+   they report it; 'next' is next month's booked artwork, which is only
+   visible to whoever booked it. */
+const cellIn = db.prepare(
   `SELECT c.submission_id, c.user_id, c.layer, s.status, s.brand_name, s.px_count
      FROM cells c LEFT JOIN submissions s ON s.id = c.submission_id
-    WHERE c.cycle = ? AND c.idx = ? ORDER BY c.layer LIMIT 1`);
+    WHERE c.cycle = ? AND c.layer = ? AND c.idx = ?`);
+
+const cellAt = {
+  get: (cycle, idx) => cellIn.get(cycle, 'live', idx) || cellIn.get(cycle, 'next', idx)
+};
 
 /* One per reporter per batch. A second report from the same person about
    the same drawing tells a moderator nothing the first did not, and the
@@ -53,6 +65,24 @@ const cellAt = db.prepare(
 const alreadyReported = db.prepare(
   `SELECT 1 FROM events
     WHERE action = 'report' AND actor = ? AND payload LIKE ? LIMIT 1`);
+
+/* And a ceiling per reporter per day. The per-submission rule above stops
+   somebody reporting one drawing twice; it does nothing about reporting a
+   thousand different ones, and every report is a message in the moderation
+   group. The rate limiter in front of this bounds the speed, not the total.
+
+   Set where a person acting in good faith will never meet it — noticing
+   thirty things wrong with a wall in one day is not a thing that happens —
+   and where somebody trying to bury the queue does. */
+const REPORTS_A_DAY = 30;
+const reportedToday = db.prepare(
+  `SELECT COUNT(*) n FROM events WHERE action = 'report' AND actor = ? AND ts > ?`);
+
+const FLOODED = {
+  status: 429, error: 'report-cap',
+  message: 'That is a lot of reports for one day. If something is badly wrong, ' +
+    'write to us instead — that reaches a person faster than another report will.'
+};
 
 function report(reporter, body, now = Date.now()) {
   const b = body && typeof body === 'object' ? body : {};
@@ -70,6 +100,7 @@ function report(reporter, body, now = Date.now()) {
   }
 
   const actor = `user:${reporter.id}`;
+  if (reportedToday.get(actor, now - 24 * 60 * 60 * 1000).n >= REPORTS_A_DAY) return FLOODED;
   if (alreadyReported.get(actor, `%"submission":${cell.submission_id},%`)) {
     /* Answered as success. Telling somebody "you already reported this"
        invites them to work out how to report it again, and the honest

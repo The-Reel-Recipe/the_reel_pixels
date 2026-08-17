@@ -1,0 +1,21 @@
+-- ═══════════════════════════════════════════════════════════════
+-- 014_report_index — make the report route cheap to serve
+--
+-- /api/report is open to anyone with no account, which is
+-- deliberate: making somebody sign up before they can tell you
+-- about something that should not be on a public wall is a notice
+-- procedure designed not to be used. That makes its cost per call
+-- everybody's problem.
+--
+-- The duplicate check reads the events journal, which is the
+-- append-only record of everything that has ever happened here.
+-- Without this it was SCAN events on every report — the whole
+-- journal, per call, forever growing.
+--
+-- Partial, because reports are a rounding error in that table and
+-- an index over all of it would cost more than it saves. It serves
+-- both the "have they already reported this" check and the daily
+-- per-reporter cap.
+-- ═══════════════════════════════════════════════════════════════
+
+CREATE INDEX idx_events_report ON events(actor, ts) WHERE action = 'report';

@@ -683,7 +683,9 @@ test('a pack whose paint is already on the wall is refused, not silently clamped
     { to: 'refund_due', reason: 'they asked for it back' }, AS_PANEL);
   assert.equal(r.code, 400);
   assert.equal(r.json.error, 'paint-spent');
-  assert.match(r.json.message, /70 has been spent/);
+  assert.match(r.json.message, /take back 100 paint and the balance is 30/);
+  assert.match(r.json.message, /one balance rather than a pile per pack/,
+    'the message must not attribute the spend to this pack — paint has no such identity');
 
   assert.equal(dbm.db.prepare('SELECT status FROM payments WHERE id = ?').get(pid).status, 'verified',
     'and nothing moved');
@@ -910,4 +912,25 @@ test('a sweep that fails destroys nothing on the way down', () => {
   assert.ok(dbm.db.prepare('SELECT screenshot_path FROM payments WHERE code = ?')
     .get('S37-ROLLBK').screenshot_path, 'and the row still points at it');
   identity.forget = realForget;
+});
+
+test('one reporter cannot bury the moderation queue', async () => {
+  const ip = '198.51.100.240';
+  const first = await json('GET', '/api/me', null, { ip, jar: new Map() });
+  const cookie = String(first.headers['set-cookie'] || '').split(';')[0];
+  const as = { ip, headers: cookie ? { cookie } : {} , jar: new Map() };
+
+  /* The per-submission rule stops reporting one drawing twice; it says
+     nothing about reporting a thousand different ones, and every report is
+     a message in the moderation group. */
+  let refused = 0, sent = 0;
+  for (let i = 0; i < 34; i++) {
+    const g = guestClaim(1);
+    await json('POST', `/api/admin/submissions/${g.sid}/approve`, {}, AS_PANEL);
+    const r = await json('POST', '/api/report', { idx: g.idx[0], reason: 'spam' }, as);
+    if (r.code === 429) { refused++; assert.equal(r.json.error, 'report-cap'); }
+    else if (r.code === 200) sent++;
+  }
+  assert.ok(sent <= 30, `${sent} reports went through in a day`);
+  assert.ok(refused > 0, 'and the rest were refused rather than queued');
 });

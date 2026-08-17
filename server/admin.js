@@ -787,11 +787,17 @@ function override(paymentId, to, actor, reason, now = Date.now()) {
     const held = selAllowance.get(p.user_id);
     const have = held ? held.paint : 0;
     if (have < p.pack) {
+      /* Careful with the wording here: paint is one balance, not a pile per
+         pack, so "this pack's paint has been spent" is a sentence about an
+         identity paint does not have. What is actually true — and all the
+         operator needs — is that the balance is smaller than the refund
+         would take back. */
       return {
         error: 'paint-spent',
-        message: `That pack credited ${p.pack} paint and only ${have} is left — ` +
-          `${p.pack - have} has been spent on the wall. Refund it by hand and adjust ` +
-          `the balance separately, so the write-off is recorded as one.`
+        message: `This refund would take back ${p.pack} paint and the balance is ${have}. ` +
+          `Paint is one balance rather than a pile per pack, so ${p.pack - have} of what ` +
+          `this order paid for is already on the wall. Refund by hand and adjust the ` +
+          `balance separately, so the write-off is recorded as a decision somebody made.`
       };
     }
   }
