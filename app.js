@@ -853,11 +853,36 @@ $('btnClear').onclick = () => { clearSel(); };
 
 /* ── Paint shop ── */
 function openPaintShop() {
-  const locked = !hasAccount();
-  $('psGate').hidden = !locked;
-  $('packs').classList.toggle('locked', locked);
+  /* Two doors, in the order somebody meets them: no account at all, then an
+     account that has not agreed to anything. The second only exists because
+     accounts predate the terms — once everybody has accepted the current
+     version, nobody sees it again until a new one is published. */
+  const noAccount = !hasAccount();
+  const noAccept = !noAccount && !hasAccepted();
+  $('psGate').hidden = !noAccount;
+  $('psAcceptGate').hidden = !noAccept;
+  $('psAcceptBox').checked = false;
+  clearTick('psAcceptBox', 'errPsAccept');
+  $('packs').classList.toggle('locked', noAccount || noAccept);
   openModal('modalPaint');
 }
+
+/* Catching up an account that was made before there was anything to accept.
+   Posts the same two statements the registration tick makes, so the record
+   is the same shape however somebody got there. */
+$('psAcceptGo').onclick = async () => {
+  if (!markTick('psAcceptBox', 'errPsAccept')) return;
+  const btn = $('psAcceptGo');
+  btn.disabled = true;
+  try {
+    const r = await apiPost('/api/me/accept', { accept: true, capacity: true });
+    if (!r.ok) { showErr('errPsAccept', r.data.message || t('toast.unreachable')); return; }
+    setMe(r.data);
+    openPaintShop();                    // re-runs the gates against the new record
+  } catch (err) {
+    showErr('errPsAccept', t('toast.unreachable'));
+  } finally { btn.disabled = false; }
+};
 $('btnPaintShop').onclick = openPaintShop;
 /* Every price on the page, written from the wall snapshot.
 
@@ -1247,6 +1272,14 @@ const canBook = () => isBrand() && me.brandStatus === 'approved';
 /* an email is what makes an identity recoverable, and paint is only sold to
    identities that can be recovered — a brand has one by definition */
 const hasAccount = () => !!me.email;
+/* Whether they have agreed to the wording currently published. Accounts made
+   before migration 010 have agreed to nothing, and an account that accepted
+   1.0 has to be asked again once 1.1 goes up — a bare "they agreed" cannot
+   say that, which is why the version travels with it. The server refuses the
+   purchase either way; this is what puts the tick in front of them so the
+   refusal has somewhere to go. */
+const hasAccepted = () =>
+  !!me.accepted && !!me.capacity && (!me.termsVersion || me.accepted.version === me.termsVersion);
 
 function setMe(d) {
   if (d && typeof d === 'object') {
@@ -1255,7 +1288,9 @@ function setMe(d) {
       brandStatus: d.brandStatus || null,
       /* the painter upgrade (§3): a guest with an email is a signed-in
          painter — same identity, reachable from other devices */
-      registered: !!d.registered, email: d.email || null
+      registered: !!d.registered, email: d.email || null,
+      accepted: d.accepted || null, capacity: !!d.capacity,
+      termsVersion: d.termsVersion || null
     };
   }
   renderAuth();
@@ -2538,6 +2573,8 @@ const L = {
     'toast.unreachable': 'Could not reach the server — try again in a moment.',
     'toast.shopDown': 'The paint shop is unreachable — try again.',
     'ps.gate': 'Paint lives on your account, not on this browser — so making one is the first step. It takes a moment, and every pixel you have already painted stays exactly where it is.',
+    'ps.acceptWhy': 'One thing before you buy — we need to know you have read the terms and are old enough to agree to them.',
+    'ps.acceptCta': 'AGREE & CARRY ON',
     'ps.popular': 'POPULAR', 'ps.save': 'SAVE {pct}%',
     'hs.sub.pending': 'WAITING', 'hs.sub.approved': 'ON THE WALL',
     'hs.sub.rejected': 'TURNED DOWN', 'hs.sub.expired': 'EXPIRED',
@@ -2756,6 +2793,8 @@ const L = {
     'toast.unreachable': 'السيرفر مش رادّ — جرّب كمان شوية.',
     'toast.shopDown': 'محل البوية مش رادّ — جرّب تاني.',
     'ps.gate': 'البوية بتتحفظ على حسابك مش على المتصفح ده — فأول خطوة إنك تعمل حساب. دقيقة واحدة، وكل بكسل رسمته بيفضل زي ما هو.',
+    'ps.acceptWhy': 'حاجة واحدة قبل ما تشتري — لازم نعرف إنك قريت الشروط وسنك يسمح إنك توافق عليها.',
+    'ps.acceptCta': 'موافق، كمّل',
     'ps.popular': 'الأكثر طلبًا', 'ps.save': 'وفّر {pct}%',
     'hs.sub.pending': 'مستنية', 'hs.sub.approved': 'على الحيط',
     'hs.sub.rejected': 'اترفضت', 'hs.sub.expired': 'انتهت',

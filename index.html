@@ -365,6 +365,19 @@ finish review, the verdict, and DESIGN.md.
         <button class="btn-claim" id="psGateGo"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg> <span data-i18n="me.create">CREATE ACCOUNT</span></button>
         <button class="btn-ghost" id="psGateLogin"><svg class="ic" aria-hidden="true"><use href="#i-login"/></svg> <span data-i18n="me.login">LOG IN</span></button>
       </div>
+      <!-- For an account that predates the terms, or one that has not seen
+           the version currently published. Same two statements as the
+           registration tick, so the record is the same shape however
+           somebody got here. -->
+      <div class="ps-gate" id="psAcceptGate" hidden>
+        <p data-i18n="ps.acceptWhy">One thing before you buy — we need to know you have read the terms and are old enough to agree to them.</p>
+        <label class="fld-tick">
+          <input type="checkbox" id="psAcceptBox">
+          <span data-i18n-html="au.accept">I am 18 or older and entering this for myself, and I accept the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">Terms</a>, the <a data-legal="privacy" target="_blank" rel="noopener" href="assets/privacy.html">Privacy Policy</a> and the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">Refund Policy</a>.</span>
+        </label>
+        <span class="fld-err" id="errPsAccept" hidden></span>
+        <button class="btn-claim" id="psAcceptGo" data-i18n="ps.acceptCta">AGREE &amp; CARRY ON</button>
+      </div>
       <div class="packs" id="packs"></div>
       <p class="fine" data-i18n="ps.fine">Paid by InstaPay and confirmed by a person &mdash; usually within the hour. Paint never expires. If a batch is turned down, the paint comes straight back.</p>
     </div>
