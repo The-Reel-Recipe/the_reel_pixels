@@ -14,7 +14,7 @@ S37 is a public wall of a million pixels. This page says exactly what we record,
 
 1. **We record something the moment the page loads**, before you tap anything: an anonymous account, a cookie, and your IP address. Section 3 explains why.
 2. **There is no analytics and no advertising tracking here.** No Google Analytics, no Meta pixel, no third-party script, no external fonts, no CDN. Everything is served from our own server. This is verifiable — open your browser's network tab.
-3. **Everything you paint is reviewed by a person over Telegram** before it goes public. Your artwork, your display name and your payment details go to Telegram. Section 6.
+3. **Everything you paint is reviewed by a person over Telegram** before it goes public. Your artwork and your display name go to Telegram. Your contact details, bank details and payment screenshots do not. Section 6.
 4. **The wall is wiped every month. Our records are not.** Section 7.
 5. **You have rights over your data and we honour them by hand**, because there is no self-service button yet. Section 9 says exactly what we can and cannot undo.
 
@@ -81,7 +81,7 @@ Please do not use your full real name unless you want strangers to have it.
 
 In one form: business name and category; a description of at least 200 characters; website and/or social links; a contact person's name; a phone number; a commercial registration or tax number (optional); an InstaPay handle; an email address and a password.
 
-None of this goes on the wall. It is used to check the business is real and to handle bookings and refunds. All of it goes to our moderator over Telegram — section 6.
+None of this goes on the wall. It is used to check the business is real and to handle bookings and refunds. Only the business name, the category and the website reach our moderator over Telegram; the rest stays in our own admin panel — section 6.
 
 ### 3.6 When you pay
 
@@ -142,11 +142,15 @@ The site runs on **Railway**, a hosting company, on servers in the **Netherlands
 
 Every human review happens in a private Telegram group. Telegram is a messaging company outside Egypt.
 
-**For every batch of pixels:** a picture of your artwork as it would appear on the wall, your display name or brand name, the pixel count, how many of your batches were approved or refused before, and — if it was paid for — the order code, its status and the InstaPay reference.
+What we send there is deliberately thin.
 
-**For every brand application:** the business name, category, contact person's name, **phone number, email address**, website, social links, **commercial registration number, InstaPay handle**, and the full description. In plain text.
+**For every batch of pixels:** a picture of your artwork as it would appear on the wall, your display name or brand name, the pixel count, how many of your batches were approved or refused before, and — if it was paid for — the order code and its status.
 
-**For every payment:** the amount, the order code, the InstaPay reference, the handle you paid from, **and the screenshot itself if you attached one.** Where a refund is owed, a reminder repeating the handle is re-sent every 24 hours until it is paid.
+**For every brand application:** the business name, the category, and the website if you gave one. Then a link.
+
+**For every payment:** the amount, the order code and its status. Then a link. Where a refund is owed, a reminder repeating the amount and the order code is sent every 24 hours until it is paid.
+
+**What we do not send there:** phone numbers, email addresses, commercial registration numbers, InstaPay handles, transaction references, and payment screenshots. None of those reach Telegram. The moderator opens the link and signs in to our own admin panel with a password and a one-time code, and sees them there.
 
 Once a message is in Telegram, Telegram stores it and everyone in that moderation group can see it. We can delete our own copy. **We cannot promise every copy inside Telegram is gone.** Telegram's own handling of that data is governed by Telegram's privacy policy, not ours.
 

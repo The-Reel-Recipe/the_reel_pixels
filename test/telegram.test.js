@@ -385,7 +385,23 @@ test('a brand application becomes a card, and the buttons decide it', async () =
   assert.equal(card.about.kind, 'brand');
   assert.match(card.params.text, /NEW BRAND APPLICATION/);
   assert.match(card.params.text, /Nile Soda Co\./);
-  assert.match(card.params.text, /nilesoda@instapay/);
+
+  /* And nothing else. This card used to carry the contact's name, phone
+     number, email address, commercial registration number and InstaPay
+     handle in plain text into a group hosted by a messaging company
+     outside Egypt, which keeps its own copies of everything and cannot be
+     asked to forget them. Every one of those is a PDPL problem and the
+     InstaPay handle is a banking-confidentiality one on top.
+
+     A moderator deciding "is this a real business" needs the name, the
+     category and the website. The rest is one tap away in the panel,
+     behind a password and a one-time code. */
+  for (const leak of [form.phone, form.email, form.contact_name, form.instapay_handle]) {
+    assert.ok(!card.params.text.includes(leak),
+      `the brand card still leaks "${leak}" into Telegram`);
+  }
+  assert.match(card.params.text, /open the admin panel|open in the panel/,
+    'and points at where the rest actually lives');
 
   const uid = card.about.id;
   assert.equal(identity.brandStatus({ id: uid, kind: 'brand' }), 'pending');
@@ -612,4 +628,74 @@ test('a report button is no use to somebody who is not a moderator', async () =>
 
   assert.ok(out && out.refused);
   assert.equal(statusOf(r.sid), 'approved', 'still up');
+});
+
+/* ── Nothing personal leaves for Telegram (M6) ─────────────────── */
+
+test('a payment card carries the decision, not the bank details', async () => {
+  const r = await claim(freeRange(2).map(i => [i, 0x778899]));
+  const uid = dbm.db.prepare('SELECT user_id FROM submissions WHERE id = ?').get(r.sid).user_id;
+
+  /* a payment with every sensitive field populated, and a screenshot on disk */
+  const cfg = require('../server/config.js');
+  const shotDir = require('path').join(cfg.DATA_DIR, 'uploads');
+  fs.mkdirSync(shotDir, { recursive: true });
+  const shot = require('path').join(shotDir, 'leak-test.png');
+  fs.writeFileSync(shot, 'pretend png');
+
+  const pid = Number(dbm.db.prepare(
+    `INSERT INTO payments (user_id, kind, pack, amount, code, status, created_at,
+                           instapay_ref, payer_handle, screenshot_path)
+     VALUES (?, 'paint_pack', 100, 16000, 'S37-LEAK', 'submitted', ?, ?, ?, ?)`
+  ).run(uid, Date.now(), '50119876543', 'someones-phone@instapay', shot).lastInsertRowid);
+
+  dbm.db.prepare('DELETE FROM tg_outbox').run();
+  telegram.cardForPayment(pid);
+
+  const q = queued();
+  assert.equal(q.length, 1);
+  assert.equal(q[0].method, 'sendMessage',
+    'never sendPhoto — the screenshot is a picture of somebody’s banking app');
+
+  const p = JSON.parse(q[0].payload);
+  assert.equal(p.params.photoPath, undefined, 'and no file is attached by any other name');
+  assert.ok(!JSON.stringify(p).includes(shot), 'not even the path to it');
+
+  for (const leak of ['50119876543', 'someones-phone@instapay']) {
+    assert.ok(!p.params.text.includes(leak), `the payment card still leaks "${leak}"`);
+  }
+
+  /* what a moderator actually needs to decide is all still there */
+  assert.match(p.params.text, /S37-LEAK/, 'the code to look for in the transfer note');
+  assert.match(p.params.text, /160/, 'and the amount to look for');
+});
+
+test('the refund reminder stops re-broadcasting where the money goes', () => {
+  const r = dbm.db.prepare(
+    `INSERT INTO payments (user_id, kind, amount, code, status, created_at, payer_handle)
+     VALUES (1, 'paint_pack', 9900, 'S37-RMND', 'refund_due', ?, ?)`
+  ).run(Date.now(), 'refund-me@instapay');
+  const pid = Number(r.lastInsertRowid);
+
+  dbm.db.prepare('DELETE FROM tg_outbox').run();
+  telegram.remindRefund(pid);
+
+  const p = JSON.parse(queued()[0].payload);
+  assert.ok(!p.params.text.includes('refund-me@instapay'),
+    'this fires every 24 hours — it was the same bank detail, again and again, ' +
+    'into a chat that keeps all of them');
+  assert.match(p.params.text, /S37-RMND/, 'the order code is enough to find it in the panel');
+  assert.match(p.params.text, /99/, 'and the amount still owed');
+});
+
+test('no card builder can attach a file any more', () => {
+  /* The one structural check: sendPhoto is how a file leaves this process
+     for Telegram, and after M6 exactly one card is entitled to use it —
+     the rendered artwork, which is public content by definition. */
+  const src = fs.readFileSync(require('path').join(__dirname, '..', 'server', 'telegram.js'), 'utf8');
+  const photoSends = [...src.matchAll(/enqueue\('sendPhoto'/g)].length;
+  assert.equal(photoSends, 1,
+    'only cardForSubmission may send a photo, and only of the artwork it is moderating');
+  assert.ok(!/photoPath:\s*p\.screenshot_path/.test(src),
+    'a payment screenshot must never be attached to a Telegram message');
 });

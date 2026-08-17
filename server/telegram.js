@@ -120,6 +120,18 @@ const setMsgId = {
    makes those work the same as the photo cards. */
 const EDIT_METHODS = new Set(['editMessageCaption', 'editMessageReplyMarkup', 'editMessageText']);
 
+/* ── Links into the panel ─────────────────────────────────────────
+   The cards carry the minimum a moderator needs to decide, and a link to
+   everything else. That only works if the link works, so a missing
+   PUBLIC_URL degrades to a sentence rather than to a broken href — and
+   the boot guard in config.js is what stops it being missing in
+   production in the first place. */
+function panelLink(page, what) {
+  return cfg.PUBLIC_URL
+    ? `<a href="${cfg.PUBLIC_URL}/admin#${page}">open in the panel →</a>`
+    : `<i>${esc(what)} — open the admin panel</i>`;
+}
+
 /* ── The worker ───────────────────────────────────────────────── */
 
 let timer = null, running = false;
@@ -384,17 +396,22 @@ function cardForBrand(userId, now = Date.now()) {
   const b = selBrand.get(userId);
   if (!b || b.status !== 'pending') return null;
 
-  const socials = (() => { try { return JSON.parse(b.socials || '[]'); } catch (e) { return []; } })();
+  /* Deliberately thin. This used to carry the contact's name, phone number,
+     email, commercial registration number and InstaPay handle in plain text
+     into a group hosted by a messaging company outside Egypt — an accurate
+     written account of which is not something you want to hand a regulator
+     under the PDPL, and the InstaPay handle brings banking confidentiality
+     into it as well. Telegram keeps its own copies; we cannot unsend them.
+
+     What is left is what a moderator needs to make the decision they are
+     being asked to make — is this a real business — plus a link. Everything
+     else is one tap away in the panel, behind a password and a one-time
+     code, where it was always available. */
   const text = [
     `<b>🏢 NEW BRAND APPLICATION</b>`,
     `<b>${esc(b.business_name)}</b> · ${esc(b.category)}`,
-    `contact: ${esc(b.contact_name)} · ${esc(b.phone)} · ${esc(b.email)}`,
     b.website ? `site: ${esc(b.website)}` : null,
-    socials.length ? `social: ${socials.map(esc).join(', ')}` : null,
-    b.reg_number ? `reg: ${esc(b.reg_number)}` : null,
-    `instapay: ${esc(b.instapay_handle)}`,
-    '',
-    esc(b.description)
+    panelLink('brands', `application from ${b.business_name}`)
   ].filter(l => l !== null).join('\n');
 
   return tx(() => enqueue('sendMessage', {
@@ -456,11 +473,19 @@ function payCaption(p, now) {
   if (p.kind === 'paint_pack') bits.push(`${p.pack} paint`);
   if (p.sid) bits.push(`#s${p.sid} · ${p.px_count} px`);
   bits.push(PAY_STATE[p.status] || p.status);
-  const tail = [];
-  if (p.instapay_ref) tail.push(`ref <code>${esc(p.instapay_ref)}</code>`);
-  if (p.payer_handle) tail.push(`from <code>${esc(p.payer_handle)}</code>`);
-  return bits.join(' · ') + (tail.length ? `\n${tail.join(' · ')}` : '') +
-    `\n<i>look for ${money(p.amount)} with “${esc(p.code)}” in the note</i>`;
+
+  /* The transaction reference and the payer's InstaPay handle used to be
+     here. Both are bank details of somebody else's account, sitting in a
+     third-party chat outside Egypt, and the reference is enough to look a
+     transfer up. Neither is needed for the decision this card asks for: the
+     moderator checks their own InstaPay app for this amount with this code
+     in the note, and both of those are still right here.
+
+     The reference and the handle matter when a payment is disputed, and the
+     panel is where a dispute gets worked out. */
+  return bits.join(' · ') +
+    `\n<i>look for ${money(p.amount)} with “${esc(p.code)}” in the note</i>` +
+    `\n${panelLink('pay', `order ${p.code}`)}`;
 }
 
 const payKeys = pid => ({
@@ -473,22 +498,26 @@ function cardForPayment(paymentId, now = Date.now()) {
   const p = selPay.get(paymentId);
   if (!p) return null;
 
-  const params = {
-    chat_id: cfg.TG_CHAT_ID,
-    caption: payCaption(p, now),
-    parse_mode: 'HTML',
-    reply_markup: payKeys(paymentId)
-  };
-  /* A screenshot makes the card a photo; without one there is nothing to
-     look at, so it goes as text and sendMessage wants `text`, not `caption`. */
-  if (p.screenshot_path && fs.existsSync(p.screenshot_path)) {
-    params.photoPath = p.screenshot_path;
-    return tx(() => enqueue('sendPhoto', { about: { kind: 'payment', id: paymentId }, params }, now));
-  }
-  const { caption, ...rest } = params;
+  /* The payer's screenshot used to be attached here, which put a picture of
+     somebody's banking app into a chat hosted outside Egypt, kept there by a
+     company we cannot ask to forget it, visible to everyone in the group.
+
+     It is already served at /api/admin/payments/:id/screenshot behind a
+     password, a one-time code and a twelve-hour session. That is where it
+     stays. The card carries what the decision needs — the amount and the
+     code to look for — and a link to the rest.
+
+     Every payment card is a message now, so there is one shape rather than
+     two, and no branch where a file gets read at send time. */
   return tx(() => enqueue('sendMessage', {
     about: { kind: 'payment', id: paymentId },
-    params: { ...rest, text: caption }
+    params: {
+      chat_id: cfg.TG_CHAT_ID,
+      text: payCaption(p, now),
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: payKeys(paymentId)
+    }
   }, now));
 }
 
@@ -502,11 +531,19 @@ function editPayment(paymentId, status, actor, now = Date.now()) {
   const when = new Date(now).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   const body = payCaption(p, now) +
     `\n\n${PAY_STATE[p.status] || p.status} · ${esc(actor)} · ${when}`;
-  const photo = !!(p.screenshot_path && fs.existsSync(p.screenshot_path));
+  /* Always a text edit now. This used to choose editMessageCaption whenever
+     a screenshot existed on disk, which was right while the card itself was
+     a photo — but no payment card carries a photo any more, and a payer can
+     upload a screenshot after the card has gone out, which would have made
+     this pick a caption edit for a text message and fail permanently.
+
+     Migration 012 clears tg_msg_id on the cards that went out as photos
+     before this change, so they get a fresh text card on their next
+     transition instead of an edit that can never land. */
   /* refund_due is the one state that keeps a button: somebody still has to
      send the money and then say so. */
   const markup = p.status === 'refund_due' ? refundKeys(paymentId) : { inline_keyboard: [] };
-  return enqueue(photo ? 'editMessageCaption' : 'editMessageText', {
+  return enqueue('editMessageText', {
     about: { kind: 'payment', id: paymentId },
     params: photo
       ? { chat_id: cfg.TG_CHAT_ID, caption: body, parse_mode: 'HTML', reply_markup: markup }
@@ -524,9 +561,15 @@ function remindRefund(paymentId, now = Date.now()) {
   return tx(() => enqueue('sendMessage', {
     params: {
       chat_id: cfg.TG_CHAT_ID,
-      text: `💸 <b>Still owed:</b> ${money(p.amount)} back to <code>${esc(p.payer_handle || '—')}</code>` +
-        `\norder ${esc(p.code)} · ${esc(p.brand_name || p.handle)}` +
-        `\n\nSend it from InstaPay, then tap below.`,
+      /* This fired every 24 hours and re-broadcast the payer's InstaPay
+         handle each time — the same bank detail, again and again, into a
+         chat that keeps all of them. The handle to send it back to is on
+         the order in the panel, which is where you are going anyway to
+         make the transfer. */
+      text: `💸 <b>Still owed:</b> ${money(p.amount)} · order ${esc(p.code)}` +
+        `\n${esc(p.brand_name || p.handle)}` +
+        `\n${panelLink('pay', `order ${p.code}`)}` +
+        `\n\nThe handle to send it to is on the order. Send it, then tap below.`,
       parse_mode: 'HTML',
       reply_markup: refundKeys(paymentId)
     }

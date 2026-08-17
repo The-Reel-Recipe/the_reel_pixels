@@ -55,7 +55,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:v
 <ol>
 <li><strong>We record something the moment the page loads</strong>, before you tap anything: an anonymous account, a cookie, and your IP address. Section 3 explains why.</li>
 <li><strong>There is no analytics and no advertising tracking here.</strong> No Google Analytics, no Meta pixel, no third-party script, no external fonts, no CDN. Everything is served from our own server. This is verifiable — open your browser's network tab.</li>
-<li><strong>Everything you paint is reviewed by a person over Telegram</strong> before it goes public. Your artwork, your display name and your payment details go to Telegram. Section 6.</li>
+<li><strong>Everything you paint is reviewed by a person over Telegram</strong> before it goes public. Your artwork and your display name go to Telegram. Your contact details, bank details and payment screenshots do not. Section 6.</li>
 <li><strong>The wall is wiped every month. Our records are not.</strong> Section 7.</li>
 <li><strong>You have rights over your data and we honour them by hand</strong>, because there is no self-service button yet. Section 9 says exactly what we can and cannot undo.</li>
 </ol>
@@ -103,7 +103,7 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:v
 </ul>
 <h3>3.5 When you apply as a brand</h3>
 <p>In one form: business name and category; a description of at least 200 characters; website and/or social links; a contact person's name; a phone number; a commercial registration or tax number (optional); an InstaPay handle; an email address and a password.</p>
-<p>None of this goes on the wall. It is used to check the business is real and to handle bookings and refunds. All of it goes to our moderator over Telegram — section 6.</p>
+<p>None of this goes on the wall. It is used to check the business is real and to handle bookings and refunds. Only the business name, the category and the website reach our moderator over Telegram; the rest stays in our own admin panel — section 6.</p>
 <h3>3.6 When you pay</h3>
 <p>Payment is an InstaPay bank transfer made inside your own bank app. We record:</p>
 <ul>
@@ -147,9 +147,11 @@ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);color:v
 <h2>6. Who else receives it</h2>
 <h3>6.1 Telegram — the moderation channel</h3>
 <p>Every human review happens in a private Telegram group. Telegram is a messaging company outside Egypt.</p>
-<p><strong>For every batch of pixels:</strong> a picture of your artwork as it would appear on the wall, your display name or brand name, the pixel count, how many of your batches were approved or refused before, and — if it was paid for — the order code, its status and the InstaPay reference.</p>
-<p><strong>For every brand application:</strong> the business name, category, contact person's name, <strong>phone number, email address</strong>, website, social links, <strong>commercial registration number, InstaPay handle</strong>, and the full description. In plain text.</p>
-<p><strong>For every payment:</strong> the amount, the order code, the InstaPay reference, the handle you paid from, <strong>and the screenshot itself if you attached one.</strong> Where a refund is owed, a reminder repeating the handle is re-sent every 24 hours until it is paid.</p>
+<p>What we send there is deliberately thin.</p>
+<p><strong>For every batch of pixels:</strong> a picture of your artwork as it would appear on the wall, your display name or brand name, the pixel count, how many of your batches were approved or refused before, and — if it was paid for — the order code and its status.</p>
+<p><strong>For every brand application:</strong> the business name, the category, and the website if you gave one. Then a link.</p>
+<p><strong>For every payment:</strong> the amount, the order code and its status. Then a link. Where a refund is owed, a reminder repeating the amount and the order code is sent every 24 hours until it is paid.</p>
+<p><strong>What we do not send there:</strong> phone numbers, email addresses, commercial registration numbers, InstaPay handles, transaction references, and payment screenshots. None of those reach Telegram. The moderator opens the link and signs in to our own admin panel with a password and a one-time code, and sees them there.</p>
 <p>Once a message is in Telegram, Telegram stores it and everyone in that moderation group can see it. We can delete our own copy. <strong>We cannot promise every copy inside Telegram is gone.</strong> Telegram's own handling of that data is governed by Telegram's privacy policy, not ours.</p>
 <h3>6.2 Railway — hosting</h3>
 <p>Railway runs the server, holds the disk, terminates the encryption on your connection, and keeps its own record of requests, which normally includes IP addresses. Those records are Railway's, not ours; we cannot read or delete them.</p>

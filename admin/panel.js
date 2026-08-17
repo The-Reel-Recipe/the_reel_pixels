@@ -123,6 +123,9 @@ function shell() {
 const RENDER = {};
 async function show(id) {
   current = id;
+  /* keep the address bar honest, and make the page reloadable and
+     linkable — without pushing a history entry per tab click */
+  if (pageFromHash() !== id) history.replaceState(null, '', `#${id}`);
   for (const p of PAGES) {
     const t = document.getElementById(`tab-${p.id}`);
     if (t) t.classList.toggle('sel', p.id === id);
@@ -939,10 +942,21 @@ RENDER.system = async main => {
 
 /* ── go ───────────────────────────────────────────────────────── */
 
+/* The moderation cards no longer carry personal details — they carry a link
+   here instead, of the form /admin#pay. So the hash has to mean something.
+   Anything unrecognised falls back to the dashboard rather than erroring:
+   the link came from a chat message and may be from an older version. */
+const pageFromHash = () => {
+  const want = (location.hash || '').replace(/^#/, '').split('-')[0];
+  return PAGES.some(p => p.id === want) ? want : 'dash';
+};
+
 (async () => {
   me = await get('/api/admin/me');
   shell();
-  await show('dash');
+  await show(pageFromHash());
+  /* tapping a second link while the panel is already open should move it */
+  window.addEventListener('hashchange', () => show(pageFromHash()));
   /* the dashboard is the only page worth refreshing on its own — the rest
      are things somebody is reading, and moving under them is rude */
   setInterval(() => { if (current === 'dash') show('dash'); }, 30000);
