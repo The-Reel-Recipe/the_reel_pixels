@@ -1523,6 +1523,25 @@ $('paneLogin').addEventListener('submit', async e => {
    guest again, so the wall is reloaded to pick up whose pixels are whose. */
 async function logout() {
   try { await apiPost('/api/auth/logout'); } catch (e) { /* the cookie goes either way */ }
+
+  /* Signed out locally before anything that can fail.
+     This used to be loadWall's job — it calls setMe with whoever the server
+     now thinks we are — and loadWall can be refused. Logging out clears the
+     cookie, so the wall reload has to mint a fresh guest, and a mint is
+     capped per address per day (§3). On a carrier-NAT mobile network, or on
+     the fifth account somebody makes while testing, that comes back 429, the
+     catch below swallowed it, setMe never ran, and the account was still on
+     screen. "Logging out does nothing until I reload" is exactly that. */
+  setMe({ kind: 'guest', handle: '', brandStatus: null, registered: false, email: null });
+
+  /* And their work goes with them. MY PIXELS is a cached list of somebody's
+     submissions; leaving it up after a logout shows one person's history to
+     whoever picks the phone up next. */
+  history.rows = []; history.total = 0; history.loaded = 0;
+  knownSubs.clear(); knownPayments.clear();
+  yours.clear();
+  renderHistory();
+
   try { await loadWall(); } catch (e) { /* offline handling already covers this */ }
   closeModal('modalAuth'); closeModal('modalCompany'); closeModal('modalMe');
   loadAlerts();

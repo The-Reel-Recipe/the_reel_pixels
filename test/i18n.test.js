@@ -173,3 +173,29 @@ test('the promises REFUNDS quotes back are still the ones the app makes', () => 
       `the app no longer says what REFUNDS.md quotes it as saying:\n  quoted: ${q}\n  app:    ${strings[i]}`);
   });
 });
+
+test('logging out does not depend on the wall reload succeeding', () => {
+  /* The bug this pins: logout cleared the cookie, then called loadWall to
+     pick up the fresh guest — and setMe lived only inside loadWall. Logging
+     out forces a mint, a mint is capped per address per day, and on a
+     carrier-NAT mobile network that comes back 429. The catch swallowed it,
+     setMe never ran, and the account stayed on screen until a reload.
+
+     So: the local sign-out has to happen before the call that can fail. */
+  const body = SRC.slice(SRC.indexOf('async function logout()'));
+  const end = body.indexOf('\n}');
+  const fn = body.slice(0, end);
+
+  const setMeAt = fn.indexOf('setMe(');
+  const loadWallAt = fn.indexOf('loadWall()');
+  assert.ok(setMeAt > 0, 'logout must sign out locally');
+  assert.ok(loadWallAt > 0, 'logout still refreshes the wall');
+  assert.ok(setMeAt < loadWallAt,
+    'setMe must run BEFORE loadWall — otherwise a refused mint leaves the ' +
+    'account on screen, which is exactly the reported bug');
+
+  /* and their history goes with them: leaving it up shows one person's
+     submissions to whoever picks the phone up next */
+  assert.match(fn, /history\.rows = \[\]/, 'logout must drop the cached history');
+  assert.match(fn, /yours\.clear\(\)/, 'and stop highlighting their pixels as theirs');
+});
