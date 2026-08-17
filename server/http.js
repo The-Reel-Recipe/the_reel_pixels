@@ -738,6 +738,10 @@ async function handler(req, res) {
     if (proof && req.method === 'POST') {
       const id = Number(proof[1]);
       if (proof[2] === 'screenshot') {
+        /* ownership first: uploads.store writes a file named after the
+           payment, so an unowned upload would overwrite somebody's proof */
+        const gate = payments.mayAttach(id, row.id);
+        if (gate) return sendJson(res, gate.status, gate);
         const raw = await readBody(req, uploads.MAX_BYTES + 1024);
         const stored = uploads.store(raw, `p${id}`);
         if (stored.error) return sendJson(res, 400, stored);

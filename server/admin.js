@@ -561,7 +561,10 @@ function forceReseed(phrase, actor, now = Date.now()) {
 const OVERRIDES = {
   'rejected>submitted': "the payer says it did arrive and it is worth another look",
   'expired>awaiting_transfer': 'reopening a hold that lapsed',
-  'refunded>refund_due': 'the refund bounced or never landed'
+  'refunded>refund_due': 'the refund bounced or never landed',
+  /* the other side of erring toward owing: a debt raised on an unverified
+     transfer that never actually arrived has to be closable */
+  'refund_due>rejected': 'checked the account and no transfer ever arrived'
 };
 
 function override(paymentId, to, actor, reason, now = Date.now()) {

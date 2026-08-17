@@ -184,10 +184,21 @@ function submitProof(paymentId, userId, body, now = Date.now()) {
   return { ok: true, paymentId, status: 'submitted' };
 }
 
-function attachScreenshot(paymentId, userId, file, now = Date.now()) {
+/* Whether this caller may attach to this payment — asked *before* the bytes
+   are written, because the file is named after the payment id and writing
+   is an overwrite: without this, anyone with a guest cookie could replace
+   the screenshot on somebody else's order, which is the evidence a
+   moderator confirms the transfer against. */
+function mayAttach(paymentId, userId) {
   const p = selPayment.get(paymentId);
   if (!p || p.user_id !== userId) return { error: 'not-found', status: 404 };
   if (!['awaiting_transfer', 'submitted'].includes(p.status)) return { error: 'settled', status: 409 };
+  return null;
+}
+
+function attachScreenshot(paymentId, userId, file, now = Date.now()) {
+  const gate = mayAttach(paymentId, userId);
+  if (gate) return gate;
   setShot.run(file, paymentId);
   logEvent(`user:${userId}`, 'payment-screenshot', { payment: paymentId }, now);
   return { ok: true };
@@ -316,6 +327,6 @@ const forUser = (userId, limit = 20, offset = 0) => listFor.all(userId, limit, o
 module.exports = {
   attach, createOrder, instructionsFor, submitProof, attachScreenshot,
   verify, reject, markRefunded, sweep, startSweeper, stopSweeper,
-  newCode, get, byCode, forUser, piasters, packPrice, bookingPrice,
+  newCode, get, byCode, forUser, piasters, packPrice, bookingPrice, mayAttach,
   HOLD_MS, REMIND_MS, ALPHABET
 };

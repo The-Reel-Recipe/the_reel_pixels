@@ -261,6 +261,22 @@ test('somebody else cannot pay off, or look at, your order', async () => {
     { instapay_ref: '5011234567', payer_handle: 'nosy@instapay' });
   assert.equal(r.code, 404, 'and is told nothing about whose it is');
   assert.equal(payOf(order.json.paymentId).status, 'awaiting_transfer');
+
+  /* …and cannot put a file on their order either. The upload is named after
+     the payment id and writing it is an overwrite, so a stranger who got as
+     far as the disk would be replacing the evidence a moderator confirms the
+     transfer against — the ownership check has to come first. */
+  const id = order.json.paymentId;
+  const mine = pngOf(8, 8);
+  const ok = await req(me, 'POST', `/api/payments/${id}/screenshot`, mine, 'image/png');
+  assert.equal(ok.code, 200);
+  const shot = payOf(id).screenshot_path;
+  assert.ok(shot && fs.existsSync(shot), 'the owner\'s screenshot is on disk');
+  const before = fs.readFileSync(shot);
+
+  const theirs = await req(nosy, 'POST', `/api/payments/${id}/screenshot`, pngOf(64, 64), 'image/png');
+  assert.equal(theirs.code, 404, 'a stranger is refused');
+  assert.deepEqual(fs.readFileSync(shot), before, 'and did not overwrite the file on the way to being refused');
 });
 
 test('an unpaid order expires and cannot then be paid', async () => {
@@ -373,6 +389,36 @@ test('money that never arrived frees the spot immediately', async () => {
 });
 
 /* ── refunds (§6) ─────────────────────────────────────────────── */
+
+test('money nobody has checked yet is owed back, not written off', async () => {
+  /* The dangerous order of events: the brand transfers, submits the
+     reference, and the artwork is rejected before anyone opens the bank app.
+     The payment was closing as "expired" — the never-arrived outcome — so a
+     transfer that may well have landed left no record of being owed. */
+  const { who } = brand('203.0.113.118', 'UNCHECKED CO.');
+  const r = await json(who, 'POST', '/api/book', envelope({ name: 'UNCHECKED CO.' },
+    freeRange(20).map(i => [i, 0x224466])), 'application/octet-stream');
+  const pid = r.json.payment.paymentId;
+
+  await json(who, 'POST', `/api/payments/${pid}/proof`,
+    { instapay_ref: '5011122233', payer_handle: 'unchecked@instapay' });
+  assert.equal(payOf(pid).status, 'submitted', 'said to be sent, not yet verified');
+
+  assert.equal(submissions.reject(r.json.sid, 'tg:1 (sara)', 'not this month').ok, true);
+  assert.equal(payOf(pid).status, 'refund_due', 'the debt is recorded rather than lost');
+
+  /* an order nobody ever claimed to have paid still just expires */
+  const quiet = brand('203.0.113.119', 'NEVER PAID CO.');
+  const q = await json(quiet.who, 'POST', '/api/book', envelope({ name: 'NEVER PAID CO.' },
+    freeRange(20).map(i => [i, 0x664422])), 'application/octet-stream');
+  assert.equal(submissions.reject(q.json.sid, 'tg:1 (sara)', 'no').ok, true);
+  assert.equal(payOf(q.json.payment.paymentId).status, 'expired', 'nothing sent, nothing owed');
+
+  /* settle it: refund_due is global state the sweep counts, and a debt left
+     lying here would show up in the next test's nag count */
+  payments.markRefunded(pid, 'tg:1 (sara)');
+  assert.equal(payOf(pid).status, 'refunded');
+});
 
 test('rejecting paid-for pixels owes the money back, and keeps saying so', async () => {
   const { who } = brand('203.0.113.113', 'TURNED DOWN CO.');

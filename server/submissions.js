@@ -136,10 +136,20 @@ const countHistory = db.prepare(
    so this is a no-op today and correct the moment it isn't. */
 const oweRefund = db.prepare(
   `UPDATE payments SET status = 'refund_due', updated_at = ? WHERE id = ? AND status = 'verified'`);
-/* Money that never arrived just voids with the submission. */
-const voidPayment = db.prepare(
+/* Money the payer says they sent but nobody has checked yet. This used to
+   void alongside the never-claimed ones, which quietly wrote off a real
+   possibility: a brand transfers, submits the reference, and the logo is
+   rejected before anyone looks at the bank — the order closed as "expired"
+   and the debt was never recorded anywhere. A debt that turns out not to
+   exist is a question for the operator; money kept with no record of owing
+   it is the one that becomes a complaint, so this errs toward owing. */
+const oweUnverified = db.prepare(
+  `UPDATE payments SET status = 'refund_due', updated_at = ?
+     WHERE id = ? AND status = 'submitted'`);
+/* Nothing was ever claimed to be sent, so there is nothing to give back. */
+const voidUnclaimed = db.prepare(
   `UPDATE payments SET status = 'expired', updated_at = ?
-     WHERE id = ? AND status IN ('awaiting_transfer','submitted')`);
+     WHERE id = ? AND status = 'awaiting_transfer'`);
 
 function settlePayment(sub, now) {
   if (!sub.payment_id) return null;
@@ -147,7 +157,11 @@ function settlePayment(sub, now) {
     logEvent('system', 'refund-due', { sid: sub.id, payment: sub.payment_id }, now);
     return 'refund_due';
   }
-  return voidPayment.run(now, sub.payment_id).changes ? 'expired' : null;
+  if (oweUnverified.run(now, sub.payment_id).changes) {
+    logEvent('system', 'refund-due', { sid: sub.id, payment: sub.payment_id, unverified: true }, now);
+    return 'refund_due';
+  }
+  return voidUnclaimed.run(now, sub.payment_id).changes ? 'expired' : null;
 }
 
 /* ── Transitions ──────────────────────────────────────────────── */
