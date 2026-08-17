@@ -291,6 +291,59 @@ function cardForSubmission(sid, now = Date.now()) {
   }, now));
 }
 
+/* ── A report (§11) ───────────────────────────────────────────────
+   TERMS §11 promises a REPORT button on any pixel and a person who looks.
+   The button is in the tooltip and the route is reports.js; this is the
+   half that makes "a person looks" true, because a report that only
+   reaches the events table reaches nobody.
+
+   It is a message, not a photo. The drawing already has a card in this
+   group from when it was moderated — re-sending the picture would be a
+   second copy of something the group has seen, and the point of this one
+   is the complaint, not the artwork. The coordinates are a link into the
+   panel for anybody who wants to look again.
+
+   Only one button: take it down. Approve is not an outcome here — the
+   thing is already approved and already up. Doing nothing is the other
+   outcome and needs no button. */
+
+const REPORT_WHY = {
+  sexual: 'Sexual content', hate: 'Hate or harassment', violence: 'Violence',
+  personal: "Someone's personal information", copyright: 'Copyright', spam: 'Spam',
+  other: 'Other'
+};
+
+function cardForReport(sid, about, now = Date.now()) {
+  if (!on()) return null;
+  const sub = selSub.get(sid);
+  if (!sub) return null;
+
+  const where = cfg.PUBLIC_URL ? `${cfg.PUBLIC_URL}/admin#pixel-${about.x}-${about.y}` : null;
+  const lines = [
+    `<b>⚑ Reported — #s${sid}</b>`,
+    `${REPORT_WHY[about.reason] || about.reason}`,
+    `(${about.x}, ${about.y}) · ${sub.px_count} px · by ${esc(sub.brand_name || sub.handle)}`,
+    sub.status === 'approved' ? 'On the wall now.' : `Currently ${sub.status}.`
+  ];
+  if (about.note) lines.push(`\n<i>${esc(about.note)}</i>`);
+  if (where) lines.push(`\n${where}`);
+
+  return tx(() => enqueue('sendMessage', {
+    /* its own kind, so a later decision on the submission does not try to
+       edit this message as though it were the moderation card */
+    about: { kind: 'report', id: sid },
+    params: {
+      chat_id: cfg.TG_CHAT_ID,
+      text: lines.join('\n'),
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      reply_markup: sub.status === 'approved'
+        ? { inline_keyboard: [[btn('🧹 Take it down', `td:${sid}`)]] }
+        : { inline_keyboard: [] }
+    }
+  }, now));
+}
+
 /* A decision edits the card it was made on rather than adding to the thread:
    a moderation group with forty cards in it is unreadable if every one of
    them is three messages long. */
@@ -548,6 +601,22 @@ async function onCallback(q) {
     return r;
   }
 
+  /* Acting on a report. takedown() is the existing §7.2 erasure of approved
+     work — it publishes the removal to every open wall and tells the owner —
+     so this button is a way into it from the group rather than a new path. */
+  if (verb === 'td') {
+    const sid = Number(a);
+    const r = submissions.takedown(sid, actor, 'Reported and taken down', now);
+    if (r.missing) { await answer(q.id, 'That submission is gone.', true); return r; }
+    if (!r.ok) { await answer(q.id, `Already ${r.already}.`, true); return r; }
+    await call('editMessageReplyMarkup', {
+      chat_id: q.message.chat.id, message_id: q.message.message_id,
+      reply_markup: { inline_keyboard: [] }
+    }).catch(() => {});
+    await answer(q.id, 'Taken down, and the painter has been told.');
+    return r;
+  }
+
   if (verb === 'fz') {
     const to = a === '1';
     const r = settings.set('maintenance', to, actor, now);
@@ -756,7 +825,7 @@ module.exports = {
   on, start, enqueue, drain, drainOne, backoff, startWorker, stopWorker,
   startPolling, stopPolling, pollOnce,
   call, captionFor, decideKeys, reasonKeys, REASONS,
-  cardForSubmission, editDecision, cardForBrand, editBrandDecision,
+  cardForSubmission, editDecision, cardForBrand, editBrandDecision, cardForReport,
   cardForPayment, editPayment, remindRefund, payCaption,
   onUpdate, onCallback, onCommand, secretOk, digestCheck,
   status: () => outboxDepth.get()

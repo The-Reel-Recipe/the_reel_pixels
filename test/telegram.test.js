@@ -533,3 +533,73 @@ test('/freeze asks before it closes the wall', async () => {
   await telegram.onCommand({ text: '/freeze', chat: { id: OUR_CHAT }, from: { id: 1 } });
   assert.equal(calls.length, 0);
 });
+
+/* ── A report reaches the group (TERMS §11) ────────────────────── */
+
+test('a report becomes its own card, with one thing to do about it', async () => {
+  calls.length = 0;
+  const r = await claim(freeRange(3).map(i => [i, 0x992244]));
+  submissions.approve(r.sid, 'tg:4242 (sara)');
+  dbm.db.prepare('DELETE FROM tg_outbox').run();
+
+  telegram.cardForReport(r.sid, { x: 12, y: 34, reason: 'hate', note: 'it is a slur' });
+
+  const q = queued();
+  assert.equal(q.length, 1);
+  assert.equal(q[0].method, 'sendMessage',
+    'a message, not a photo — the group already saw the artwork when it was moderated');
+
+  const p = JSON.parse(q[0].payload);
+  assert.equal(p.about.kind, 'report',
+    'its own kind, so a later decision does not try to edit it as a moderation card');
+  assert.match(p.params.text, /Reported/);
+  assert.match(p.params.text, /Hate or harassment/);
+  assert.match(p.params.text, /\(12, 34\)/, 'the coordinates, so somebody can go and look');
+  assert.match(p.params.text, /it is a slur/);
+  assert.equal(p.params.reply_markup.inline_keyboard[0][0].callback_data, `td:${r.sid}`);
+});
+
+test('a report about something already gone offers no button', async () => {
+  const r = await claim(freeRange(2).map(i => [i, 0x113355]));
+  submissions.reject(r.sid, 'tg:4242 (sara)', 'Spam or advertising');
+  dbm.db.prepare('DELETE FROM tg_outbox').run();
+
+  telegram.cardForReport(r.sid, { x: 1, y: 2, reason: 'spam' });
+
+  const p = JSON.parse(queued()[0].payload);
+  assert.deepEqual(p.params.reply_markup.inline_keyboard, [],
+    'there is nothing to take down, and a button that does nothing is worse than none');
+  assert.match(p.params.text, /Currently rejected/);
+});
+
+test('the take-down button takes it down, and tells the painter why', async () => {
+  const r = await claim(freeRange(4).map(i => [i, 0x556677]));
+  submissions.approve(r.sid, 'tg:4242 (sara)');
+  assert.equal(statusOf(r.sid), 'approved');
+  dbm.db.prepare('DELETE FROM tg_outbox').run();
+
+  const out = await telegram.onCallback({
+    id: 'cb-td', data: `td:${r.sid}`,
+    from: { id: 4242, username: 'sara' },
+    message: { chat: { id: OUR_CHAT }, message_id: 77 }
+  });
+
+  assert.ok(out && out.ok, JSON.stringify(out));
+  assert.equal(statusOf(r.sid), 'rejected', 'off the wall');
+  const reason = dbm.db.prepare('SELECT reject_reason FROM submissions WHERE id = ?').get(r.sid);
+  assert.match(reason.reject_reason, /Reported/);
+});
+
+test('a report button is no use to somebody who is not a moderator', async () => {
+  const r = await claim(freeRange(2).map(i => [i, 0x224466]));
+  submissions.approve(r.sid, 'tg:4242 (sara)');
+
+  const out = await telegram.onCallback({
+    id: 'cb-nope', data: `td:${r.sid}`,
+    from: { id: 999999, username: 'passerby' },
+    message: { chat: { id: OUR_CHAT }, message_id: 78 }
+  });
+
+  assert.ok(out && out.refused);
+  assert.equal(statusOf(r.sid), 'approved', 'still up');
+});

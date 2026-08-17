@@ -144,17 +144,35 @@ const DATA_DIR = path.resolve(env.DATA_DIR ||
    half-edited must not stop the wall from serving. An order stamped
    'unversioned' is a gap in the record; a wall that will not boot is an
    outage, and only one of those is worth having. */
-function termsVersion() {
+let operator = null;
+function operatorFile() {
+  if (operator) return operator;
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'legal', 'operator.json'), 'utf8'));
-    const v = raw.VERSION;
-    const s = String((v && typeof v === 'object' ? v.en : v) || '').trim();
-    if (s) return s;
-    warnings.push('legal/operator.json has no VERSION — orders will be stamped "unversioned"');
+    operator = JSON.parse(fs.readFileSync(path.join(ROOT, 'legal', 'operator.json'), 'utf8'));
   } catch (err) {
-    warnings.push(`legal/operator.json unreadable (${err.code || err.message}) — orders will be stamped "unversioned"`);
+    warnings.push(`legal/operator.json unreadable (${err.code || err.message})`);
+    operator = {};
   }
+  return operator;
+}
+/* a value that may be a plain string or {en, ar} */
+const plain = v => String((v && typeof v === 'object' ? v.en : v) || '').trim();
+
+function termsVersion() {
+  const s = plain(operatorFile().VERSION);
+  if (s) return s;
+  warnings.push('legal/operator.json has no VERSION — orders will be stamped "unversioned"');
   return 'unversioned';
+}
+
+/* The address printed in all six documents, so the app offers the same one
+   rather than a second copy that can fall out of step with them. Empty is
+   survivable: the client hides the contact links, the way it hides the
+   policy links when the pages are not built. */
+function contactEmail() {
+  const s = plain(operatorFile()['CONTACT EMAIL']);
+  if (!s) warnings.push('legal/operator.json has no CONTACT EMAIL — the app will offer no way to get in touch');
+  return s;
 }
 
 const DEV_SECRET = 'dev-insecure-session-secret';
@@ -291,6 +309,9 @@ module.exports = Object.freeze({
   PASS_MIN: 10,
   /* Stamped on a user when they accept and on every order they place. */
   TERMS_VERSION: termsVersion(),
+  /* Both read from legal/operator.json, so the app and the documents cannot
+     end up naming different places to write to. */
+  CONTACT_EMAIL: contactEmail(),
   DESC_MIN: 200,
 
   /* secrets + integrations (unused until their phase; parsed now so a

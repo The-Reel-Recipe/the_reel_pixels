@@ -231,6 +231,61 @@ a { color: var(--accent); }
 .tooltip .tt-you { color: var(--pink); font-weight: 700; }
 .tooltip .tt-exp { color: var(--dim); display: block; }
 .tooltip .tt-cta { color: var(--accent); font-weight: 600; }
+/* The report chip. Quiet until touched: it is the least likely thing anyone
+   wants from a tooltip, and a red button under every pixel would read as an
+   invitation. Full width so it is a real target on a phone — the tooltip is
+   pinned by then and is not going anywhere. */
+.tooltip .tt-report {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 34px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r-sm, 8px);
+  border: 1px solid var(--glass-brd);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--dim);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.tooltip .tt-report:hover, .tooltip .tt-report:focus-visible {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(255, 255, 255, 0.1);
+}
+.tooltip .tt-report .ic { width: 14px; height: 14px; }
+
+/* Report sheet — a row of categories, tap one, send. */
+.rp-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.rp-reason {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.rp-reason:hover { border-color: var(--dim); }
+.rp-reason.sel {
+  border-color: var(--pink);
+  background: rgba(255, 77, 157, 0.14);
+  color: var(--text);
+}
 
 .offline-note {
   position: absolute;

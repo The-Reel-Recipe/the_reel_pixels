@@ -61,10 +61,12 @@ function unlinkQuiet(rel) {
 const FINAL = ['verified', 'rejected', 'refunded', 'expired'];
 
 const staleShots = db.prepare(`
-  SELECT id, screenshot_path FROM payments
-   WHERE screenshot_path IS NOT NULL
-     AND status IN (${FINAL.map(() => '?').join(',')})
-     AND COALESCE(updated_at, created_at) < ?`);
+  SELECT p.id, p.screenshot_path FROM payments p
+    JOIN users u ON u.id = p.user_id
+   WHERE p.screenshot_path IS NOT NULL
+     AND u.legal_hold = 0
+     AND p.status IN (${FINAL.map(() => '?').join(',')})
+     AND COALESCE(p.updated_at, p.created_at) < ?`);
 const clearShot = db.prepare(`UPDATE payments SET screenshot_path = NULL WHERE id = ?`);
 
 function sweepScreenshots(now) {
@@ -82,9 +84,13 @@ function sweepScreenshots(now) {
    from this table and a misconfigured period should cost us an old
    record, never the wall people are looking at right now. */
 
+/* legal_hold = 0 on every sweep below. TERMS §11A and PRIVACY §9 both say
+   nothing is deleted while a matter is open, and a retention period that
+   ignores that is the same destruction of evidence as the erase button —
+   only on a timer, and with nobody's name against it. */
 const staleSubs = db.prepare(`
   SELECT id, preview_path FROM submissions
-   WHERE created_at < ? AND cycle < ?`);
+   WHERE created_at < ? AND cycle < ? AND legal_hold = 0`);
 const dropSub = db.prepare(`DELETE FROM submissions WHERE id = ?`);
 const dropCells = db.prepare(`DELETE FROM cells WHERE submission_id = ?`);
 
@@ -148,6 +154,7 @@ const dormant = db.prepare(`
    WHERE u.kind = 'guest'
      AND u.email IS NULL
      AND u.status = 'active'
+     AND u.legal_hold = 0
      AND u.last_seen < ?
      AND NOT EXISTS (SELECT 1 FROM payments    p WHERE p.user_id = u.id)
      AND NOT EXISTS (SELECT 1 FROM submissions s WHERE s.user_id = u.id)

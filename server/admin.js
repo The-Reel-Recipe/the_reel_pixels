@@ -493,6 +493,146 @@ function setBan(userId, banned, actor, reason, now = Date.now()) {
   return { ok: true, userId, status: banned ? 'banned' : 'active' };
 }
 
+/* ── Erasure, and the hold that has to ship with it (§7.2) ────────
+   PRIVACY §9 describes this procedure in some detail and, until now,
+   nothing in the product could carry it out.
+
+   What survives is the interesting half. The payment rows stay: they are
+   books, kept on the tax clock, which is a different obligation with a
+   different clock and one the person asking cannot waive on our behalf.
+   What comes off them is everything that points at a human — the InstaPay
+   handle, the transfer reference, the screenshot. The journal keeps its
+   lines and loses the identifiers inside them, for the same reason the
+   retention sweep redacts rather than deletes: the wall is rebuilt from
+   that journal, and a hole in it is a hole in the audit trail.
+
+   The submissions go, and with them the stored pixels and the rendered
+   previews — that last is what actually anonymises the archive.
+
+   And the hold ships in the same commit, because without it this route is
+   the mechanism by which somebody destroys the record of their own post
+   the moment a complaint about it lands. TERMS §11A and PRIVACY §9 both
+   say nothing goes while a matter is open; this is what makes that true. */
+
+const HELD = {
+  error: 'legal-hold',
+  status: 409,
+  message: 'This account is under a legal hold. Nothing on it can be erased ' +
+    'until the hold is lifted, and lifting it is its own recorded action.'
+};
+
+function setHold(userId, held, actor, reason, now = Date.now()) {
+  if (!reason || String(reason).trim().length < 3) {
+    return { error: 'reason-required', message: 'Say why — it goes in the audit log.' };
+  }
+  const u = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!u) return { error: 'not-found' };
+  tx(() => {
+    db.prepare('UPDATE users SET legal_hold = ? WHERE id = ?').run(held ? 1 : 0, userId);
+    /* the person's own submissions travel with them: a hold is about a
+       matter, and the drawing is usually what the matter is about */
+    db.prepare('UPDATE submissions SET legal_hold = ? WHERE user_id = ?').run(held ? 1 : 0, userId);
+  });
+  logEvent(actor, held ? 'legal-hold-on' : 'legal-hold-off', { user: userId, reason }, now);
+  return { ok: true, userId, legalHold: !!held };
+}
+
+const ERASE = {
+  profile: db.prepare('DELETE FROM brand_profiles WHERE user_id = ?'),
+  subs: db.prepare('SELECT id, preview_path FROM submissions WHERE user_id = ?'),
+  dropSubs: db.prepare('DELETE FROM submissions WHERE user_id = ?'),
+  dropCells: db.prepare('DELETE FROM cells WHERE user_id = ?'),
+  pays: db.prepare('SELECT id, screenshot_path FROM payments WHERE user_id = ?'),
+  scrubPay: db.prepare(
+    `UPDATE payments SET instapay_ref = NULL, payer_handle = NULL, screenshot_path = NULL
+      WHERE user_id = ?`),
+  /* Only this person's lines, and only the fields that name them. Done in JS
+     rather than json_remove so a build of SQLite without JSON1 behaves the
+     same and a payload that is not an object is left alone. */
+  theirs: db.prepare(
+    `SELECT id, payload FROM events WHERE actor = ? AND (
+       payload LIKE '%"ip"%' OR payload LIKE '%"email"%' OR
+       payload LIKE '%"handle"%' OR payload LIKE '%"name"%' OR payload LIKE '%"ref"%')`),
+  redact: db.prepare('UPDATE events SET payload = ? WHERE id = ?'),
+  wipe: db.prepare(
+    `UPDATE users SET email = NULL, pass_hash = NULL, handle = ?, status = 'banned',
+            erased_at = ?, token_epoch = COALESCE(token_epoch, 0) + 1
+      WHERE id = ?`)
+};
+
+const PERSONAL = ['ip', 'email', 'handle', 'name', 'ref', 'payer_handle', 'instapay_ref'];
+
+function eraseUser(userId, actor, reason, now = Date.now()) {
+  if (!reason || String(reason).trim().length < 3) {
+    return { error: 'reason-required', message: 'Say why — it goes in the audit log.' };
+  }
+  const u = db.prepare('SELECT id, handle, kind, legal_hold, erased_at FROM users WHERE id = ?').get(userId);
+  if (!u) return { error: 'not-found' };
+  if (u.erased_at) return { error: 'already-erased', message: 'This account has already been erased.' };
+  if (u.legal_hold) return HELD;
+  if (db.prepare('SELECT 1 FROM submissions WHERE user_id = ? AND legal_hold = 1').get(userId)) return HELD;
+
+  /* The same name this identity would have had if it had never chosen one —
+     handleFor hashes the key, so 'u<id>' is exactly what identity.js mints a
+     guest. An erased row therefore does not stand out as one on the wall,
+     which is the point: an anonymised account that is visibly anonymised is
+     only half anonymised. The 'u' prefix is not decoration; the function
+     walks the string, so a bare number hashes to the same name every time. */
+  const handle = identity.handleFor('u' + userId);
+  const files = [];
+  const out = tx(() => {
+    for (const s of ERASE.subs.all(userId)) if (s.preview_path) files.push(s.preview_path);
+    for (const p of ERASE.pays.all(userId)) if (p.screenshot_path) files.push(p.screenshot_path);
+
+    const cells = ERASE.dropCells.run(userId).changes;
+    const subs = ERASE.dropSubs.run(userId).changes;
+    ERASE.profile.run(userId);
+    const paid = ERASE.scrubPay.run(userId).changes;
+
+    let lines = 0;
+    for (const row of ERASE.theirs.all(`user:${userId}`)) {
+      let p;
+      try { p = JSON.parse(row.payload); } catch { continue; }
+      if (!p || typeof p !== 'object') continue;
+      let touched = false;
+      for (const k of PERSONAL) if (k in p) { delete p[k]; touched = true; }
+      if (touched) { ERASE.redact.run(JSON.stringify(p), row.id); lines++; }
+    }
+
+    ERASE.wipe.run(handle, now, userId);
+    return { cells, subs, payments: paid, events: lines };
+  });
+
+  /* Outside the transaction: a file removed for a row that rolled back is
+     recoverable from a backup, a row removed with its file left behind is
+     personal data still sitting on the volume. */
+  for (const f of files) unlinkQuiet(f);
+
+  /* wall.owners is an interned name table that nothing but this refreshes.
+     A direct database edit leaves every open tab, and every fresh snapshot,
+     serving the old name until a restart — which is also what makes
+     PRIVACY §9's "we reset your name" real rather than eventual. */
+  try { wall.renameOwner(u.handle, handle); } catch (err) {
+    console.warn('erase: owner table not patched —', err.message);
+  }
+  identity.forget(userId);
+
+  logEvent(actor, 'user-erase',
+    { user: userId, kept: ['payments'], removed: out, files: files.length, reason }, now);
+  return { ok: true, userId, handle, ...out, filesRemoved: files.length };
+}
+
+/* Same containment rule the retention sweep uses: never follow a path out of
+   the data directory, whatever the column happens to say. */
+function unlinkQuiet(rel) {
+  const abs = path.isAbsolute(rel) ? rel : path.join(cfg.DATA_DIR, rel);
+  if (!path.resolve(abs).startsWith(path.resolve(cfg.DATA_DIR))) return false;
+  try { fs.unlinkSync(abs); return true; } catch (err) {
+    if (err.code !== 'ENOENT') console.warn('erase unlink:', rel, err.message);
+    return false;
+  }
+}
+
 function adjust(userId, patch, actor, reason, now = Date.now()) {
   if (!reason || String(reason).trim().length < 3) {
     return { error: 'reason-required', message: 'Say why — it goes in the audit log.' };
@@ -543,7 +683,12 @@ function eraseRegion(rect, actor, reason, now = Date.now()) {
 
 /* Both of these are one keystroke away from erasing a month, so both want
    the operator to type something that cannot be a slip. */
-const PHRASE = { reset: 'RESET THE WALL', reseed: 'RESEED THE WALL' };
+const PHRASE = {
+  reset: 'RESET THE WALL', reseed: 'RESEED THE WALL',
+  /* Erasure is not undoable and not partial, so it asks to be typed out for
+     the same reason the other two do. */
+  erase: 'ERASE THIS ACCOUNT'
+};
 
 function forceReset(phrase, actor, now = Date.now()) {
   if (phrase !== PHRASE.reset) {
@@ -573,8 +718,21 @@ const OVERRIDES = {
   'refunded>refund_due': 'the refund bounced or never landed',
   /* the other side of erring toward owing: a debt raised on an unverified
      transfer that never actually arrived has to be closable */
-  'refund_due>rejected': 'checked the account and no transfer ever arrived'
+  'refund_due>rejected': 'checked the account and no transfer ever arrived',
+  /* The one the documents need. TERMS §5, §20 item 4 and §21, and REFUNDS
+     §6.1 items 2-4, §9 and §16 all promise money back for a paint pack in
+     named cases — the wall closing, an account we ended, a mistake of ours.
+     Every other route into refund_due goes through settlePayment, which
+     needs a submission, and a pack order has none: http.js creates it with
+     no `sid`. So without this there was no path in the software that could
+     do what six clauses say we will do. */
+  'verified>refund_due': 'refunding a pack under the refund policy'
 };
+
+/* Paint bought and not yet spent, for the pack this payment credited. */
+const selAllowance = db.prepare('SELECT paint FROM allowances WHERE user_id = ?');
+const debitPaint = db.prepare(
+  'UPDATE allowances SET paint = paint - ? WHERE user_id = ? AND paint >= ?');
 
 function override(paymentId, to, actor, reason, now = Date.now()) {
   const p = payments.get(paymentId);
@@ -586,9 +744,50 @@ function override(paymentId, to, actor, reason, now = Date.now()) {
   if (!reason || String(reason).trim().length < 3) {
     return { error: 'reason-required', message: 'Say why — it goes in the audit log.' };
   }
-  db.prepare('UPDATE payments SET status = ? WHERE id = ? AND status = ?').run(to, paymentId, p.status);
-  logEvent(actor, 'payment-override', { payment: paymentId, from: p.status, to, reason }, now);
-  return { ok: true, paymentId, from: p.status, to };
+
+  /* Turning a verified pack into a debt means giving the money back, so the
+     paint it bought has to come off in the same breath. Without the debit
+     you hand back the cash and leave the pixels, and reconcile() — the only
+     instrument that tracks money-in against value-out — stops meaning
+     anything the moment it is used.
+
+     Refused rather than clamped when the balance is short: paint that has
+     already been spent is on the wall, and a refund that would take back
+     more than is there is a decision about somebody's artwork, which is not
+     a decision this button should be making quietly. */
+  const debiting = key === 'verified>refund_due' && p.kind === 'paint_pack' && p.pack > 0;
+  if (debiting) {
+    const held = selAllowance.get(p.user_id);
+    const have = held ? held.paint : 0;
+    if (have < p.pack) {
+      return {
+        error: 'paint-spent',
+        message: `That pack credited ${p.pack} paint and only ${have} is left — ` +
+          `${p.pack - have} has been spent on the wall. Refund it by hand and adjust ` +
+          `the balance separately, so the write-off is recorded as one.`
+      };
+    }
+  }
+
+  const done = tx(() => {
+    const moved = db.prepare('UPDATE payments SET status = ?, updated_at = ? WHERE id = ? AND status = ?')
+      .run(to, now, paymentId, p.status).changes;
+    /* Conditional on the status we read, so a double-tapped button is one
+       transition — and, critically, one debit. */
+    if (!moved) return false;
+    if (debiting && !debitPaint.run(p.pack, p.user_id, p.pack).changes) {
+      /* somebody spent it between the check and here; unwind the whole thing */
+      throw new Error('paint-raced');
+    }
+    return true;
+  });
+
+  if (!done) return { error: 'moved', message: 'Somebody else changed this payment first.' };
+
+  logEvent(actor, 'payment-override',
+    { payment: paymentId, from: p.status, to, reason, paintDebited: debiting ? p.pack : 0 }, now);
+  if (debiting) identity.forget(p.user_id);        // the cached allowance is stale
+  return { ok: true, paymentId, from: p.status, to, paintDebited: debiting ? p.pack : 0 };
 }
 
 const csvCell = v => {
@@ -612,5 +811,6 @@ module.exports = {
   clearCookie, ipAllowed, throttled,
   overview, queue, users, brands, paymentList, reconcile, events, actionList,
   pixelAt, systemInfo, setBan, adjust, eraseRegion, forceReset, forceReseed,
+  eraseUser, setHold,
   override, paymentsCsv, exportFromDb, renderWall
 };

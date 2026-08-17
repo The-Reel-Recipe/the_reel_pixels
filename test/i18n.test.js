@@ -34,13 +34,29 @@ function dictionaries() {
   const start = SRC.indexOf('const L = {');
   assert.ok(start > 0, 'app.js no longer declares `const L = {` — this test cannot find the dictionaries');
 
-  /* walk the braces so a } inside a string does not end it early */
+  /* Walk the braces, skipping anything inside a string or a comment. Both
+     matter: a } inside a string would end it early, and an apostrophe
+     inside a comment — "§11's report route" — would open a string that
+     never closes. The second one is not hypothetical; it is what this
+     walker got wrong the first time. */
   let depth = 0, inStr = null, esc = false, end = -1;
+  let line = false, block = false;
+
   for (let i = SRC.indexOf('{', start); i < SRC.length; i++) {
-    const c = SRC[i];
-    if (esc) { esc = false; continue; }
-    if (c === '\\') { esc = true; continue; }
-    if (inStr) { if (c === inStr) inStr = null; continue; }
+    const c = SRC[i], next = SRC[i + 1];
+
+    if (line) { if (c === '\n') line = false; continue; }
+    if (block) { if (c === '*' && next === '/') { block = false; i++; } continue; }
+
+    if (inStr) {
+      if (esc) { esc = false; continue; }
+      if (c === '\\') { esc = true; continue; }
+      if (c === inStr) inStr = null;
+      continue;
+    }
+
+    if (c === '/' && next === '/') { line = true; i++; continue; }
+    if (c === '/' && next === '*') { block = true; i++; continue; }
     if (c === "'" || c === '"' || c === '`') { inStr = c; continue; }
     if (c === '{') depth++;
     else if (c === '}' && --depth === 0) { end = i + 1; break; }

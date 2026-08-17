@@ -94,7 +94,7 @@ finish review, the verdict, and DESIGN.md.
       <button id="zoomOut" title="Zoom out (−)" data-i18n-title="zoom.out">&minus;</button>
       <button id="zoomFit" title="Fit whole wall (0)" data-i18n-title="zoom.fit"><svg class="ic" aria-hidden="true"><use href="#i-fit"/></svg></button>
     </div>
-    <div class="coords" id="coords">0, 0</div>
+    <div class="coords" id="coords" dir="ltr">0, 0</div>
     <canvas id="minimap" width="148" height="148" title="Minimap — click to jump"></canvas>
     <div class="tooltip" id="tooltip" hidden></div>
     <!-- the wall lives on the server now, so there's nothing to show without it -->
@@ -193,6 +193,35 @@ finish review, the verdict, and DESIGN.md.
   <!-- ═══════════ SHEETS ═══════════ -->
 
   <!-- Help -->
+  <!-- Report — TERMS §11's notice procedure, reachable from any pixel.
+       Deliberately short: the person filling this in is annoyed and on a
+       phone, and every field between them and sending is a report that does
+       not get made. A category, an optional line, done. -->
+  <div class="overlay" id="modalReport" hidden>
+    <div class="modal modal-report" role="dialog" aria-modal="true" aria-labelledby="rpTitle">
+      <button class="modal-x" data-close aria-label="Close">&times;</button>
+      <h2 id="rpTitle"><svg class="ic" aria-hidden="true"><use href="#i-warn"/></svg> <span data-i18n="rp.title">REPORT THIS</span></h2>
+      <!-- dir="ltr": a coordinate pair is not a phrase, and bidi reorders
+           "(908, 9)" into "(9 ,908)" on an Arabic page. Anywhere a pair of
+           numbers means x-then-y it has to be isolated. -->
+      <p class="modal-sub"><span data-i18n="rp.sub">Tell us what is wrong with it and a person will look.</span> <b id="rpWhere" dir="ltr">&mdash;</b></p>
+      <form id="rpForm" novalidate>
+        <div class="rp-reasons" id="rpReasons" role="radiogroup" aria-labelledby="rpTitle"></div>
+        <label class="fld">
+          <span class="lbl" data-i18n="rp.note">ANYTHING TO ADD? (OPTIONAL)</span>
+          <textarea id="rpNote" rows="3" maxlength="500" data-i18n-ph="rp.notePh" placeholder="Only if it helps us find the problem."></textarea>
+        </label>
+        <span class="fld-err" id="errRp" hidden></span>
+        <button class="btn-claim modal-cta" id="rpSend" type="submit" data-i18n="rp.send">SEND REPORT</button>
+      </form>
+      <div id="rpSent" class="co-success" hidden>
+        <b data-i18n="rp.thanks">Thank you &mdash; it is with a moderator.</b>
+        <p data-i18n="rp.thanksSub">If it breaks the rules it comes off the wall, and the person who painted it is told why.</p>
+        <button class="btn-claim modal-cta" data-close data-i18n="rp.done">DONE</button>
+      </div>
+    </div>
+  </div>
+
   <div class="overlay" id="modalHelp" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
       <button class="modal-x" data-close aria-label="Close">&times;</button>
@@ -487,6 +516,13 @@ finish review, the verdict, and DESIGN.md.
           <span data-i18n="mo.how">HOW IT WORKS</span>
           <svg class="ic chev" aria-hidden="true"><use href="#i-arrow-right"/></svg>
         </button>
+        <!-- TERMS §25 and REFUNDS §14 both route here. Hidden until the
+             server says an address is published — see setContact. -->
+        <a class="me-row" id="moreContact" href="#" rel="noopener" hidden>
+          <svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg>
+          <span><span data-i18n="ct.row">GET IN TOUCH</span> <b class="ct-addr"></b></span>
+          <svg class="ic chev" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+        </a>
         <button class="me-row" id="langToggleMore">
           <svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg>
           <span data-i18n="mo.lang">اللغة &middot; LANGUAGE</span>

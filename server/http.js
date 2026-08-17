@@ -15,6 +15,7 @@ const identity = require('./identity.js');
 const wall = require('./wall.js');
 const submissions = require('./submissions.js');
 const notifications = require('./notifications.js');
+const reports = require('./reports.js');
 const payments = require('./payments.js');
 const uploads = require('./uploads.js');
 const telegram = require('./telegram.js');
@@ -129,7 +130,7 @@ function limitFor(urlPath) {
   if (urlPath.startsWith('/api/auth/') || urlPath === '/api/admin/login' ||
       urlPath === '/api/me/name' || urlPath === '/api/me/accept' ||
       urlPath === '/api/paint/order' || urlPath.startsWith('/api/payments/')) return 'auth';
-  if (urlPath === '/api/claim' || urlPath === '/api/book') return 'write';
+  if (urlPath === '/api/claim' || urlPath === '/api/book' || urlPath === '/api/report') return 'write';
   return 'read';
 }
 
@@ -365,13 +366,29 @@ async function adminRoutes(req, res, urlPath, now) {
     if (urlPath === '/api/admin/users') {
       return sendJson(res, 200, { rows: admin.users(q.get('q'), Number(q.get('limit')) || 40) });
     }
-    const userAct = urlPath.match(/^\/api\/admin\/users\/(\d+)\/(ban|unban|adjust)$/);
+    const userAct = urlPath.match(
+      /^\/api\/admin\/users\/(\d+)\/(ban|unban|adjust|erase|hold|unhold)$/);
     if (userAct && req.method === 'POST') {
       const uid = Number(userAct[1]);
-      const r = userAct[2] === 'adjust'
-        ? admin.adjust(uid, body, actor, reason, now)
-        : admin.setBan(uid, userAct[2] === 'ban', actor, reason, now);
-      return sendJson(res, r.error ? 400 : 200, r);
+      const act = userAct[2];
+      let r;
+      if (act === 'adjust') r = admin.adjust(uid, body, actor, reason, now);
+      /* PRIVACY §9's erasure. Not undoable and not partial, so it wants the
+         same typed confirmation the region wipe does rather than a button
+         somebody can be halfway through pressing. */
+      else if (act === 'erase') {
+        r = String(body.confirm || '').trim() === admin.PHRASE.erase
+          ? admin.eraseUser(uid, actor, reason, now)
+          : { error: 'confirm-required', message: `Type ${admin.PHRASE.erase} to confirm.` };
+      } else if (act === 'hold' || act === 'unhold') {
+        r = admin.setHold(uid, act === 'hold', actor, reason, now);
+      } else r = admin.setBan(uid, act === 'ban', actor, reason, now);
+      return sendJson(res, r.error ? (r.status || 400) : 200, r);
+    }
+
+    /* ── reports (§11) ── */
+    if (urlPath === '/api/admin/reports') {
+      return sendJson(res, 200, { rows: reports.queue(Number(q.get('limit')) || 100) });
     }
 
     /* ── brands ── */
@@ -645,6 +662,17 @@ async function handler(req, res) {
 
     if (urlPath === '/api/me/notifications/seen' && req.method === 'POST') {
       return sendJson(res, 200, notifications.markSeen(row.id, now));
+    }
+
+    /* TERMS §11's REPORT button. Open to anyone including a guest: making
+       somebody sign up before they can tell you about something that should
+       not be on a public wall is a notice procedure designed not to be
+       used. The per-IP write budget is what limits it. */
+    if (urlPath === '/api/report' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req, 4096)).toString('utf8'));
+      const r = reports.report(row, body, now);
+      if (r.error) return sendJson(res, r.status || 400, r);
+      return sendJson(res, 200, r);
     }
 
     /* Accepting from an account that already exists. Registering records it

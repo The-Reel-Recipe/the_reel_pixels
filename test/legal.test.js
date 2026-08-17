@@ -77,6 +77,14 @@ test('the app only offers a link once the page behind it exists', () => {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   assert.match(html, /<nav class="more-legal"[^>]*\shidden/,
     'the links must start hidden, or they flash before the wall snapshot arrives');
+
+  /* The unwrap is destructive and the sweep only rebuilds what the
+     dictionaries render, so an anchor written in index.html that got
+     unwrapped at boot — before the snapshot said the pages exist — never
+     came back when it said they did. It must only ever unwrap dictionary
+     content. */
+  assert.match(app, /a\.closest\('\[data-i18n-html\]'\)\s*\)\s*a\.replaceWith/,
+    'syncLegalLinks must only unwrap anchors the i18n sweep will rebuild');
 });
 
 test('the pages are all present, or all absent', () => {

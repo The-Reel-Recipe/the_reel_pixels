@@ -355,6 +355,7 @@ async function loadWall() {
     applyPrices(meta.prices);
   }
   showLegalLinks(meta.legal !== false);
+  setContact(meta.contact || null);
   for (const [name, brand] of Object.entries(meta.brands || {})) {
     const safe = safeUrl(brand.url);
     if (safe) brands.set(name, { url: safe, cta: brand.cta || 'VISIT SITE' });
@@ -1168,6 +1169,28 @@ function historyRow(row) {
     why.textContent = row.reason;
     body.appendChild(why);
   }
+
+  /* TERMS §11 promises a person looks again if you disagree with a decision,
+     and REFUNDS §10 and §14 the same about money. Both said "get in touch"
+     with nowhere to get in touch. This is the somewhere.
+
+     Appended as an element rather than interpolated: this row is built with
+     textContent throughout because the reason is a moderator's free text,
+     and switching to innerHTML here to fit a link in would undo that for
+     every row. The order code goes in the subject so a reply does not begin
+     by asking which order. */
+  const disputable = row.status === 'rejected' || row.status === 'taken_down' ||
+    (row.payment && ['rejected', 'refund_due', 'refunded'].includes(row.payment.status));
+  if (disputable) {
+    const code = row.payment && row.payment.code;
+    const a = document.createElement('a');
+    a.className = 'hs-appeal';
+    a.href = contactHref(code ? t('ct.subjOrder', { code }) : t('ct.subjDecision', { id: row.sid }));
+    a.rel = 'noopener';
+    a.textContent = t('ct.disagree');
+    body.appendChild(a);
+  }
+
   el.appendChild(body);
   return el;
 }
@@ -2305,11 +2328,94 @@ function showTooltip(cell, e, pinned) {
   const when = booked
     ? `goes live ${shortDate(cycleEndsAt())}`
     : `clears ${shortDate(cycleEndsAt())}`;
-  tooltipEl.innerHTML = `<b>${icon} ${who}</b><span class="tt-exp">(${cell.x}, ${cell.y}) · ${when}</span>${cta}`;
+  /* TERMS §11 promises a REPORT button on any pixel, so here it is, on the
+     one surface that already knows which pixel is meant. Only on a pinned
+     tooltip: a chip that appears under a moving cursor is a chip nobody can
+     hit, and pinning is what a phone does anyway. Not on your own work —
+     reporting yourself is not a thing anyone needs, and offering it makes
+     the tooltip longer for everybody. */
+  const flag = pinned && !mine && !booked
+    ? `<button type="button" class="tt-report" data-idx="${i}">${ic('warn')} ${esc(t('rp.chip'))}</button>`
+    : '';
+  /* the coordinate pair is isolated for the same reason #rpWhere is: bidi
+     reorders "(908, 9)" into "(9 ,908)" once the page is Arabic */
+  tooltipEl.innerHTML =
+    `<b>${icon} ${who}</b><span class="tt-exp"><span dir="ltr">(${cell.x}, ${cell.y})</span> · ${when}</span>${cta}${flag}`;
   tooltipEl.hidden = false;
   positionTooltip(e);
-  if (pinned) { clearTimeout(tooltipTimer); tooltipTimer = setTimeout(hideTooltip, 2200); }
+  /* A pinned tooltip with a button in it must not time out from under the
+     finger reaching for it. */
+  if (pinned) {
+    clearTimeout(tooltipTimer);
+    tooltipTimer = setTimeout(hideTooltip, flag ? 6000 : 2200);
+  }
 }
+
+/* Delegated, because the tooltip's innerHTML is rebuilt on every hover. */
+tooltipEl.addEventListener('click', e => {
+  const btn = e.target.closest('.tt-report');
+  if (!btn) return;
+  e.stopPropagation();
+  clearTimeout(tooltipTimer);
+  openReport(Number(btn.dataset.idx));
+});
+
+/* ── Reporting a pixel (TERMS §11) ────────────────────────────────
+   The categories are the server's, in the server's order, so the two
+   cannot drift into disagreeing about what a valid reason is. */
+const REPORT_REASONS = ['sexual', 'hate', 'violence', 'personal', 'copyright', 'spam', 'other'];
+const report = { idx: -1, reason: null, busy: false };
+
+function openReport(i) {
+  report.idx = i; report.reason = null; report.busy = false;
+  $('rpWhere').textContent = `(${i % W}, ${Math.floor(i / W)})`;
+  $('rpNote').value = '';
+  $('errRp').hidden = true;
+  $('rpForm').hidden = false; $('rpSent').hidden = true;
+  $('rpSend').disabled = false; $('rpSend').textContent = t('rp.send');
+
+  const host = $('rpReasons');
+  host.textContent = '';
+  for (const key of REPORT_REASONS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'rp-reason';
+    b.dataset.reason = key;
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', 'false');
+    b.textContent = t(`rp.r.${key}`);
+    b.onclick = () => {
+      report.reason = key;
+      for (const el of host.children) el.setAttribute('aria-checked', String(el === b));
+      host.querySelectorAll('.rp-reason').forEach(el => el.classList.toggle('sel', el === b));
+      clearErr('errRp');
+    };
+    host.append(b);
+  }
+  hideTooltip();
+  openModal('modalReport');
+}
+
+$('rpForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (report.busy) return;
+  if (!report.reason) { showErr('errRp', t('rp.pick')); return; }
+
+  report.busy = true;
+  const btn = $('rpSend');
+  btn.disabled = true; btn.textContent = t('rp.sending');
+  try {
+    const r = await apiPost('/api/report',
+      { idx: report.idx, reason: report.reason, note: $('rpNote').value });
+    if (!r.ok) { showErr('errRp', r.data.message || t('rp.failed')); return; }
+    $('rpForm').hidden = true; $('rpSent').hidden = false;
+  } catch (err) {
+    showErr('errRp', t('toast.unreachable'));
+  } finally {
+    report.busy = false;
+    btn.disabled = false; btn.textContent = t('rp.send');
+  }
+});
 function positionTooltip(e) {
   const r = wrap.getBoundingClientRect();
   let x = e.clientX - r.left + 16, y = e.clientY - r.top + 16;
@@ -2678,6 +2784,28 @@ const L = {
     /* the hrefs here are placeholders — syncLegalLinks rewrites every
        [data-legal] to the current language right after the sweep */
     'help.n4': 'Before you pay, read the <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.html">refund policy</a> and the <a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.html">terms</a>.',
+    /* TERMS §11's report route. Plain words, not legal ones — somebody who
+       has just seen something horrible should not have to work out which
+       category a lawyer would file it under. */
+    'rp.chip': 'REPORT',
+    'rp.title': 'REPORT THIS', 'rp.sub': 'Tell us what is wrong with it and a person will look.',
+    'rp.note': 'ANYTHING TO ADD? (OPTIONAL)', 'rp.notePh': 'Only if it helps us find the problem.',
+    'rp.send': 'SEND REPORT', 'rp.sending': 'SENDING…', 'rp.done': 'DONE',
+    'rp.pick': 'Pick what is wrong with it first.',
+    'rp.failed': 'That did not go through — try again.',
+    'rp.thanks': 'Thank you — it is with a moderator.',
+    'rp.thanksSub': 'If it breaks the rules it comes off the wall, and the person who painted it is told why.',
+    'rp.r.sexual': 'Sexual content', 'rp.r.hate': 'Hate or harassment',
+    'rp.r.violence': 'Violence', 'rp.r.personal': "Someone's private information",
+    'rp.r.copyright': 'Copied without permission', 'rp.r.spam': 'Spam',
+    'rp.r.other': 'Something else',
+    /* The subjects are prefilled with whatever identifies the thing being
+       written about, so a reply does not have to start by asking which. */
+    'ct.row': 'GET IN TOUCH',
+    'ct.disagree': 'Disagree with this? Write to us →',
+    'ct.subjGeneral': 'S37 — a question',
+    'ct.subjOrder': 'S37 — order {code}',
+    'ct.subjDecision': 'S37 — decision on batch #{id}',
     'help.cta': 'START PAINTING',
     'py.title': 'PAY WITH INSTAPAY', 'py.send': 'SEND', 'py.to': 'Send it to',
     'py.code': 'Put this in the transfer note — it is how we match your payment:',
@@ -2889,6 +3017,23 @@ const L = {
     'help.n2': 'مش قادر تستنى؟ اشتري <b>بوية</b> بـ<span class="px-rate">—</span> جنيه/بكسل — بتعدّيك الـ{n} المجانية فورًا.',
     'help.n3': 'البراندات <b>بتحجز مكان اللوجو</b> بـ<span class="co-rate">—</span> جنيه للبكسل على حيط <b>الشهر الجاي</b>.',
     'help.n4': 'قبل ما تدفع، اقرا <a data-legal="refunds" target="_blank" rel="noopener" href="assets/refunds.ar.html">سياسة الاسترداد</a> و<a data-legal="terms" target="_blank" rel="noopener" href="assets/terms.ar.html">الشروط</a>.',
+    'rp.chip': 'بلّغ',
+    'rp.title': 'بلّغ عن ده', 'rp.sub': 'قولنا إيه الغلط فيه وحد هيبص عليه.',
+    'rp.note': 'عايز تضيف حاجة؟ (اختياري)', 'rp.notePh': 'بس لو هيساعدنا نلاقي المشكلة.',
+    'rp.send': 'ابعت البلاغ', 'rp.sending': 'بنبعت…', 'rp.done': 'تمام',
+    'rp.pick': 'اختار الأول إيه الغلط فيه.',
+    'rp.failed': 'ما نفعتش — جرّب تاني.',
+    'rp.thanks': 'شكرًا — البلاغ وصل للمشرف.',
+    'rp.thanksSub': 'لو مخالف هيتشال من الحيط، واللي رسمه هيتقاله السبب.',
+    'rp.r.sexual': 'محتوى جنسي', 'rp.r.hate': 'كراهية أو تنمّر',
+    'rp.r.violence': 'عنف', 'rp.r.personal': 'بيانات شخصية لحد',
+    'rp.r.copyright': 'منقول من غير إذن', 'rp.r.spam': 'إعلانات مزعجة',
+    'rp.r.other': 'حاجة تانية',
+    'ct.row': 'كلّمنا',
+    'ct.disagree': 'مش موافق على ده؟ اكتبلنا ←',
+    'ct.subjGeneral': 'S37 — استفسار',
+    'ct.subjOrder': 'S37 — طلب {code}',
+    'ct.subjDecision': 'S37 — قرار على الدفعة رقم {id}',
     'help.cta': 'يلا نشخبط',
     'py.title': 'ادفع بإنستاباي', 'py.send': 'ابعت', 'py.to': 'ابعتها على',
     'py.code': 'حط الكود ده في ملاحظة التحويل — ده اللي بنلاقي بيه دفعتك:',
@@ -3018,14 +3163,54 @@ let legalLive = false;
 function syncLegalLinks() {
   document.querySelectorAll('a[data-legal]').forEach(a => {
     if (legalLive) { a.href = legalHref(a.dataset.legal); return; }
-    /* Unpublished: keep the words, drop the link. The acceptance ticks name
-       the documents inside the sentence somebody is agreeing to, and that
-       sentence cannot be edited away — so the anchor becomes plain text
-       rather than a promise of a page that is not there. The dictionary
-       re-inserts the anchor on every sweep, which is why this runs after
-       one rather than being a one-off at boot. */
-    a.replaceWith(document.createTextNode(a.textContent));
+
+    /* Unpublished. The acceptance ticks name the documents inside the
+       sentence somebody is agreeing to, and that sentence has to stay
+       readable — so there the anchor becomes plain text rather than a
+       promise of a page that is not there.
+
+       Only there. Unwrapping is destructive, and the sweep only rebuilds
+       what the dictionaries render: an anchor written in index.html would
+       be replaced once, at boot, before the snapshot has said whether the
+       pages exist — and never come back when it says they do. That is
+       exactly what happened. Anchors in the markup live inside containers
+       that get hidden wholesale instead, which is reversible. */
+    if (a.closest('[data-i18n-html]')) a.replaceWith(document.createTextNode(a.textContent));
+    else a.removeAttribute('href');
   });
+}
+
+/* ── Getting in touch ─────────────────────────────────────────────
+   TERMS §11 promises a person looks again at a decision, §25 an answer
+   within a stated window; REFUNDS §10 and §14 the same about money.
+   Every one of them says "get in touch", and until the documents were
+   published there was nowhere to get in touch — no address, no mailto,
+   no form anywhere in the product.
+
+   The address comes from the server, which reads it from the same file
+   the documents are built from, so the app cannot end up naming a
+   different one. Empty means no address is published yet, and the links
+   hide rather than pointing at mailto: with nothing after it. */
+let contactAddr = null;
+
+function contactHref(subject) {
+  if (!contactAddr) return null;
+  return `mailto:${contactAddr}?subject=${encodeURIComponent(subject || t('ct.subjGeneral'))}`;
+}
+
+function setContact(addr) {
+  contactAddr = addr || null;
+  const row = $('moreContact');
+  if (row) {
+    row.hidden = !contactAddr;
+    if (contactAddr) {
+      row.href = contactHref(t('ct.subjGeneral'));
+      const at = row.querySelector('.ct-addr');
+      if (at) at.textContent = contactAddr;
+    }
+  }
+  /* rows already rendered in MY PIXELS keep the href they were built with,
+     which is fine — this only ever goes from null to an address at boot */
 }
 
 /* The parts that are only links, and have no reason to exist without the

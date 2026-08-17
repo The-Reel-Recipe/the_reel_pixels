@@ -517,3 +517,299 @@ test('ADMIN_IP_ALLOW keeps everyone else out', () => {
   } finally { real.length = 0; }
   assert.equal(admin.ipAllowed('192.0.2.1'), true, 'and an empty list allows everyone');
 });
+
+/* ── Erasure, and the hold that has to ship with it (M7) ───────── */
+
+const eraseBody = reason => ({ reason, confirm: admin.PHRASE.erase });
+
+test('erasing an account keeps the books and drops the person', async () => {
+  const g = guestClaim(2);
+  const now = Date.now();
+  dbm.db.prepare("UPDATE users SET email = ?, pass_hash = 'x', handle = 'Chosen Name' WHERE id = ?")
+    .run('gone@painter.example', g.uid);
+
+  /* a verified payment, which is a book entry and has to survive */
+  const pid = Number(dbm.db.prepare(
+    `INSERT INTO payments (user_id, kind, pack, amount, code, status, created_at,
+                           instapay_ref, payer_handle)
+     VALUES (?, 'paint_pack', 100, 16000, 'S37-ERAS', 'verified', ?, '5011234567', 'them@instapay')`
+  ).run(g.uid, now).lastInsertRowid);
+
+  /* a journal line naming them */
+  dbm.db.prepare('INSERT INTO events (ts, actor, action, payload) VALUES (?,?,?,?)')
+    .run(now, `user:${g.uid}`, 'guest-mint', JSON.stringify({ ip: '41.33.7.9', keep: 'this' }));
+
+  const r = await json('POST', `/api/admin/users/${g.uid}/erase`,
+    eraseBody('the owner asked us to'), AS_PANEL);
+  assert.equal(r.code, 200, JSON.stringify(r.json));
+
+  const u = dbm.db.prepare('SELECT * FROM users WHERE id = ?').get(g.uid);
+  assert.equal(u.email, null, 'the email is gone');
+  assert.equal(u.pass_hash, null, 'and the password with it');
+  assert.match(u.handle, /^Pixel fan #\d+$/, 'the chosen name is reset, as PRIVACY says');
+  assert.ok(u.erased_at > 0);
+  assert.equal(u.status, 'banned', 'the account can no longer act');
+
+  assert.equal(dbm.db.prepare('SELECT COUNT(*) n FROM submissions WHERE user_id = ?').get(g.uid).n, 0);
+  assert.equal(dbm.db.prepare('SELECT COUNT(*) n FROM cells WHERE user_id = ?').get(g.uid).n, 0);
+
+  const p = dbm.db.prepare('SELECT * FROM payments WHERE id = ?').get(pid);
+  assert.ok(p, 'the payment row survives — it is a book entry on the tax clock');
+  assert.equal(p.amount, 16000, 'and it still says how much');
+  assert.equal(p.instapay_ref, null, 'but nothing on it points at a person any more');
+  assert.equal(p.payer_handle, null);
+
+  const line = dbm.db.prepare(
+    "SELECT payload FROM events WHERE actor = ? AND action = 'guest-mint'").get(`user:${g.uid}`);
+  const after = JSON.parse(line.payload);
+  assert.equal(after.ip, undefined, 'the address is out of the journal line');
+  assert.equal(after.keep, 'this', 'and the rest of the line is still there');
+});
+
+test('erasure logs them out — being forgotten is not being blocked', async () => {
+  const g = guestClaim(1);
+  const cookie = identity.sessionCookie(identity.rowFor(g.uid, Date.now()), Date.now()).split(';')[0];
+
+  await json('POST', `/api/admin/users/${g.uid}/erase`, eraseBody('asked to be forgotten'), AS_PANEL);
+
+  /* This is the one place erasure and a ban are deliberately opposite. A ban
+     must NOT bump token_epoch, because a cookie that will not verify cannot
+     be identified and the banned person would be handed a fresh identity —
+     the very thing the ban is for. Erasure bumps it precisely so that
+     happens: the whole request is to stop being recognised, and coming back
+     as a stranger is what that means. */
+  const res = await json('GET', '/api/me', null, { ip: '198.51.100.77', headers: { cookie } });
+  assert.equal(res.code, 200, 'they are served, as a new visitor');
+  assert.notEqual(res.json.handle, 'Chosen Name');
+
+  const still = identity.verifyCookie(cookie.split('=')[1], Date.now());
+  assert.equal(still, null, 'the old cookie no longer names anybody');
+});
+
+test('a legal hold stops an erasure, and says so', async () => {
+  const g = guestClaim(1);
+
+  const held = await json('POST', `/api/admin/users/${g.uid}/hold`,
+    { reason: 'a complaint about this drawing' }, AS_PANEL);
+  assert.equal(held.code, 200);
+  assert.equal(dbm.db.prepare('SELECT legal_hold FROM users WHERE id = ?').get(g.uid).legal_hold, 1);
+  assert.equal(dbm.db.prepare('SELECT legal_hold FROM submissions WHERE id = ?').get(g.sid).legal_hold, 1,
+    'the drawing travels with the person — it is usually what the matter is about');
+
+  const blocked = await json('POST', `/api/admin/users/${g.uid}/erase`,
+    eraseBody('trying it on'), AS_PANEL);
+  assert.equal(blocked.code, 409);
+  assert.equal(blocked.json.error, 'legal-hold');
+  assert.ok(dbm.db.prepare('SELECT id FROM submissions WHERE id = ?').get(g.sid),
+    'and nothing was destroyed on the way to being refused');
+
+  const lifted = await json('POST', `/api/admin/users/${g.uid}/unhold`,
+    { reason: 'the matter closed' }, AS_PANEL);
+  assert.equal(lifted.code, 200);
+  const done = await json('POST', `/api/admin/users/${g.uid}/erase`, eraseBody('and now'), AS_PANEL);
+  assert.equal(done.code, 200);
+});
+
+test('a held submission is not swept away on a timer either', () => {
+  const g = guestClaim(1);
+  dbm.db.prepare('UPDATE submissions SET legal_hold = 1, created_at = ?, cycle = ? WHERE id = ?')
+    .run(Date.now() - 2000 * 86400000, 1, g.sid);
+
+  const retention = require('../server/retention.js');
+  retention.sweep(Date.now(), {
+    identity: { dayKey: identity.dayKey, forget: () => {} },
+    wall: { cycleStart: () => Date.now() }
+  });
+
+  assert.ok(dbm.db.prepare('SELECT id FROM submissions WHERE id = ?').get(g.sid),
+    'a retention period that ignores a hold is the erase button on a timer, ' +
+    'with nobody name against it');
+});
+
+test('erasure needs the phrase typed, like the other two irreversible things', async () => {
+  const g = guestClaim(1);
+  const noPhrase = await json('POST', `/api/admin/users/${g.uid}/erase`,
+    { reason: 'no confirmation given' }, AS_PANEL);
+  assert.equal(noPhrase.code, 400);
+  assert.equal(noPhrase.json.error, 'confirm-required');
+
+  const noReason = await json('POST', `/api/admin/users/${g.uid}/erase`,
+    { confirm: admin.PHRASE.erase }, AS_PANEL);
+  assert.equal(noReason.code, 400);
+  assert.equal(noReason.json.error, 'reason-required');
+
+  assert.ok(dbm.db.prepare('SELECT id FROM users WHERE id = ?').get(g.uid), 'still there');
+});
+
+test('erasing twice is refused rather than done twice', async () => {
+  const g = guestClaim(1);
+  assert.equal((await json('POST', `/api/admin/users/${g.uid}/erase`, eraseBody('once'), AS_PANEL)).code, 200);
+  const again = await json('POST', `/api/admin/users/${g.uid}/erase`, eraseBody('twice'), AS_PANEL);
+  assert.equal(again.code, 400);
+  assert.equal(again.json.error, 'already-erased');
+});
+
+/* ── The cash refund of a paint pack (M4) ──────────────────────── */
+
+let refundSeq = 0;
+function verifiedPack(uid, paint) {
+  dbm.db.prepare('UPDATE allowances SET paint = ? WHERE user_id = ?').run(paint, uid);
+  identity.forget(uid);
+  return Number(dbm.db.prepare(
+    `INSERT INTO payments (user_id, kind, pack, amount, code, status, created_at)
+     VALUES (?, 'paint_pack', 100, 16000, ?, 'verified', ?)`
+  ).run(uid, `S37-RF${++refundSeq}`, Date.now()).lastInsertRowid);
+}
+
+test('refunding a pack takes the paint back in the same breath', async () => {
+  const g = guestClaim(1);
+  const pid = verifiedPack(g.uid, 140);           // 100 from the pack, 40 from elsewhere
+
+  const r = await json('POST', `/api/admin/payments/${pid}/override`,
+    { to: 'refund_due', reason: 'the wall is closing and they asked for it back' }, AS_PANEL);
+  assert.equal(r.code, 200, JSON.stringify(r.json));
+  assert.equal(r.json.paintDebited, 100);
+
+  assert.equal(dbm.db.prepare('SELECT status FROM payments WHERE id = ?').get(pid).status, 'refund_due');
+  assert.equal(dbm.db.prepare('SELECT paint FROM allowances WHERE user_id = ?').get(g.uid).paint, 40,
+    'hand back the money, take back the pixels — otherwise reconcile() stops meaning anything');
+});
+
+test('a pack whose paint is already on the wall is refused, not silently clamped', async () => {
+  const g = guestClaim(1);
+  const pid = verifiedPack(g.uid, 30);            // 70 of the 100 already spent
+
+  const r = await json('POST', `/api/admin/payments/${pid}/override`,
+    { to: 'refund_due', reason: 'they asked for it back' }, AS_PANEL);
+  assert.equal(r.code, 400);
+  assert.equal(r.json.error, 'paint-spent');
+  assert.match(r.json.message, /70 has been spent/);
+
+  assert.equal(dbm.db.prepare('SELECT status FROM payments WHERE id = ?').get(pid).status, 'verified',
+    'and nothing moved');
+  assert.equal(dbm.db.prepare('SELECT paint FROM allowances WHERE user_id = ?').get(g.uid).paint, 30);
+});
+
+test('a double-tapped refund is one refund', async () => {
+  const g = guestClaim(1);
+  const pid = verifiedPack(g.uid, 250);
+
+  const body = { to: 'refund_due', reason: 'refunding under the policy' };
+  const a = await json('POST', `/api/admin/payments/${pid}/override`, body, AS_PANEL);
+  const b = await json('POST', `/api/admin/payments/${pid}/override`, body, AS_PANEL);
+
+  assert.equal(a.code, 200);
+  assert.equal(b.code, 400, 'the second tap finds it already moved');
+  assert.equal(dbm.db.prepare('SELECT paint FROM allowances WHERE user_id = ?').get(g.uid).paint, 150,
+    'debited once, not twice');
+});
+
+test('a brand booking refund does not debit paint it never credited', async () => {
+  const g = guestClaim(1);
+  dbm.db.prepare('UPDATE allowances SET paint = 500 WHERE user_id = ?').run(g.uid);
+  identity.forget(g.uid);
+  const pid = Number(dbm.db.prepare(
+    `INSERT INTO payments (user_id, kind, amount, code, status, created_at)
+     VALUES (?, 'brand_booking', 50000, 'S37-BKRF', 'verified', ?)`
+  ).run(g.uid, Date.now()).lastInsertRowid);
+
+  const r = await json('POST', `/api/admin/payments/${pid}/override`,
+    { to: 'refund_due', reason: 'we could not give them the space' }, AS_PANEL);
+  assert.equal(r.code, 200);
+  assert.equal(r.json.paintDebited, 0);
+  assert.equal(dbm.db.prepare('SELECT paint FROM allowances WHERE user_id = ?').get(g.uid).paint, 500);
+});
+
+/* ── Reporting a pixel (TERMS §11) ─────────────────────────────── */
+
+const reports = require('../server/reports.js');
+
+test('anyone can report a pixel, including somebody with no account', async () => {
+  const g = guestClaim(2);
+  await json('POST', `/api/admin/submissions/${g.sid}/approve`, {}, AS_PANEL);
+
+  /* a passer-by, no account, no cookie history */
+  const r = await json('POST', '/api/report',
+    { idx: g.idx[0], reason: 'hate', note: 'it is a slur' }, { ip: '198.51.100.201' });
+  assert.equal(r.code, 200, JSON.stringify(r.json));
+
+  const row = reports.queue(20).find(x => x.submission === g.sid);
+  assert.ok(row, 'it reaches the queue a moderator reads');
+  assert.equal(row.reason, 'hate');
+  assert.equal(row.note, 'it is a slur');
+  assert.equal(row.status, 'approved', 'and says whether it is still up');
+});
+
+/* the card that carries it to the moderation group is proved in
+   telegram.test.js, which is where a bot token exists to make on() true */
+
+test('reporting the same batch twice does nothing the second time', async () => {
+  const g = guestClaim(2);
+  await json('POST', `/api/admin/submissions/${g.sid}/approve`, {}, AS_PANEL);
+  const ip = '198.51.100.203';
+
+  const first = await json('POST', '/api/report', { idx: g.idx[0], reason: 'spam' }, { ip });
+  const cookie = first.headers['set-cookie'];
+  const opts = { ip, headers: cookie ? { cookie: String(cookie).split(';')[0] } : {} };
+
+  const again = await json('POST', '/api/report', { idx: g.idx[1] || g.idx[0], reason: 'spam' }, opts);
+  assert.equal(again.code, 200, 'answered as success — "you already reported this" is an invitation');
+
+  const mine = reports.queue(200).filter(x => x.submission === g.sid);
+  assert.equal(mine.length, 1, 'but the queue has it once');
+});
+
+test('a report about nothing is refused', async () => {
+  const empty = await json('POST', '/api/report', { idx: 999999, reason: 'spam' }, { ip: '198.51.100.204' });
+  assert.equal(empty.code, 404);
+  assert.equal(empty.json.error, 'empty');
+
+  const nonsense = await json('POST', '/api/report', { idx: -5, reason: 'spam' }, { ip: '198.51.100.205' });
+  assert.equal(nonsense.code, 400);
+
+  const offWall = await json('POST', '/api/report', { idx: 1000 * 1000, reason: 'spam' }, { ip: '198.51.100.206' });
+  assert.equal(offWall.code, 400);
+});
+
+test('an unknown reason becomes "other" rather than being rejected', async () => {
+  const g = guestClaim(2);
+  await json('POST', `/api/admin/submissions/${g.sid}/approve`, {}, AS_PANEL);
+
+  const r = await json('POST', '/api/report',
+    { idx: g.idx[0], reason: 'something-a-client-made-up' }, { ip: '198.51.100.207' });
+  assert.equal(r.code, 200, 'the person who found the problem is not made to fight the form');
+  assert.equal(reports.queue(50).find(x => x.submission === g.sid).reason, 'other');
+});
+
+test('a long note is cut, and an enormous one never gets read at all', async () => {
+  const g = guestClaim(2);
+  await json('POST', `/api/admin/submissions/${g.sid}/approve`, {}, AS_PANEL);
+
+  /* over the note cap, under the wire limit: trimmed on the way in */
+  await json('POST', '/api/report',
+    { idx: g.idx[0], reason: 'other', note: 'x'.repeat(2000) }, { ip: '198.51.100.208' });
+  const row = reports.queue(50).find(x => x.submission === g.sid);
+  assert.equal(row.note.length, reports.REASON_MAX);
+
+  /* over the wire limit: refused before anything parses it, which is the
+     cheaper of the two places to say no */
+  const g2 = guestClaim(2);
+  await json('POST', `/api/admin/submissions/${g2.sid}/approve`, {}, AS_PANEL);
+  const huge = await json('POST', '/api/report',
+    { idx: g2.idx[0], reason: 'other', note: 'x'.repeat(50000) }, { ip: '198.51.100.210' });
+  assert.equal(huge.code, 413);
+  assert.equal(reports.queue(50).find(x => x.submission === g2.sid), undefined);
+});
+
+test('the report survives the thing it is about', async () => {
+  const g = guestClaim(2);
+  await json('POST', `/api/admin/submissions/${g.sid}/approve`, {}, AS_PANEL);
+  await json('POST', '/api/report', { idx: g.idx[0], reason: 'violence' }, { ip: '198.51.100.209' });
+
+  /* taken down — which is the whole point of the report */
+  submissions.takedown(g.sid, 'tg:1 (sara)', 'Reported and taken down');
+
+  const row = reports.queue(50).find(x => x.submission === g.sid);
+  assert.ok(row, 'the report is still in the queue');
+  assert.equal(row.status, 'rejected', 'and says what happened to the drawing');
+});

@@ -69,6 +69,7 @@ function handleFor(key) {
 
 const selUser = db.prepare(
   `SELECT u.id, u.kind, u.handle, u.email, u.status, u.token_epoch, u.last_seen,
+          u.erased_at,
           a.used, a.refill_at, a.paint
      FROM users u LEFT JOIN allowances a ON a.user_id = u.id
     WHERE u.id = ?`);
@@ -383,8 +384,18 @@ function resolve(req, now, opts) {
      verifying, and the next request minted a brand-new guest — so the
      banned person got a clean identity out of it. Nothing on this path read
      users.status at all. */
+  /* status is the mechanism — may this account act — and erased_at is the
+     meaning, which decides the wording. Somebody who asked to be forgotten
+     should not be told they broke the rules.
+
+     In practice the erased branch is a backstop rather than the usual path:
+     eraseUser bumps token_epoch, so the cookie stops verifying and its
+     holder arrives here as a stranger instead. That is deliberate and it is
+     the one place erasure and a ban are opposite — a ban must stay
+     identifiable to be enforced, an erasure must stop being identifiable to
+     be an erasure. This branch covers a session that outlives the bump. */
   if (u && u.status && u.status !== 'active') {
-    return { ip, capped: BANNED[u.status] || BANNED.banned };
+    return { ip, capped: u.erased_at ? BANNED.erased : (BANNED[u.status] || BANNED.banned) };
   }
   if (u) {
     const e = entryOf(u, now);

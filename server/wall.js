@@ -197,7 +197,12 @@ function snapshotFor(e, now) {
        worse than no link: it reads as a policy that was taken down. So the
        links are hidden until tools/make-legal.js has written the pages,
        which it refuses to do while any operator detail is unanswered. */
-    legal: legalPublished()
+    legal: legalPublished(),
+    /* TERMS §11 and §25 and REFUNDS §10 and §14 all say "get in touch", and
+       until now there was nowhere to. Sent from the same file the documents
+       are built from, so the app cannot end up naming a different address
+       than the ones printed in them. */
+    contact: cfg.CONTACT_EMAIL || null
   };
   return Buffer.concat([encodeHead(meta), snapshotBody()]);
 }
