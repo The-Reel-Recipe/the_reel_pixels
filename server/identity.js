@@ -698,33 +698,81 @@ function fromGoogle(e, who, now = Date.now()) {
   return { e, cookie: sessionCookie(e, now), created: true };
 }
 
-/* ── Signing in with an emailed code ──────────────────────────────
-   Brands, and anyone whose address we can prove they hold. The code
-   itself is emailcode.js's problem; by the time this is called it has
-   already been checked, so this is only "who does that address mean".
+/* ── Signing in, or signing up, with an emailed code ──────────────
+   The code itself is emailcode.js's problem; by the time this runs it
+   has already been checked, so what is left is "who does that address
+   mean" — and, if it means nobody yet, making it mean somebody.
 
-   No account is created here. A code proves somebody holds an
-   address; it does not say they applied to be a brand, and the brand
-   application is the thing that creates a brand. An address with
-   nothing behind it gets the same answer as a wrong code — see the
-   note in emailcode.js about not confirming who has an account. */
+   Both in one route, because with a code there is no difference
+   between the two. Proving you hold an address is the whole of what
+   either one asks for, and a product that made you pick "sign up" or
+   "sign in" first would only be asking you to remember which you did
+   last time.
+
+   A brand's address finds their existing account, because the brand
+   application created it. An unknown address becomes a painter,
+   adopting the guest they are browsing as — same as Google, so the
+   pixels from five minutes ago come with them.
+
+   That it now creates accounts is also why the enumeration guard in
+   emailcode.js still holds without doing anything extra: a code goes
+   to any address, so "a code was sent" says nothing about who already
+   had an account. */
 
 const selByEmailForCode = db.prepare(
   'SELECT id, kind, status, token_epoch FROM users WHERE email = ?');
+const adoptEmail = db.prepare(
+  "UPDATE users SET email = ? WHERE id = ? AND kind = 'guest' AND email IS NULL");
 
-function fromEmailCode(email, now = Date.now()) {
-  const u = selByEmailForCode.get(String(email || '').trim().toLowerCase());
-  if (!u) {
-    return { status: 400, error: 'bad-code',
-      fields: { code: 'That code is wrong or has expired. Ask for a new one.' } };
+function fromEmailCode(e, email, now = Date.now()) {
+  const to = String(email || '').trim().toLowerCase();
+  const u = selByEmailForCode.get(to);
+
+  if (u) {
+    if (u.status !== 'active') return GOOGLE_BLOCKED;
+    const row = rowFor(u.id, now);
+    row.epoch = u.token_epoch || 0;
+    touch(row, now);
+    logEvent(`user:${u.id}`, u.kind === 'brand' ? 'brand-login' : 'painter-login',
+      { email: to, via: 'code' }, now);
+    return { e: row, cookie: sessionCookie(row, now) };
   }
-  if (u.status !== 'active') return GOOGLE_BLOCKED;
 
-  const row = rowFor(u.id, now);
-  row.epoch = u.token_epoch || 0;
-  touch(row, now);
-  logEvent(`user:${u.id}`, u.kind === 'brand' ? 'brand-login' : 'painter-login', { email, via: 'code' }, now);
-  return { e: row, cookie: sessionCookie(row, now) };
+  /* Nobody yet — grow the guest into a painter. */
+  if (!e) return { status: 400, error: 'invalid' };
+  if (e.kind === 'brand') {
+    return { status: 409, error: 'already-registered',
+      message: 'This is a brand account — it signs in through the brand door.' };
+  }
+  if (e.email) {
+    return { status: 409, error: 'already-registered',
+      message: 'This browser is already signed in. Log out first to use a different account.' };
+  }
+
+  try {
+    const made = tx(() => {
+      if (emailTaken.get(to)) return { taken: true };
+      if (!adoptEmail.run(to, e.id).changes) return { taken: true };
+      /* The button says what accepting it means, and TERMS §4 wants that
+         recorded rather than implied — same as the other two doors. */
+      accept(e.id, { capacity: true }, now);
+      logEvent(`user:${e.id}`, 'code-register', { email: to }, now);
+      return { ok: true };
+    });
+    if (made.taken) {
+      return { status: 409, error: 'email-taken',
+        message: 'That address already has an account. Log out and sign in with it.' };
+    }
+  } catch (err) {
+    if (String(err.code).startsWith('SQLITE_CONSTRAINT')) {
+      return { status: 409, error: 'email-taken',
+        message: 'That address already has an account. Log out and sign in with it.' };
+    }
+    throw err;
+  }
+
+  e.email = to;
+  return { e, cookie: sessionCookie(e, now), created: true };
 }
 
 /* ── Painter accounts (§3, optional) ──────────────────────────────

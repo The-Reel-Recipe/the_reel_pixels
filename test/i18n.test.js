@@ -199,3 +199,25 @@ test('logging out does not depend on the wall reload succeeding', () => {
   assert.match(fn, /history\.rows = \[\]/, 'logout must drop the cached history');
   assert.match(fn, /yours\.clear\(\)/, 'and stop highlighting their pixels as theirs');
 });
+
+test('every element app.js reaches for actually exists in the page', () => {
+  /* app.js is one long script with no modules: `$('tabRegister').onclick = …`
+     on an element that has been removed throws TypeError at load, and every
+     line after it never runs. The symptom is not "that button is broken", it
+     is the entire app dead with one console line — which is exactly what
+     happened when the CREATE tab came out and its handler stayed.
+
+     Cheap to check, and it catches the whole class. */
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
+
+  const missing = [];
+  for (const m of SRC.matchAll(/\$\('([A-Za-z0-9_-]+)'\)/g)) {
+    if (ids.has(m[1])) continue;
+    const line = SRC.slice(0, m.index).split('\n').length;
+    missing.push(`app.js:${line}  $('${m[1]}')`);
+  }
+  assert.deepEqual(missing, [],
+    `${missing.length} reference(s) to elements that are not in index.html:\n  ` +
+    missing.join('\n  '));
+});

@@ -655,10 +655,11 @@ async function handler(req, res) {
     /* Signing in must not mint. Handing a fresh identity to somebody who
        cleared cookies to log in spends the very budget that exists to stop
        cookie-clearing (§3) — and an emailed code is a login, so it joins
-       the list. Google's callback is the exception on purpose: it adopts
-       the guest they are browsing as, the way registering does, so the
-       pixels painted five minutes ago come with them. */
-    { mint: !/^\/api\/auth\/(signup|login|logout|code\/(request|verify))$/.test(urlPath) });
+       the list. Google's callback and code/verify are the exceptions on
+       purpose: both may adopt the guest they are browsing as, the way
+       registering does, so the pixels painted five minutes ago come with
+       them — and neither can do that without an identity to adopt. */
+    { mint: !/^\/api\/auth\/(signup|login|logout|code\/request)$/.test(urlPath) });
   if (ses.cookie) res.setHeader('set-cookie', ses.cookie);
   /* a daily cap is 429 "come back later"; a closed account is 403 "no" */
   if (ses.capped) return sendJson(res, ses.capped.status || 429, ses.capped);
@@ -876,10 +877,10 @@ async function handler(req, res) {
       const checked = emailcode.verify(body.email, body.code, now);
       if (checked.error) return sendJson(res, checked.status, checked);
 
-      const r = identity.fromEmailCode(checked.email, now);
+      const r = identity.fromEmailCode(row, checked.email, now);
       if (r.error) return sendJson(res, r.status, r);
       res.setHeader('set-cookie', r.cookie);
-      return sendJson(res, 200, identity.me(r.e, now));
+      return sendJson(res, 200, { ...identity.me(r.e, now), created: !!r.created });
     }
 
     /* Maintenance mode (§7.2). Reads keep working — the wall stays up and

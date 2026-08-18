@@ -1368,18 +1368,23 @@ let authCtx = 'brand';
 function openAuth(tab, ctx) {
   if (ctx) authCtx = ctx;
   if (isBrand()) authCtx = 'brand';
-  const pane = tab || (isBrand() ? 'status' : (authCtx === 'painter' ? 'register' : 'signup'));
   const painter = authCtx === 'painter';
+  /* A painter has one screen. Both doors on it — Google and a code —
+     make an account if there is not one and sign you in if there is, so
+     "create" and "log in" were the same screen twice and asking somebody
+     to pick between them was asking them to remember which they did last
+     time. Brands still choose, because applying and signing in genuinely
+     differ there: one fills in a form a person reads. */
+  const pane = tab && !(painter && tab === 'register') ? tab
+    : (isBrand() ? 'status' : (painter ? 'login' : 'signup'));
 
-  $('paneRegister').hidden = pane !== 'register';
   $('paneSignup').hidden = pane !== 'signup';
   $('paneLogin').hidden = pane !== 'login';
   $('paneStatus').hidden = pane !== 'status';
-  $('authTabs').hidden = pane === 'status';
+  /* nothing to switch between for a painter, so no tabs */
+  $('authTabs').hidden = pane === 'status' || painter;
   $('tabSignup').hidden = painter;
-  $('tabRegister').hidden = !painter;
   $('tabSignup').classList.toggle('sel', pane === 'signup');
-  $('tabRegister').classList.toggle('sel', pane === 'register');
   $('tabLogin').classList.toggle('sel', pane === 'login');
 
   $('auTitleText').textContent = painter ? t('au.titlePainter') : t('au.titleBrand');
@@ -1388,7 +1393,6 @@ function openAuth(tab, ctx) {
   openModal('modalAuth');
 }
 $('tabSignup').onclick = () => openAuth('signup');
-$('tabRegister').onclick = () => openAuth('register');
 $('tabLogin').onclick = () => openAuth('login');
 
 /* signup field id -> the server's name for it, which is also the key it
@@ -1538,15 +1542,12 @@ function applySignin(ways) {
   $('paneCode').hidden = !signinWays.code;
   /* the "or" divider only earns its place with something on both sides */
   $('authOr').hidden = !(signinWays.google && signinWays.code);
-  /* Creating an account is Google's job now. With Google off there is no
-     way to make a painter account at all, so the register pane says that
-     rather than showing a form that cannot finish. */
-  $('rgGoogle').hidden = !signinWays.google;
-  $('rgNoWay').hidden = signinWays.google;
+  /* With neither configured there is no way to make an account at all, so
+     say that rather than leaving an empty sheet. */
+  $('noWayIn').hidden = signinWays.google || signinWays.code;
 }
 
 $('btnGoogle').onclick = () => { location.href = `${API_BASE}/api/auth/google/start`; };
-$('rgGoogle').onclick = () => { location.href = `${API_BASE}/api/auth/google/start`; };
 
 /* ── Signing in with a code ───────────────────────────────────────
    Two steps in one form: the first submit asks for a code, the second

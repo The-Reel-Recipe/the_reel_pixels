@@ -242,13 +242,46 @@ test('a code cannot open a closed account', async () => {
   assert.equal(r.json.error, 'account-closed', 'otherwise email is a way around a ban');
 });
 
-test('a valid code for an address with no account creates nothing', async () => {
-  plant('ghost@example.test', '777777');
-  const r = await json(visitor('203.0.113.17'), 'POST', '/api/auth/code/verify',
-    { email: 'ghost@example.test', code: '777777' });
-  assert.equal(r.code, 400,
-    'proving you hold an address is not the same as having applied to be a brand');
-  assert.equal(dbm.db.prepare('SELECT COUNT(*) n FROM users WHERE email = ?').get('ghost@example.test').n, 0);
+test('a valid code for a new address makes an account and keeps the pixels', async () => {
+  /* Signing up and signing in are one action here: proving you hold an
+     address is the whole of what either asks for, so the same route does
+     both rather than making somebody remember which they did last time. */
+  const who = visitor('203.0.113.17');
+  await req(who, 'GET', '/api/wall');                 // they are a guest, mid-paint
+  const guestId = Number(String(who.jar.get('uid') || '').split('.')[0]);
+
+  plant('newcomer@example.test', '777777');
+  const r = await json(who, 'POST', '/api/auth/code/verify',
+    { email: 'newcomer@example.test', code: '777777' });
+
+  assert.equal(r.code, 200, JSON.stringify(r.json));
+  assert.equal(r.json.created, true);
+  assert.equal(r.json.email, 'newcomer@example.test');
+
+  const made = dbm.db.prepare('SELECT id, kind FROM users WHERE email = ?').get('newcomer@example.test');
+  assert.ok(made);
+  assert.equal(made.kind, 'guest', 'a painter, not a brand — brands come from the application form');
+  assert.equal(made.id, guestId,
+    'and it grew the guest they were browsing as, so the pixels from five minutes ago came with them');
+
+  /* TERMS §4: the button says what continuing means, so it is recorded */
+  const acc = dbm.db.prepare(
+    'SELECT terms_version, capacity_confirmed_at FROM users WHERE id = ?').get(made.id);
+  assert.ok(acc.terms_version, 'the wording they accepted is on the row');
+  assert.ok(acc.capacity_confirmed_at > 0);
+});
+
+test('a second browser cannot claim an address that already has an account', async () => {
+  const taken = account('guest');
+  const who = visitor('203.0.113.18');
+  await req(who, 'GET', '/api/wall');
+  plant(taken.email, '888111');
+
+  const r = await json(who, 'POST', '/api/auth/code/verify', { email: taken.email, code: '888111' });
+  assert.equal(r.code, 200, 'the code proves the address, so this is a sign-in');
+  assert.equal(r.json.created, false, 'nothing was created');
+  assert.equal(dbm.db.prepare('SELECT COUNT(*) n FROM users WHERE email = ?').get(taken.email).n, 1,
+    'one address is still one account');
 });
 
 test('the code is stored hashed, never in the clear', () => {
