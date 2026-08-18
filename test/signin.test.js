@@ -279,3 +279,48 @@ test('password registration still works while Google is unconfigured', async () 
     { email: 'still-works@example.test', password: 'a-long-enough-password', accept: true });
   assert.equal(r.code, 200);
 });
+
+/* ── The callback route, not just the token checks ────────────────
+   google.test.js proves verifyIdToken rejects every forgery, and all of
+   that was true while the route in front of it threw ReferenceError on
+   the first real sign-in: it read `q`, which was declared inside two
+   unrelated route blocks further up. The unit tests could not see it
+   because they never went through HTTP.
+
+   These do. They do not need Google to exist — with GOOGLE_CLIENT_ID
+   unset the routes must 404, and that is itself the contract. */
+
+test('the google routes are absent, not broken, when unconfigured', async () => {
+  const who = visitor('203.0.113.30');
+  const start = await json(who, 'GET', '/api/auth/google/start');
+  assert.equal(start.code, 404);
+  assert.equal(start.json.error, 'not-configured');
+
+  const cb = await json(who, 'GET',
+    '/api/auth/google/callback?state=abc&code=def');
+  assert.equal(cb.code, 404,
+    'and the callback answers the same way rather than throwing on its way to finding out');
+  assert.equal(cb.json.error, 'not-configured');
+});
+
+test('every route that reads the query string can actually read it', async () => {
+  /* The bug was one route reaching for a `q` that existed only inside two
+     others. Walk the query-reading routes and assert none of them 500s —
+     a ReferenceError surfaces as a 500 with a message, which is precisely
+     what reached production. */
+  const who = visitor('203.0.113.31');
+  await req(who, 'GET', '/api/wall');
+
+  const paths = [
+    '/api/auth/google/callback?state=x&code=y',
+    '/api/auth/google/start',
+    '/api/me/history?limit=5&offset=0',
+    '/api/me/notifications?limit=5'
+  ];
+  for (const p of paths) {
+    const r = await json(who, 'GET', p);
+    assert.notEqual(r.code, 500, `${p} → 500 ${JSON.stringify(r.json)}`);
+    assert.ok(!/is not defined/.test(JSON.stringify(r.json)),
+      `${p} threw a ReferenceError: ${JSON.stringify(r.json)}`);
+  }
+});

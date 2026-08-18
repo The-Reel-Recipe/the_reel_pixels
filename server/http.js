@@ -557,6 +557,11 @@ async function adminRoutes(req, res, urlPath, now) {
 
 async function handler(req, res) {
   const urlPath = (req.url || '/').split('?')[0];
+  /* Parsed once, here, for every route below. It used to be built inside the
+     two history blocks that needed it, which read fine until a later route
+     used `q` from outside them and threw ReferenceError at the worst possible
+     moment — on the way back from Google, holding a one-time code. */
+  const q = new URLSearchParams((req.url || '').split('?')[1] || '');
   if (req.method === 'OPTIONS' && cfg.ALLOW_ORIGIN) {
     res.writeHead(204, corsHeaders());
     return res.end();
@@ -696,7 +701,6 @@ async function handler(req, res) {
        one place a pending submission stops being a shimmer on the canvas
        and becomes something with a status and a reason. */
     if (urlPath === '/api/me/history' && req.method === 'GET') {
-      const q = new URLSearchParams((req.url || '').split('?')[1] || '');
       return sendJson(res, 200, submissions.historyFor(row.id, {
         limit: q.get('limit'), offset: q.get('offset')
       }));
@@ -705,7 +709,6 @@ async function handler(req, res) {
     /* The bell (§3): decisions, money and application news, newest first,
        with the unread count keyed on the caller's own high-water mark. */
     if (urlPath === '/api/me/notifications' && req.method === 'GET') {
-      const q = new URLSearchParams((req.url || '').split('?')[1] || '');
       return sendJson(res, 200, notifications.feedFor(row.id, {
         limit: q.get('limit'), offset: q.get('offset')
       }));
